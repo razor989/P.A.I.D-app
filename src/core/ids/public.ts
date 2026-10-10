@@ -13,8 +13,13 @@ type FourActivityCompetency = Exclude<CompetencyId, "C05">;
 export type ActivityId =
   `${FourActivityCompetency}-A0${1 | 2 | 3 | 4}` | `C05-A0${1 | 2 | 3 | 4 | 5}`;
 
-/** Form validation only: scenario-bank membership is later-owned. */
-export type ScenarioId = `${CompetencyId}-S${number}`;
+type NonzeroDigit = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+type Digit = 0 | NonzeroDigit;
+
+/** Two-digit form only (01–99); scenario-bank membership is later-owned. */
+export type ScenarioId =
+  | `${CompetencyId}-S${0}${NonzeroDigit}`
+  | `${CompetencyId}-S${NonzeroDigit}${Digit}`;
 /** Established child suffix form only; does not assert bank membership. */
 export type ScenarioChildId = `${ScenarioId}-${"A" | "B"}`;
 export type SupportingRecordId = "C02-S01-F";

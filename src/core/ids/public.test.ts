@@ -8,6 +8,8 @@ import {
   isScenarioId,
   isSupportingRecordId,
   type ActivityId,
+  type ScenarioChildId,
+  type ScenarioId,
 } from "./public";
 
 describe("canonical identity", () => {
@@ -57,12 +59,28 @@ describe("canonical identity", () => {
   });
 
   it("validates scenario and established child forms without claiming bank membership", () => {
-    expect(isScenarioId("C02-S01")).toBe(true);
-    expect(isScenarioId("C06-S12")).toBe(true); // form only; not a claim of membership
-    expect(isScenarioChildId("C02-S01-A")).toBe(true);
+    const validForms: readonly ScenarioId[] = [
+      "C02-S01",
+      "C06-S12",
+      "C01-S09",
+      "C05-S10",
+      "C04-S99",
+    ];
+    const validChildForms: readonly ScenarioChildId[] = [
+      "C02-S01-A",
+      "C06-S12-B",
+      "C04-S99-A",
+    ];
+    for (const id of validForms) expect(isScenarioId(id)).toBe(true);
+    for (const id of validChildForms) expect(isScenarioChildId(id)).toBe(true);
+    // These are form examples, not claims that the complete bank contains them.
     for (const invalid of [
       "C02-S00",
       "C02-S1",
+      "C02-S001",
+      "C02-S100",
+      "C02-S-1",
+      "C02-S1.5",
       "C07-S01",
       "GI-S01",
       "C02-S01-F",
@@ -75,8 +93,39 @@ describe("canonical identity", () => {
       "C02-S01-C",
       "C07-S01-A",
       "C02-S00-B",
+      "C02-S1-A",
+      "C02-S100-B",
     ]) {
       expect(isScenarioChildId(invalid)).toBe(false);
+    }
+  });
+
+  it("rejects malformed scenario and child literals at the TypeScript boundary too", () => {
+    // @ts-expect-error A single-digit scenario number is not the canonical form.
+    const shortScenario: ScenarioId = "C02-S1";
+    // @ts-expect-error Zero is not a canonical scenario number.
+    const zeroScenario: ScenarioId = "C02-S00";
+    // @ts-expect-error Three digits are not the approved form.
+    const longScenario: ScenarioId = "C02-S100";
+    // @ts-expect-error Noncanonical competency prefixes are not permitted.
+    const aliasScenario: ScenarioId = "GI-S01";
+    // @ts-expect-error Child identity inherits the two-digit scenario form.
+    const shortChild: ScenarioChildId = "C02-S1-A";
+    // @ts-expect-error Child identity inherits the nonzero scenario number.
+    const zeroChild: ScenarioChildId = "C02-S00-B";
+    // @ts-expect-error Only established A/B child suffix forms are permitted.
+    const supportingRecord: ScenarioChildId = "C02-S01-F";
+
+    for (const id of [
+      shortScenario,
+      zeroScenario,
+      longScenario,
+      aliasScenario,
+    ]) {
+      expect(isScenarioId(id)).toBe(false);
+    }
+    for (const id of [shortChild, zeroChild, supportingRecord]) {
+      expect(isScenarioChildId(id)).toBe(false);
     }
   });
 
