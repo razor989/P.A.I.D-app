@@ -86,7 +86,9 @@ describe("semantic boundaries", () => {
       "undefined: no result",
     ]);
     expect(() =>
-      describeResolution({ kind: "WITHHELD" } as unknown as DomainResolution<number>),
+      describeResolution({
+        kind: "WITHHELD",
+      } as unknown as DomainResolution<number>),
     ).toThrow("Invalid domain state");
     // Technical read failures are errors, not fabricated UNKNOWN domain values.
     expect(() => {
