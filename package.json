@@ -9,6 +9,17 @@
     "node": ">=24.0.0 <25"
   },
   "packageManager": "npm@11.19.0",
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json && tsc --project tsconfig.node.json",
+    "lint": "eslint src vite.config.ts",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"*.{js,mjs,ts,json,html}\"",
+    "test:unit": "vitest run tests/helpers/runner.test.ts",
+    "test:component": "vitest run tests/helpers/testing-library.dom.test.tsx",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test tests/e2e --project=chromium",
+    "test:a11y": "playwright test tests/a11y --project=chromium",
+    "build": "vite build"
+  },
   "dependencies": {
     "@capacitor/android": "8.5.2",
     "@capacitor/app": "8.1.2",
