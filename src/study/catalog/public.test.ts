@@ -97,6 +97,39 @@ describe("T010 caller-supplied catalog composition", () => {
       }),
     ).toThrow();
   });
+  it("rejects foreign competency activity references without supplying the activity", () => {
+    const foreign = { id: "C01", activityIds: ["C02-A01"] };
+    for (const complete of [false, true]) {
+      expect(() =>
+        composeStudyCatalog({
+          ...registry(),
+          complete,
+          competencies: [foreign],
+          activities: [],
+          scenarios: [],
+        }),
+      ).toThrow();
+    }
+    const sameOwner = { id: "C01", activityIds: ["C01-A02"] };
+    expect(() =>
+      composeStudyCatalog({
+        ...registry(),
+        complete: false,
+        competencies: [sameOwner],
+        activities: [],
+        scenarios: [],
+      }),
+    ).not.toThrow();
+    expect(() =>
+      composeStudyCatalog({
+        ...registry(),
+        complete: true,
+        competencies: [sameOwner],
+        activities: [],
+        scenarios: [],
+      }),
+    ).toThrow(/Dangling activity C01-A02/);
+  });
   it("permits unresolved future membership in partial registry; complete registry rejects dangling references", () => {
     const partial = {
       ...registry(),

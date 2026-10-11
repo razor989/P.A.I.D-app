@@ -76,6 +76,12 @@ describe("T010 local definition schemas (test-only synthetic data)", () => {
   });
   it("parses canonical competency, activity, scenario and structural references", () => {
     expect(competencyDefinitionSchema.parse(competency).id).toBe("C01");
+    expect(
+      competencyDefinitionSchema.safeParse({
+        id: "C01",
+        activityIds: ["C01-A02"],
+      }).success,
+    ).toBe(true);
     expect(activityManifestSchema.parse(activity).scenarioIds).toEqual([
       "C01-S01",
     ]);
@@ -159,6 +165,18 @@ describe("T010 local definition schemas (test-only synthetic data)", () => {
       ).toBe(false);
     expect(
       competencyDefinitionSchema.safeParse({ ...competency, id: "GI" }).success,
+    ).toBe(false);
+    expect(
+      competencyDefinitionSchema.safeParse({
+        id: "C01",
+        activityIds: ["C02-A01"],
+      }).success,
+    ).toBe(false);
+    expect(
+      competencyDefinitionSchema.safeParse({
+        id: "C01",
+        activityIds: ["C01-A01", "C02-A01"],
+      }).success,
     ).toBe(false);
     expect(
       activityManifestSchema.safeParse({ ...activity, competencyId: "C02" })

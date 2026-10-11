@@ -109,6 +109,9 @@ export function composeStudyCatalog(input: unknown): StudyCatalog {
 
   for (const competency of competencies.values()) {
     for (const id of competency.activityIds) {
+      // Ownership is structural, independent of registry completeness or presence.
+      if (!id.startsWith(`${competency.id}-`))
+        throw new Error(`Wrong competency for ${id}`);
       const activity = activities.get(id);
       if (activity && activity.competencyId !== competency.id)
         throw new Error(`Wrong competency for ${id}`);

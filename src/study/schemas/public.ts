@@ -91,10 +91,16 @@ export const fixedResolutionSchema = z.discriminatedUnion("kind", [
 ]);
 export type FixedResolution = DomainResolution<Quantity>;
 
-export const competencyDefinitionSchema = z.strictObject({
-  id: competencyIdSchema,
-  activityIds: z.array(activityIdSchema).refine(distinct),
-});
+export const competencyDefinitionSchema = z
+  .strictObject({
+    id: competencyIdSchema,
+    activityIds: z.array(activityIdSchema).refine(distinct),
+  })
+  .refine(
+    (competency) =>
+      competency.activityIds.every((id) => id.startsWith(`${competency.id}-`)),
+    { message: "Competency activity ownership mismatch" },
+  );
 
 export const activityManifestSchema = z
   .strictObject({
