@@ -119,48 +119,50 @@ const bindings = [
   "Static semantic — approved single-day schematic allowed",
 ] as const;
 
-export const c03RoleKeys = Object.freeze([
-  [
-    "scenario",
-    "task",
-    "relationship-help",
-    "confirmation",
-    "reconsider-condition",
-    "reconsider-multiplier",
-    "completion",
-    "accessibility-summary",
-  ],
-  [
-    "scenario",
-    "task",
-    "relationship-help",
-    "confirmation",
-    "reconsider-invariant-values",
-    "reconsider-condition",
-    "completion",
-    "accessibility-summary",
-  ],
-  [
-    "scenario",
-    "task",
-    "relationship-help",
-    "confirmation",
-    "reconsider-condition",
-    "reconsider-boundary",
-    "completion",
-    "accessibility-summary",
-  ],
-  [
-    "scenario",
-    "task",
-    "relationship-help",
-    "confirmation",
-    "reconsider-condition",
-    "reconsider-scope",
-    "completion",
-    "accessibility-summary",
-  ],
-] as const).map((roles) => Object.freeze(roles));
+export const c03RoleKeys = Object.freeze(
+  Object.freeze([
+    [
+      "scenario",
+      "task",
+      "relationship-help",
+      "confirmation",
+      "reconsider-condition",
+      "reconsider-multiplier",
+      "completion",
+      "accessibility-summary",
+    ],
+    [
+      "scenario",
+      "task",
+      "relationship-help",
+      "confirmation",
+      "reconsider-invariant-values",
+      "reconsider-condition",
+      "completion",
+      "accessibility-summary",
+    ],
+    [
+      "scenario",
+      "task",
+      "relationship-help",
+      "confirmation",
+      "reconsider-condition",
+      "reconsider-boundary",
+      "completion",
+      "accessibility-summary",
+    ],
+    [
+      "scenario",
+      "task",
+      "relationship-help",
+      "confirmation",
+      "reconsider-condition",
+      "reconsider-scope",
+      "completion",
+      "accessibility-summary",
+    ],
+  ] as const).map((roles) => Object.freeze(roles)),
+);
 
 /** No additional shifts, dates or hours are implied by these source-evidence modes.
  * S02 fact-key links identify children within ONE parent Scenario Definition.

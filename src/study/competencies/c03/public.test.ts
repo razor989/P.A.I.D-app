@@ -327,6 +327,32 @@ describe("C03 source-pinned fixed definitions", () => {
       ]);
   });
 
+  it("freezes the exported role-key roster at both levels without changing references", () => {
+    const originalRoles = c03RoleKeys.map((roles) => [...roles]);
+    const originalReferences = c03Activities.map((activity) =>
+      activity.contentReferences.map((reference) => reference.contentId),
+    );
+    expect(Object.isFrozen(c03RoleKeys)).toBe(true);
+    for (const roles of c03RoleKeys) {
+      expect(Object.isFrozen(roles)).toBe(true);
+      expect(() => (roles as unknown as string[]).push("extra-role")).toThrow();
+      expect(() => (roles as unknown as string[]).splice(0, 1)).toThrow();
+    }
+    expect(() =>
+      (c03RoleKeys as unknown as string[][]).push(["extra-role"]),
+    ).toThrow();
+    expect(() => (c03RoleKeys as unknown as string[][]).splice(0, 1)).toThrow();
+    expect(() => {
+      (c03RoleKeys as unknown as string[][])[0] = ["wrong-role"];
+    }).toThrow();
+    expect(c03RoleKeys).toEqual(originalRoles);
+    expect(
+      c03Activities.map((activity) =>
+        activity.contentReferences.map((reference) => reference.contentId),
+      ),
+    ).toEqual(originalReferences);
+  });
+
   it("parses with T010 schemas/catalog; keeps only established downstream C03→C01 semantics", () => {
     expect(() => check()).not.toThrow();
     expect(
