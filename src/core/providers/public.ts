@@ -82,6 +82,35 @@ function exactQuantity(value: unknown): value is Quantity {
   );
 }
 
+/** Output identity is provenance, not the T008 quantity kind. The confirmed
+ * edges carry PHP monetary amounts, except C05 representations which may be
+ * monetary rates with approved C05 time representations; C05→C03 is hourly.
+ * This does not assert fixed-bank source/output membership or infer schedules.
+ */
+function matchesExportQuantity(
+  provenance: ProviderProvenance,
+  value: Quantity,
+): boolean {
+  if (value.unit !== "PHP") return false;
+  if (provenance.providerCompetencyId === "C05") {
+    if (provenance.consumerCompetencyId === "C03") {
+      return value.kind === "MONETARY_RATE" && value.basis === "per hour";
+    }
+    if (value.kind === "MONETARY_RATE") {
+      return (
+        value.basis === "per hour" ||
+        value.basis === "per day" ||
+        value.basis === "per week" ||
+        value.basis === "per month" ||
+        value.basis === "per year" ||
+        value.basis === "per semi-monthly period"
+      );
+    }
+    return value.kind === "MONETARY_AMOUNT" && value.basis === null;
+  }
+  return value.kind === "MONETARY_AMOUNT" && value.basis === null;
+}
+
 function isProvenance(value: unknown): value is ProviderProvenance {
   if (
     !record(value) ||
@@ -139,7 +168,7 @@ export function isProviderRead(value: unknown): value is ProviderRead {
     return (
       fields(resolution, "kind", "value") &&
       exactQuantity(resolution.value) &&
-      resolution.value.kind === value.provenance.sourceOutputKey
+      matchesExportQuantity(value.provenance, resolution.value)
     );
   }
   if (resolution.kind === "NOT_APPLICABLE") return fields(resolution, "kind");

@@ -13,9 +13,9 @@ const provenance = {
 } as const;
 const amount = quantity(
   ExactDecimal.from("3600"),
-  "commission amount",
+  "MONETARY_AMOUNT",
   "PHP",
-  "per sale",
+  null,
 );
 const established = {
   kind: "ESTABLISHED",
@@ -40,7 +40,9 @@ describe("provider ownership and provenance", () => {
       throw new Error("unexpected domain state");
     expect(Object.isFrozen(read.result.resolution.value)).toBe(true);
     expect(read.result.resolution.value.magnitude.toString()).toBe("3600");
-    expect(read.result.resolution.value.basis).toBe("per sale");
+    expect(read.result.resolution.value.basis).toBeNull();
+    expect(read.provenance.sourceOutputKey).toBe("commission amount");
+    expect(read.result.resolution.value.kind).toBe("MONETARY_AMOUNT");
     expect(() => {
       Object.assign(read.provenance, { sourceOutputKey: "other" });
     }).toThrow(TypeError);
@@ -76,9 +78,9 @@ describe("provider ownership and provenance", () => {
             kind: "KNOWN",
             value: quantity(
               ExactDecimal.from("3600"),
-              "gross-income result",
+              "MONETARY_RATE",
               "PHP",
-              null,
+              "per hour",
             ),
           },
         },
@@ -111,14 +113,133 @@ describe("provider ownership and provenance", () => {
           kind: "KNOWN",
           value: quantity(
             ExactDecimal.from("75"),
-            "hourly-rate representation",
-            "PHP/hour",
-            "regular hours",
+            "MONETARY_RATE",
+            "PHP",
+            "per hour",
           ),
         },
       },
     };
     expect(isProviderRead(hourly)).toBe(true);
+    expect(parseProviderRead(hourly)).toEqual(hourly);
+  });
+
+  it("validates quantity role, currency and basis independently of authorized source output identity", () => {
+    const establishedWith = (
+      sourceOutputKey: string,
+      providerCompetencyId: string,
+      consumerCompetencyId: string,
+      sourceRecordId: string,
+      value: unknown,
+    ) => ({
+      kind: "ESTABLISHED",
+      provenance: {
+        providerCompetencyId,
+        consumerCompetencyId,
+        sourceRecordId,
+        sourceOutputKey,
+        relevantCondition: null,
+      },
+      result: {
+        availability: "AVAILABLE",
+        resolution: { kind: "KNOWN", value },
+      },
+    });
+    const money = (kind: string, unit: string, basis: string | null) =>
+      quantity(ExactDecimal.from("75"), kind, unit, basis);
+
+    // The matrix labels identify exports; they are not quantity roles.
+    for (const [key, provider, consumer, source] of [
+      ["gross-income result", "C01", "C02", "C01-S03"],
+      ["overtime-pay value", "C03", "C01", "C03-S03"],
+      ["wage/salary representation", "C05", "C01", "C05-PV-JAMES-01"],
+      ["converted pay value", "C05", "C01", "C05-PV-JAMES-01"],
+      ["contextual wage/salary representation", "C05", "C04", "C05-S04"],
+    ]) {
+      if (
+        key === undefined ||
+        provider === undefined ||
+        consumer === undefined ||
+        source === undefined
+      )
+        throw new Error("invalid test fixture");
+      expect(
+        isProviderRead(
+          establishedWith(
+            key,
+            provider,
+            consumer,
+            source,
+            money("MONETARY_AMOUNT", "PHP", null),
+          ),
+        ),
+      ).toBe(true);
+    }
+    const commission = (value: unknown) =>
+      establishedWith("commission amount", "C06", "C01", "C06-S04", value);
+    for (const invalid of [
+      money("MONETARY_RATE", "PHP", "per hour"),
+      money("PERCENTAGE_RATE", "PHP", null),
+      money("MULTIPLIER", "PHP", null),
+      money("MONETARY_AMOUNT", "USD", null),
+      money("MONETARY_AMOUNT", "PHP", "per month"),
+      money("commission amount", "PHP", null),
+    ])
+      expect(isProviderRead(commission(invalid))).toBe(false);
+
+    const hourly = (value: unknown) =>
+      establishedWith(
+        "hourly-rate representation",
+        "C05",
+        "C03",
+        "C05-PV-JAMES-01",
+        value,
+      );
+    expect(
+      isProviderRead(hourly(money("MONETARY_RATE", "PHP", "per hour"))),
+    ).toBe(true);
+    for (const invalid of [
+      money("MONETARY_AMOUNT", "PHP", null),
+      money("MONETARY_RATE", "PHP", "per day"),
+      money("MONETARY_RATE", "PHP", null),
+      money("MONETARY_RATE", "PHP", "per sale"),
+      money("MONETARY_RATE", "USD", "per hour"),
+    ])
+      expect(isProviderRead(hourly(invalid))).toBe(false);
+
+    const converted = (value: unknown) =>
+      establishedWith("converted pay value", "C05", "C01", "C05-S04", value);
+    expect(
+      isProviderRead(converted(money("MONETARY_RATE", "PHP", "per week"))),
+    ).toBe(true);
+    expect(isProviderRead(converted(money("MONETARY_RATE", "PHP", null)))).toBe(
+      false,
+    );
+    expect(
+      isProviderRead(converted(money("MONETARY_RATE", "PHP", "per sale"))),
+    ).toBe(false);
+    expect(
+      isProviderRead(
+        establishedWith(
+          "Total Compensation",
+          "C06",
+          "C01",
+          "C06-S04",
+          money("MONETARY_AMOUNT", "PHP", null),
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      isProviderRead(
+        establishedWith(
+          "commission amount",
+          "C05",
+          "C01",
+          "C05-PV-JAMES-01",
+          money("MONETARY_AMOUNT", "PHP", null),
+        ),
+      ),
+    ).toBe(false);
   });
 
   it("retains semantic UNKNOWN under WITHHELD and distinguishes technical failures", () => {
