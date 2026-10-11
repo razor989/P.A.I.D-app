@@ -172,10 +172,10 @@ const families = [
   "Check and Transfer",
 ] as const;
 const bindings = [
-  "Interactive — evaluative",
-  "Interactive — explanatory/live",
+  "Static semantic + embedded floor state",
+  "Interactive — explanatory",
   "Static semantic",
-  "Static semantic",
+  "Static semantic — paired configuration",
 ] as const;
 export const c02RoleKeys = Object.freeze([
   [

@@ -107,16 +107,37 @@ describe("C02 frozen study bank", () => {
       ["C02-S04", "C02-A04", "C02"],
     ]);
     expect(c02Scenarios.every((s) => !s.variants)).toBe(true);
+    // R7 §13 C02 binding table, NOT the C01 binding descriptors.
     expect(
-      c02Activities.map((a) => a.modelBinding?.interactionProfileId),
+      c02Activities.map((a) => [a.id, a.modelBinding?.interactionProfileId]),
     ).toEqual([
-      "Interactive — evaluative",
-      "Interactive — explanatory/live",
-      "Static semantic",
-      "Static semantic",
+      ["C02-A01", "Static semantic + embedded floor state"],
+      ["C02-A02", "Interactive — explanatory"],
+      ["C02-A03", "Static semantic"],
+      ["C02-A04", "Static semantic — paired configuration"],
     ]);
     expect(() => check()).not.toThrow();
     expect(() => composeStudyCatalog(registry())).not.toThrow();
+  });
+
+  it("rejects the three prior C01-style interaction bindings on the real C02 manifests", () => {
+    for (const [index, priorDescriptor] of [
+      [0, "Interactive — evaluative"],
+      [1, "Interactive — explanatory/live"],
+      [3, "Static semantic"],
+    ] as const) {
+      const input = registry();
+      input.activities[index] = {
+        ...input.activities[index]!,
+        modelBinding: {
+          ...input.activities[index]!.modelBinding!,
+          interactionProfileId: priorDescriptor,
+        },
+      };
+      expect(() => check(input)).toThrow(
+        "C02 fixed local inventory/content mismatch",
+      );
+    }
   });
 
   it("pins all established monthly facts, employee-only deductions and separate bases", () => {
