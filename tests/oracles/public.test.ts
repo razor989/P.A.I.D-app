@@ -81,6 +81,9 @@ describe("T018 source-first oracle bank", () => {
         .every((o) => o.activityId === null),
     ).toBe(true);
     validateOracles(oracles);
+    expect(oracles.filter((o) => o.class === "PRIMARY").length).toBe(31);
+    expect(oracles.filter((o) => o.class === "VARIANT").length).toBe(19);
+    expect(oracles.filter((o) => o.class === "SUPPORTING").length).toBe(10);
   });
   it("traces every fixture to a real tracked authority path and actual study identity, without using producer outputs", () => {
     const activities = [
