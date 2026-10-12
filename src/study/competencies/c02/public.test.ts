@@ -73,6 +73,87 @@ const amount = (scenario: number, key: string, value: string) => {
 };
 
 describe("C02 frozen study bank", () => {
+  it("freezes the actual four role tuples without changing roles, order or content associations", () => {
+    const originalRoles = [
+      [
+        "scenario",
+        "task",
+        "relationship-help",
+        "confirmation",
+        "reconsider-payroll-role",
+        "reconsider-arithmetic",
+        "completion",
+        "accessibility-summary",
+      ],
+      [
+        "scenario",
+        "provider-callout",
+        "task",
+        "relationship-help",
+        "confirmation",
+        "reconsider-basis",
+        "reconsider-ownership",
+        "completion",
+        "accessibility-summary",
+      ],
+      [
+        "scenario",
+        "task",
+        "relationship-help",
+        "confirmation",
+        "reconsider-branch",
+        "reconsider-BIR",
+        "reconsider-corrected-oracle",
+        "completion",
+        "accessibility-summary",
+      ],
+      [
+        "scenario",
+        "task",
+        "relationship-help",
+        "confirmation",
+        "reconsider-comparison",
+        "reconsider-Job-A",
+        "reconsider-Job-B",
+        "completion",
+        "accessibility-summary",
+      ],
+    ];
+    expect(Object.isFrozen(c02RoleKeys)).toBe(true);
+    expect(c02RoleKeys).toEqual(originalRoles);
+    expect(c02RoleKeys).toHaveLength(4);
+    for (const [index, roles] of c02RoleKeys.entries()) {
+      expect(Object.isFrozen(roles)).toBe(true);
+      const writable = roles as unknown as string[];
+      expect(() => {
+        writable[0] = "changed";
+      }).toThrow(TypeError);
+      expect(() => {
+        writable.push("extra");
+      }).toThrow(TypeError);
+      expect(() => {
+        writable.pop();
+      }).toThrow(TypeError);
+      expect(Reflect.deleteProperty(roles, "0")).toBe(false);
+      expect(
+        Reflect.defineProperty(roles, "extra", { value: "unexpected" }),
+      ).toBe(false);
+      expect(roles).toEqual(originalRoles[index]);
+      const activity = c02Activities[index]!;
+      const roleReferences = activity.contentReferences.slice(0, roles.length);
+      expect(roleReferences.map((reference) => reference.contentId)).toEqual(
+        originalRoles[index]!.map((role) => `c02/S0${index + 1}/${role}`),
+      );
+      for (const reference of roleReferences) {
+        expect(reference.variableIds).toEqual([]);
+        expect(
+          Object.prototype.hasOwnProperty.call(c02Copy, reference.contentId),
+        ).toBe(true);
+      }
+    }
+    expect(() => check()).not.toThrow();
+  });
+
   it("has one competency, four canonical ordered activities, four owned primary scenarios and successors", () => {
     expect([
       c02Catalog.competencies.size,

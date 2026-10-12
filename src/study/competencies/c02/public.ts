@@ -178,7 +178,7 @@ const bindings = [
   "Static semantic — paired configuration",
 ] as const;
 export const c02RoleKeys = Object.freeze([
-  [
+  Object.freeze([
     "scenario",
     "task",
     "relationship-help",
@@ -187,8 +187,8 @@ export const c02RoleKeys = Object.freeze([
     "reconsider-arithmetic",
     "completion",
     "accessibility-summary",
-  ],
-  [
+  ] as const),
+  Object.freeze([
     "scenario",
     "provider-callout",
     "task",
@@ -198,8 +198,8 @@ export const c02RoleKeys = Object.freeze([
     "reconsider-ownership",
     "completion",
     "accessibility-summary",
-  ],
-  [
+  ] as const),
+  Object.freeze([
     "scenario",
     "task",
     "relationship-help",
@@ -209,8 +209,8 @@ export const c02RoleKeys = Object.freeze([
     "reconsider-corrected-oracle",
     "completion",
     "accessibility-summary",
-  ],
-  [
+  ] as const),
+  Object.freeze([
     "scenario",
     "task",
     "relationship-help",
@@ -220,7 +220,7 @@ export const c02RoleKeys = Object.freeze([
     "reconsider-Job-B",
     "completion",
     "accessibility-summary",
-  ],
+  ] as const),
 ] as const);
 
 const parsedScenarios: readonly ScenarioDefinition[] = Object.freeze(
