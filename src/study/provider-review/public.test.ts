@@ -171,6 +171,54 @@ describe("T017 actual fixed-bank provider graph", () => {
     );
   });
 
+  it("resolves every actual edge from a reversed-insertion-order provenance copy", () => {
+    for (const definition of providerReviewDefinitions) {
+      const reference = Object.fromEntries(
+        Object.entries(definition.read.provenance).reverse(),
+      ) as ProviderProvenance;
+      expect(reference).not.toBe(definition.read.provenance);
+      expect(
+        lookupProviderReview(definition.consumerScenarioId, reference),
+      ).toBe(definition);
+    }
+  });
+
+  it("accepts reordered graph objects and a numerically identical exact-decimal fact", () => {
+    const source = c01Scenarios[2]!;
+    const first = source.facts[0]!;
+    if (first.resolution.kind !== "KNOWN")
+      throw new Error("Expected known fact");
+    const reordered: ScenarioDefinition = Object.fromEntries(
+      Object.entries({
+        ...source,
+        facts: [
+          {
+            resolution: {
+              value: {
+                basis: first.resolution.value.basis,
+                unit: first.resolution.value.unit,
+                kind: first.resolution.value.kind,
+                magnitude: ExactDecimal.from("12000.000"),
+              },
+              kind: "KNOWN",
+            },
+            key: first.key,
+          },
+          ...source.facts.slice(1),
+        ],
+        providerReferences: source.providerReferences!.map((ref) =>
+          Object.fromEntries(Object.entries(ref).reverse()),
+        ),
+      }).reverse(),
+    ) as ScenarioDefinition;
+    expect(() =>
+      validateProviderReviewGraph(
+        corrupt(() => reordered),
+        providerReviewDefinitions,
+      ),
+    ).not.toThrow();
+  });
+
   it("exports only Lina's 3600 commission, never base/sales/rate/total/allowance/gross", () => {
     const d = providerReviewDefinitions[2]!;
     expect(Object.keys(d)).toEqual([
@@ -230,6 +278,111 @@ describe("T017 actual fixed-bank provider graph", () => {
 
 describe("T017 fail-closed graph validation on source-incorrect fixtures", () => {
   const ref = c01Scenarios[2]!.providerReferences![0]!;
+  it("rejects executable, undefined, symbol, hidden and accessor provenance fields in real lookups", () => {
+    const reference = providerReviewDefinitions[0]!.read.provenance;
+    for (const extra of [
+      { calculate: () => 12000 },
+      { unexpected: undefined },
+    ]) {
+      expect(() =>
+        lookupProviderReview("C01-S03", { ...reference, ...extra }),
+      ).toThrow(/unresolved/);
+    }
+    const symbol = { ...reference };
+    Object.defineProperty(symbol, Symbol("secret"), { value: 1 });
+    const hidden = { ...reference };
+    Object.defineProperty(hidden, "secret", { value: undefined });
+    const accessor = { ...reference };
+    Object.defineProperty(accessor, "secret", {
+      enumerable: true,
+      get: () => "injected",
+    });
+    for (const invalid of [symbol, hidden, accessor])
+      expect(() => lookupProviderReview("C01-S03", invalid)).toThrow(
+        /unresolved/,
+      );
+  });
+
+  it("rejects executable or hidden additions to actual source, activity, scenario and reference fixtures", () => {
+    const injected = { execute: () => 1 };
+    for (const fixture of [
+      corrupt((s) => ({ ...s, ...injected })),
+      corrupt((s) => ({
+        ...s,
+        providerReferences: [
+          { ...s.providerReferences![0]!, ...injected },
+          s.providerReferences![1]!,
+        ],
+      })),
+      corruptActivity((a) => ({ ...a, ...injected })),
+      corrupt((s) => ({
+        ...s,
+        facts: [
+          {
+            ...s.facts[0]!,
+            resolution: { ...s.facts[0]!.resolution, ...injected },
+          },
+          ...s.facts.slice(1),
+        ],
+      })),
+    ])
+      expect(() =>
+        validateProviderReviewGraph(fixture, providerReviewDefinitions),
+      ).toThrow();
+    const source = c03Scenarios.find((s) => s.id === "C03-S03")!;
+    expect(() =>
+      validateProviderReviewGraph(
+        corrupt((s) => ({ ...s, ...injected }), source.id),
+        providerReviewDefinitions,
+      ),
+    ).toThrow();
+    const hidden = { ...c01Scenarios[2]! };
+    Object.defineProperty(hidden, "execute", { value: () => 1 });
+    expect(() =>
+      validateProviderReviewGraph(
+        corrupt(() => hidden),
+        providerReviewDefinitions,
+      ),
+    ).toThrow();
+    const undefinedField = { ...c01Activities[2]!, invalid: undefined };
+    expect(() =>
+      validateProviderReviewGraph(
+        corruptActivity(() => undefinedField),
+        providerReviewDefinitions,
+      ),
+    ).toThrow();
+    expect(() =>
+      Object.defineProperty(ExactDecimal.from("12000"), Symbol("hidden"), {
+        value: 1,
+      }),
+    ).toThrow();
+  });
+
+  it("preserves array order and rejects unauthorized consumer, output, and progress identities", () => {
+    expect(() =>
+      validateProviderReviewGraph(
+        corrupt((s) => ({
+          ...s,
+          providerReferences: [...s.providerReferences!].reverse(),
+        })),
+        providerReviewDefinitions,
+      ),
+    ).toThrow();
+    const d = providerReviewDefinitions[0]!;
+    expect(() => lookupProviderReview("C01-S04", d.read.provenance)).toThrow();
+    expect(() =>
+      lookupProviderReview("C01-S03", {
+        ...d.read.provenance,
+        sourceOutputKey: "wage/salary representation",
+      } as ProviderProvenance),
+    ).toThrow();
+    expect(() =>
+      validateProviderReviewGraph(
+        { ...bank(), activities: [...bank().activities, c01Activities[0]!] },
+        providerReviewDefinitions,
+      ),
+    ).toThrow();
+  });
   it.each([
     ["nonexistent scenario", { ...ref, sourceRecordId: "C05-S99" }],
     ["forged provider", { ...ref, sourceRecordId: "C05-PV-JAMES-02" }],

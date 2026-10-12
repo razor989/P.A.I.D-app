@@ -96,33 +96,105 @@ type Source = keyof typeof outputs;
 const isSource = (id: string): id is Source =>
   Object.prototype.hasOwnProperty.call(outputs, id);
 
-function snapshot(value: unknown): unknown {
-  if (value instanceof ExactDecimal) return { decimal: value.toString() };
-  if (Array.isArray(value)) return value.map(snapshot);
-  if (value !== null && typeof value === "object")
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, snapshot(entry)]),
-    );
-  return value;
+/** Accepted study records contain only plain data, arrays and ExactDecimal.
+ * Inspect own descriptors rather than enumerable serialization: a hidden field,
+ * getter, executable or undefined is never a valid provider reference. */
+function dataKeys(value: object): readonly string[] | null {
+  const array = Array.isArray(value);
+  if (!array && Object.getPrototypeOf(value) !== Object.prototype) return null;
+  const keys: string[] = [];
+  for (const key of Reflect.ownKeys(value)) {
+    if (array && key === "length") continue;
+    if (typeof key !== "string") return null;
+    if (array && (!/^(0|[1-9]\d*)$/.test(key) || Number(key) >= value.length))
+      return null;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor || !descriptor.enumerable || !("value" in descriptor))
+      return null;
+    if (
+      descriptor.value === undefined ||
+      typeof descriptor.value === "function"
+    )
+      return null;
+    keys.push(key);
+  }
+  if (array && keys.length !== value.length) return null; // no sparse arrays
+  return keys;
 }
-const same = (a: unknown, b: unknown): boolean =>
-  JSON.stringify(snapshot(a)) === JSON.stringify(snapshot(b));
+
+function validDecimal(value: ExactDecimal): boolean {
+  return (
+    Object.getPrototypeOf(value) === ExactDecimal.prototype &&
+    Object.isFrozen(value) &&
+    Reflect.ownKeys(value).length === 0
+  );
+}
+
+function same(
+  left: unknown,
+  right: unknown,
+  leftPath: Set<object> = new Set(),
+  rightPath: Set<object> = new Set(),
+): boolean {
+  if (left instanceof ExactDecimal || right instanceof ExactDecimal)
+    return (
+      left instanceof ExactDecimal &&
+      right instanceof ExactDecimal &&
+      validDecimal(left) &&
+      validDecimal(right) &&
+      left.equals(right)
+    );
+  if (
+    left === null ||
+    right === null ||
+    typeof left !== "object" ||
+    typeof right !== "object"
+  )
+    return left !== undefined && typeof left !== "function" && left === right;
+  if (Array.isArray(left) !== Array.isArray(right)) return false;
+  if (leftPath.has(left) || rightPath.has(right)) return false;
+  const leftKeys = dataKeys(left);
+  const rightKeys = dataKeys(right);
+  if (
+    leftKeys === null ||
+    rightKeys === null ||
+    leftKeys.length !== rightKeys.length ||
+    leftKeys.some((key) => !Object.prototype.hasOwnProperty.call(right, key))
+  )
+    return false;
+  leftPath.add(left);
+  rightPath.add(right);
+  const equal = leftKeys.every((key) =>
+    same(
+      (left as Record<string, unknown>)[key],
+      (right as Record<string, unknown>)[key],
+      leftPath,
+      rightPath,
+    ),
+  );
+  leftPath.delete(left);
+  rightPath.delete(right);
+  return equal;
+}
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`Provider integrity: ${message}`);
 }
 
-function sealedData(value: unknown): boolean {
-  if (value instanceof ExactDecimal) return Object.isFrozen(value);
+function sealedData(value: unknown, path: Set<object> = new Set()): boolean {
+  if (value instanceof ExactDecimal) return validDecimal(value);
   if (value === null || typeof value === "string" || typeof value === "boolean")
     return true;
   if (typeof value !== "object" || !Object.isFrozen(value)) return false;
-  if (
-    !Array.isArray(value) &&
-    Object.getPrototypeOf(value) !== Object.prototype
-  )
-    return false;
-  return Object.values(value).every(sealedData);
+  if (path.has(value)) return false;
+  const keys = dataKeys(value);
+  if (keys === null) return false;
+  path.add(value);
+  const valid = keys.every((key) =>
+    sealedData((value as Record<string, unknown>)[key], path),
+  );
+  path.delete(value);
+  return valid;
 }
 
 /** Source/consumer authority is checked against the committed fixed-bank records,
