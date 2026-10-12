@@ -64,7 +64,11 @@ export function deepFrozen(value: unknown, seen = new Set<object>()): boolean {
   if (
     Array.isArray(value) &&
     (keys.length !== value.length + 1 ||
-      keys.some((key) => key !== "length" && !/^(0|[1-9]\d*)$/.test(key)))
+      keys.some(
+        (key) =>
+          typeof key !== "string" ||
+          (key !== "length" && !/^(0|[1-9]\d*)$/.test(key)),
+      ))
   )
     return false;
   return keys.every((key) => {

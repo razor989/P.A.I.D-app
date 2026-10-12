@@ -82,7 +82,7 @@ describe("T018 source-first oracle bank", () => {
     ).toBe(true);
     validateOracles(oracles);
     expect(oracles.filter((o) => o.class === "PRIMARY").length).toBe(31);
-    expect(oracles.filter((o) => o.class === "VARIANT").length).toBe(19);
+    expect(oracles.filter((o) => o.class === "VARIANT").length).toBe(20);
     expect(oracles.filter((o) => o.class === "SUPPORTING").length).toBe(10);
   });
   it("traces every fixture to a real tracked authority path and actual study identity, without using producer outputs", () => {
@@ -163,6 +163,7 @@ describe("T018 source-first oracle bank", () => {
     ["C05-S04:weekly-representation", "4000"],
     ["C05-S05:monthly-representation", "87000"],
     ["Worker A:commission", "4000"],
+    ["Worker B:base-salary", "10000"],
     ["Worker B:commission", "4000"],
     ["Worker B:base-plus-total", "14000"],
     ["Situation A:commission", "9000"],
@@ -241,6 +242,78 @@ describe("T018 source-first oracle bank", () => {
     expect(oracles.filter((o) => o.class === "POLICY").length).toBe(14);
     expect(get("policy:offline").expected).toBeNull();
   });
+  it("retains source-established periods only for James and both C06-S01 arrangements", () => {
+    const james = resolveOracle({ id: "C05-PV-JAMES-01:regular-pay" });
+    expect(james).toMatchObject({
+      class: "SUPPORTING",
+      activityId: null,
+      scenarioId: null,
+    });
+    expect(james.expected).toMatchObject({
+      magnitude: "12000",
+      kind: "MONETARY_AMOUNT",
+      unit: "PHP",
+      basis: null,
+    });
+    const workerB = findOracles("C06-A01").filter(
+      (item) => item.caseId === "Worker B",
+    );
+    expect(workerB.map((item) => item.id)).toEqual([
+      "Worker B:base-salary",
+      "Worker B:commission",
+      "Worker B:base-plus-total",
+    ]);
+    expect(
+      workerB.every(
+        (item) => item.class === "VARIANT" && item.scenarioId === "C06-S01",
+      ),
+    ).toBe(true);
+    for (const [role, amount, basis] of [
+      ["base-salary", "10000", "per month"],
+      ["commission", "4000", null],
+      ["base-plus-total", "14000", null],
+    ] as const) {
+      const fixture = resolveOracle({
+        scenarioId: "C06-S01",
+        caseId: "Worker B",
+        role,
+      });
+      expect(fixture.expected).toMatchObject({
+        resolution: "KNOWN",
+        magnitude: amount,
+        kind: "MONETARY_AMOUNT",
+        unit: "PHP",
+        basis,
+      });
+    }
+    for (const role of ["base-salary", "base-plus-total"] as const) {
+      expect(
+        resolveOracle({ scenarioId: "C06-S01", caseId: "Worker A", role })
+          .expected,
+      ).toMatchObject({
+        resolution: "NOT_APPLICABLE",
+        magnitude: null,
+        basis: null,
+      });
+    }
+    expect(
+      resolveOracle({
+        scenarioId: "C06-S01",
+        caseId: "Worker A",
+        role: "commission",
+      }).expected,
+    ).toMatchObject({ magnitude: "4000", basis: null });
+    expect(get("C05-S04:weekly-representation").expected?.basis).toBe(
+      "per established 40-hour week",
+    );
+    expect(get("C05-S05:monthly-representation").expected?.basis).toBe(
+      "per month; approved 5-day/261-day/12-month basis",
+    );
+    expect(
+      new Set(scenarioLedger.map((s) => `${s.competency}-A0${s.ordinal}`)).size,
+    ).toBe(25);
+    validateOracles(oracles);
+  });
   it("freezes all nested arrays, source and policy surfaces and rejects attempted mutation", () => {
     expect(deepFrozen(oracles)).toBe(true);
     expect(deepFrozen(scenarioLedger)).toBe(true);
@@ -273,6 +346,22 @@ describe("malformed records rejected by actual validator", () => {
       validateOracles(Object.freeze([...oracles.slice(0, -1), oracles[0]!])),
     ).toThrow());
   it.each([
+    [
+      "James monthly basis invented",
+      expectation("C05-PV-JAMES-01:regular-pay", { basis: "per month" }),
+    ],
+    [
+      "Worker B monthly sales basis invented",
+      expectation("Worker B:commission", { basis: "monthly sales" }),
+    ],
+    [
+      "Worker B monthly total basis invented",
+      expectation("Worker B:base-plus-total", { basis: "per month" }),
+    ],
+    [
+      "Worker B monthly base period removed",
+      expectation("Worker B:base-salary", { basis: null }),
+    ],
     [
       "missing trace",
       changed(identity, {
@@ -382,6 +471,15 @@ describe("malformed records rejected by actual validator", () => {
       value: "wrong",
       enumerable: false,
     });
+    Object.freeze(item);
+    expect(() =>
+      validateOracles(
+        Object.freeze(oracles.map((v) => (v.id === identity ? item : v))),
+      ),
+    ).toThrow(/Mutable nested/);
+  });
+  it("rejects an own symbol key on a frozen malformed fixture", () => {
+    const item = { ...get(identity), [Symbol("hidden")]: "wrong" };
     Object.freeze(item);
     expect(() =>
       validateOracles(

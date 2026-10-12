@@ -410,8 +410,9 @@ export const scenarioLedger: readonly ScenarioSpec[] = [
       {
         label: "Worker B",
         outputs: [
-          money("commission", "4000", "monthly sales"),
-          money("base-plus-total", "14000", "per month"),
+          money("base-salary", "10000", "per month"),
+          money("commission", "4000"),
+          money("base-plus-total", "14000"),
         ],
       },
     ],
@@ -681,7 +682,7 @@ const extras: readonly Extra[] = [
     "12000",
     "MONETARY_AMOUNT",
     "PHP",
-    "per month",
+    null,
     sources.james,
     "§C05-PV-JAMES-01",
     ["James 75 PHP/hour; 160 regular hours; provider to C01-S03 only"],
