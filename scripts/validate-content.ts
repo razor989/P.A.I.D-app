@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { registerHooks } from "node:module";
 
 // Node 24 strips TypeScript types but does not resolve this bank's extensionless ESM specifiers.
@@ -14,9 +15,9 @@ registerHooks({
 
 async function main(): Promise<void> {
   const { actualContentBank, validateContent } =
-    await import("../src/study/validation/public.ts");
+    await import("../src/study/validation/public");
   const { oracles, scenarioLedger, validateOracles } =
-    await import("../tests/oracles/public.ts");
+    await import("../tests/oracles/public");
   const args = process.argv.slice(2);
   if (
     args.length > 1 ||
