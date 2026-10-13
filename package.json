@@ -13,6 +13,7 @@
     "typecheck": "tsc --project tsconfig.json && tsc --project tsconfig.node.json",
     "lint": "eslint src vite.config.ts",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"*.{js,mjs,ts,json,html}\"",
+    "validate:content": "node --experimental-strip-types scripts/validate-content.ts",
     "test:unit": "vitest run tests/helpers/runner.test.ts",
     "test:component": "vitest run tests/helpers/testing-library.dom.test.tsx",
     "test:coverage": "vitest run --coverage",
