@@ -41,6 +41,42 @@ const provider: SourceReviewAuthorization = {
   ],
 };
 describe("read-only synthetic Review and Source Review", () => {
+  it("retains outcome-neutral terminal origin for a synthetic reconsidered teaching consumer", () => {
+    const evidence = Object.freeze({
+      evaluation: Object.freeze({ outcome: "RECONSIDERATION" }),
+      responseStage: "REASONING",
+    });
+    const authorization = {
+      receivingActivityId: "C04-A04" as const,
+      invokingPhase: "POST_CONFIRMATION_EXPLANATION" as const,
+      relationships: [
+        {
+          id: "synthetic-boundary",
+          text: "Synthetic authorized boundary relationship",
+        },
+      ],
+    };
+    const review = projectReview(
+      "C04-A04",
+      authorization.invokingPhase,
+      authorization.invokingPhase,
+      "REVIEW",
+      authorization,
+    );
+    expect(review?.returnTo).toBe("POST_CONFIRMATION_EXPLANATION");
+    expect(evidence.evaluation.outcome).toBe("RECONSIDERATION");
+    expect(evidence.responseStage).toBe("REASONING");
+    expect(JSON.stringify(review)).not.toContain("evaluation");
+    expect(
+      projectSourceReview(
+        "C04-A04",
+        authorization.invokingPhase,
+        authorization.invokingPhase,
+        "SOURCE_REVIEW",
+        undefined,
+      ),
+    ).toBeNull();
+  });
   it("retains exact post-confirmation origin without leaking or mutating synthetic authorization", () => {
     const auth = {
       receivingActivityId: "C04-A04" as const,

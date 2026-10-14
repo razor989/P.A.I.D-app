@@ -6,6 +6,16 @@ import {
   validateActivityDefinition,
 } from "./public";
 import type { ActivityDefinition, ActivityPorts } from "./public";
+import { ExactDecimal, quantity } from "../../core/public";
+import type { LearnerResponse } from "../../core/public";
+import {
+  c04ResponseContracts,
+  c04Scenarios,
+} from "../../study/competencies/c04/public";
+import { createC04ModelState } from "../../competencies/c04-percentage-change/model/public";
+import type { C04ModelDefinition } from "../../competencies/c04-percentage-change/model/public";
+import { evaluateC04Response } from "../../competencies/c04-percentage-change/evaluators/public";
+import type { C04EvaluationDefinition } from "../../competencies/c04-percentage-change/evaluators/public";
 
 // Fixtures below exercise injected contracts; they are NOT canonical source manifests.
 
@@ -60,6 +70,445 @@ const actor = (definition = a01, dependencies = ports()) => {
   ).start();
   return instance;
 };
+
+// Explicitly synthetic compatibility definition; not a production C04 binding.
+const staged: ActivityDefinition = {
+  ...post,
+  edges: {
+    ...post.edges,
+    RECONSIDERATION: { CONTINUE: "POST_CONFIRMATION_EXPLANATION" },
+  },
+  support: {
+    ACTIVE: ["REVIEW"],
+    REVISION: ["REVIEW"],
+    POST_CONFIRMATION_EXPLANATION: ["REVIEW"],
+  },
+  responseStages: {
+    contractId: "synthetic-staged-v1",
+    version: 1,
+    scenarioId: "C04-S04",
+    primaryFields: [
+      {
+        key: "difference",
+        acceptedKinds: ["EXACT_QUANTITY", "SEMANTIC_BOUNDARY"],
+        quantityKind: "MONETARY_AMOUNT",
+        unit: "PHP",
+        basis: "per month",
+      },
+      {
+        key: "percentage",
+        acceptedKinds: ["EXACT_QUANTITY", "SEMANTIC_BOUNDARY"],
+        quantityKind: "PERCENTAGE_CHANGE",
+        unit: "%",
+        basis: null,
+      },
+    ],
+    reasoningField: "explanation",
+    optionIds: ["synthetic-correct", "synthetic-wrong"],
+  },
+  terminalTeaching: { outcomes: "BOTH", contentId: "synthetic-boundary" },
+};
+const primary = (amount = "999", percentage = "100"): LearnerResponse => ({
+  kind: "COMPOSITE",
+  parts: [
+    {
+      key: "difference",
+      response: {
+        kind: "EXACT_QUANTITY",
+        value: quantity(
+          ExactDecimal.from(amount),
+          "MONETARY_AMOUNT",
+          "PHP",
+          "per month",
+        ),
+      },
+    },
+    {
+      key: "percentage",
+      response: {
+        kind: "EXACT_QUANTITY",
+        value: quantity(
+          ExactDecimal.from(percentage),
+          "PERCENTAGE_CHANGE",
+          "%",
+          null,
+        ),
+      },
+    },
+  ],
+});
+const explained = (
+  response: LearnerResponse,
+  selectionId = "synthetic-wrong",
+): LearnerResponse => ({
+  kind: "COMPOSITE",
+  parts: [
+    ...(response.kind === "COMPOSITE" ? response.parts : []),
+    { key: "explanation", response: { kind: "SINGLE_SELECTION", selectionId } },
+  ],
+});
+
+describe("synthetic staged response and both-outcome compatibility", () => {
+  it("adapts the four actual Study option banks to unchanged T023 without production actor bindings", () => {
+    const exact = (amount: string, percent = false) => ({
+      kind: "EXACT_QUANTITY" as const,
+      value: quantity(
+        ExactDecimal.from(amount),
+        percent ? "PERCENTAGE_CHANGE" : "MONETARY_AMOUNT",
+        percent ? "%" : "PHP",
+        percent ? null : "per month",
+      ),
+    });
+    const numerical = [
+      { original: exact("18000"), new: exact("18000"), difference: exact("0") },
+      {
+        differenceA: exact("2000"),
+        differenceB: exact("2000"),
+        percentageA: exact("10", true),
+        percentageB: exact("20", true),
+      },
+      {
+        original: exact("30000"),
+        new: exact("27000"),
+        difference: exact("-3000"),
+        percentage: exact("-10", true),
+      },
+      {
+        difference: exact("1500"),
+        percentage: {
+          kind: "SEMANTIC_BOUNDARY" as const,
+          resolution: {
+            kind: "UNDEFINED" as const,
+            reason: "Original value is zero",
+          },
+        },
+      },
+    ];
+    c04ResponseContracts.forEach((contract, index) => {
+      const scenario = c04Scenarios[index]!;
+      const cases = (index === 1 ? ["C04-S02-A", "C04-S02-B"] : [null]).map(
+        (childId, pairIndex) => {
+          const original = scenario.facts[pairIndex * 2]!;
+          const next = scenario.facts[pairIndex * 2 + 1]!;
+          if (
+            original.resolution.kind !== "KNOWN" ||
+            next.resolution.kind !== "KNOWN"
+          )
+            throw new Error("Unestablished source fact");
+          return {
+            childId,
+            original: { role: original.key, value: original.resolution.value },
+            newValue: { role: next.key, value: next.resolution.value },
+          };
+        },
+      );
+      const state = createC04ModelState({
+        activityId: contract.activityId,
+        scenarioId: contract.scenarioId,
+        cases,
+      } as C04ModelDefinition);
+      const choice = contract.choices[0]!;
+      const required = Object.entries(numerical[index]!);
+      const definition = {
+        state,
+        fields: [...required.map(([key]) => key), choice.role],
+        choices: [
+          {
+            key: choice.role,
+            options: choice.options.map((option) => option.id),
+            correctId: choice.correctId,
+          },
+        ],
+      } as C04EvaluationDefinition;
+      for (const option of choice.options) {
+        const response = {
+          kind: "COMPOSITE",
+          parts: [
+            ...required.map(([key, response]) => ({ key, response })),
+            {
+              key: choice.role,
+              response: { kind: "SINGLE_SELECTION", selectionId: option.id },
+            },
+          ],
+        };
+        expect(evaluateC04Response(definition, response).outcome).toBe(
+          option.id === choice.correctId ? "CONFIRMED" : "RECONSIDERATION",
+        );
+      }
+      expect(() =>
+        evaluateC04Response(definition, {
+          kind: "COMPOSITE",
+          parts: required.map(([key, response]) => ({ key, response })),
+        }),
+      ).toThrow();
+    });
+  });
+  it("commits semantic boundaries without grading, rejects wrong representations, and blocks support-stage mutation", () => {
+    const a = actor(staged);
+    a.send({ type: "CONTINUE" });
+    const invalid = {
+      kind: "COMPOSITE",
+      parts: [
+        {
+          key: "difference",
+          response: {
+            kind: "EXACT_QUANTITY",
+            value: quantity(
+              ExactDecimal.from("5"),
+              "MONETARY_AMOUNT",
+              "USD",
+              "per month",
+            ),
+          },
+        },
+      ],
+    } as const;
+    a.send({ type: "RESPONSE_CHANGED", response: invalid });
+    expect(a.getSnapshot().context.response).toBeNull();
+    for (const resolution of [
+      { kind: "UNDEFINED", reason: "Original value is zero" },
+      { kind: "UNKNOWN", reason: "learner judgment" },
+      { kind: "NOT_APPLICABLE" },
+    ] as const) {
+      const response: LearnerResponse = {
+        kind: "COMPOSITE",
+        parts: [
+          {
+            key: "difference",
+            response: {
+              kind: "EXACT_QUANTITY",
+              value: quantity(
+                ExactDecimal.from("1500"),
+                "MONETARY_AMOUNT",
+                "PHP",
+                "per month",
+              ),
+            },
+          },
+          {
+            key: "percentage",
+            response: { kind: "SEMANTIC_BOUNDARY", resolution },
+          },
+        ],
+      };
+      a.send({ type: "RESPONSE_CHANGED", response });
+      a.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+      const during = a.getSnapshot().context;
+      expect(during.responseStage).toBe("REASONING");
+      expect(during.evaluation).toBeNull();
+      a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      const supported = a.getSnapshot().context;
+      a.send({ type: "RETURN_TO_PRIMARY" });
+      a.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+      a.send({ type: "RESPONSE_CHANGED", response: explained(response) });
+      a.send({ type: "CHECK_RESPONSE" });
+      expect(a.getSnapshot().context).toBe(supported);
+      a.send({ type: "CLOSE_SUPPORT" });
+      expect(a.getSnapshot().context.responseStage).toBe("REASONING");
+      a.send({ type: "RETURN_TO_PRIMARY" });
+      expect(a.getSnapshot().context.currentPrimaryCommitment).toBeNull();
+    }
+    a.stop();
+  });
+  it("commits incorrect structural values without evaluation, locks primary and retains first evidence across revisions", () => {
+    let evaluations = 0;
+    const a = actor(staged, {
+      ...ports("RECONSIDERATION"),
+      evaluate: (response) => {
+        evaluations++;
+        expect(response.kind).toBe("COMPOSITE");
+        return {
+          outcome: "RECONSIDERATION",
+          diagnostic: "RECONSIDER_UNDEFINED",
+        };
+      },
+    });
+    a.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+    expect(a.getSnapshot().context.currentPrimaryCommitment).toBeNull();
+    a.send({ type: "CONTINUE" });
+    const submitted = primary();
+    a.send({ type: "RESPONSE_CHANGED", response: submitted });
+    a.send({ type: "CHECK_RESPONSE" });
+    expect(evaluations).toBe(0);
+    a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+    a.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+    expect(a.getSnapshot().context.responseStage).toBe("PRIMARY");
+    a.send({ type: "CLOSE_SUPPORT" });
+    a.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+    const first = a.getSnapshot().context.firstPrimaryCommitment!;
+    expect(first.reasoningPreviouslyExposed).toBe(false);
+    expect(Object.isFrozen(first.response)).toBe(true);
+    expect(first.response).not.toBe(submitted);
+    expect(evaluations).toBe(0);
+    expect(a.getSnapshot().context).toMatchObject({
+      responseStage: "REASONING",
+      hasChecked: false,
+      evaluation: null,
+      feedbackRevision: null,
+    });
+    a.send({ type: "RESPONSE_CHANGED", response: explained(primary("1500")) });
+    expect(a.getSnapshot().context.responseRevision).toBe(1);
+    a.send({
+      type: "RESPONSE_CHANGED",
+      response: explained(submitted, "unknown"),
+    });
+    expect(a.getSnapshot().context.responseRevision).toBe(1);
+    a.send({ type: "RESPONSE_CHANGED", response: explained(submitted) });
+    a.send({ type: "CHECK_RESPONSE" });
+    a.send({ type: "CHECK_RESPONSE" });
+    expect(evaluations).toBe(1);
+    expect(a.getSnapshot().context.position).toBe("RECONSIDERATION");
+    a.send({ type: "FEEDBACK_DELIVERED", revision: 2 });
+    a.send({ type: "REVISE" });
+    expect(a.getSnapshot().context).toMatchObject({
+      position: "REVISION",
+      responseStage: "PRIMARY",
+      currentPrimaryCommitment: null,
+      hasChecked: true,
+      checkedRevision: null,
+      feedbackRevision: null,
+    });
+    expect(a.getSnapshot().context.firstPrimaryCommitment).toBe(first);
+    a.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+    expect(
+      a.getSnapshot().context.currentPrimaryCommitment
+        ?.reasoningPreviouslyExposed,
+    ).toBe(true);
+    a.send({ type: "RETURN_TO_PRIMARY" });
+    expect(a.getSnapshot().context.currentPrimaryCommitment).toBeNull();
+    a.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+    a.send({
+      type: "RESPONSE_CHANGED",
+      response: explained(
+        a.getSnapshot().context.currentPrimaryCommitment!.response,
+      ),
+    });
+    a.send({ type: "CHECK_RESPONSE" });
+    expect(evaluations).toBe(1);
+    a.send({ type: "CHECK_AGAIN" });
+    expect(evaluations).toBe(2);
+    expect(a.getSnapshot().context.firstPrimaryCommitment).toBe(first);
+    expect(() => Object.assign(first, { sequence: 100 })).toThrow();
+    a.stop();
+  });
+  it.each(["CONFIRMED", "RECONSIDERATION"] as const)(
+    "requires actual feedback and independently acknowledged teaching for %s",
+    (outcome) => {
+      const a = actor(staged, ports(outcome));
+      a.send({ type: "CONTINUE" });
+      a.send({ type: "RESPONSE_CHANGED", response: primary() });
+      a.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+      a.send({ type: "RESPONSE_CHANGED", response: explained(primary()) });
+      a.send({ type: "CHECK_RESPONSE" });
+      a.send({ type: "CONTINUE" });
+      expect(a.getSnapshot().context.position).not.toBe(
+        "POST_CONFIRMATION_EXPLANATION",
+      );
+      const revision = a.getSnapshot().context.responseRevision;
+      a.send({ type: "FEEDBACK_DELIVERED", revision });
+      a.send({ type: "FINISH_ACTIVITY" });
+      expect(a.getSnapshot().context.position).not.toBe("COMPLETE");
+      a.send({ type: "CONTINUE" });
+      expect(a.getSnapshot().context.evaluation?.outcome).toBe(outcome);
+      for (const [r, contentId] of [
+        [revision - 1, "synthetic-boundary"],
+        [revision, "wrong-reference"],
+      ] as const)
+        a.send({ type: "TERMINAL_TEACHING_DELIVERED", revision: r, contentId });
+      a.send({ type: "FINISH_ACTIVITY" });
+      expect(a.getSnapshot().context.terminalTeachingRevision).toBeNull();
+      a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      const during = a.getSnapshot().context;
+      for (const type of [
+        "COMMIT_PRIMARY_RESPONSE",
+        "RETURN_TO_PRIMARY",
+        "CHECK_AGAIN",
+        "FINISH_ACTIVITY",
+      ] as const)
+        a.send({ type });
+      a.send({
+        type: "TERMINAL_TEACHING_DELIVERED",
+        revision,
+        contentId: "synthetic-boundary",
+      });
+      expect(a.getSnapshot().context).toBe(during);
+      a.send({ type: "CLOSE_SUPPORT" });
+      // Test simulates trusted delivery; source projection alone is not delivery.
+      a.send({
+        type: "TERMINAL_TEACHING_DELIVERED",
+        revision,
+        contentId: "synthetic-boundary",
+      });
+      a.send({ type: "FINISH_ACTIVITY" });
+      expect(a.getSnapshot().context.position).toBe("COMPLETE");
+      expect(a.getSnapshot().context.evaluation?.outcome).toBe(outcome);
+      a.stop();
+    },
+  );
+  it("rejects malformed policies/events, partial primary commitments and legacy staging events", () => {
+    for (const definition of [
+      {
+        ...staged,
+        terminalTeaching: { outcomes: "CONFIRMED", contentId: "x" },
+      },
+      { ...staged, responseStages: { ...staged.responseStages!, version: 0 } },
+      {
+        ...staged,
+        responseStages: { ...staged.responseStages!, optionIds: ["x", "x"] },
+      },
+      {
+        ...staged,
+        responseStages: {
+          ...staged.responseStages!,
+          reasoningField: "difference",
+        },
+      },
+      { ...staged, edges: post.edges },
+    ])
+      expect(() => validateActivityDefinition(definition)).toThrow();
+    expect(
+      isActivityEvent({
+        type: "TERMINAL_TEACHING_DELIVERED",
+        revision: 1,
+        contentId: "x",
+        extra: true,
+      }),
+    ).toBe(false);
+    const a = actor(staged);
+    a.send({ type: "CONTINUE" });
+    const partial: LearnerResponse = { kind: "COMPOSITE", parts: [] };
+    a.send({ type: "RESPONSE_CHANGED", response: partial });
+    a.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+    expect(a.getSnapshot().context.currentPrimaryCommitment).toBeNull();
+    a.send({
+      type: "RESPONSE_CHANGED",
+      response: {
+        kind: "COMPOSITE",
+        parts: [
+          {
+            key: "percentage",
+            response: {
+              kind: "SEMANTIC_BOUNDARY",
+              resolution: { kind: "UNKNOWN", reason: "learner judgment" },
+            },
+          },
+        ],
+      },
+    });
+    a.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+    expect(a.getSnapshot().context.currentPrimaryCommitment).toBeNull();
+    a.send({ type: "RESPONSE_CHANGED", response: explained(primary()) });
+    expect(a.getSnapshot().context.responseRevision).toBe(1);
+    a.stop();
+    const legacy = actor();
+    legacy.send({ type: "CONTINUE" });
+    const before = legacy.getSnapshot().context;
+    legacy.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+    legacy.send({ type: "RETURN_TO_PRIMARY" });
+    expect(legacy.getSnapshot().context).toBe(before);
+    legacy.stop();
+  });
+});
 
 describe("shared parallel activity grammar", () => {
   it("requires a declared, current, learner-controlled post-confirmation route and preserves exact Review origin", () => {

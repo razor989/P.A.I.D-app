@@ -11,6 +11,8 @@ import {
 } from "../../schemas/public";
 import {
   c04Activities,
+  c04ResponseContracts,
+  validateC04ResponseContracts,
   c04Boundary,
   c04Catalog,
   c04Competency,
@@ -58,6 +60,21 @@ const change = (scenario: number, key: string, resolution: unknown) => {
 };
 
 describe("C04 fixed source definitions", () => {
+  it("adds response authority through the existing public boundary without changing copy or catalog", () => {
+    validateC04ResponseContracts(c04ResponseContracts);
+    expect(c04ResponseContracts.map((record) => record.activityId)).toEqual(
+      c04Competency.activityIds,
+    );
+    expect(Object.keys(c04Copy)).toHaveLength(34);
+    for (const record of c04ResponseContracts) {
+      expect(c04Copy).toHaveProperty(record.confirmationFeedbackRef);
+      for (const choice of record.choices)
+        expect(c04Copy).toHaveProperty(choice.incorrectFeedbackRef);
+      if (record.terminalTeaching)
+        expect(c04Copy).toHaveProperty(record.terminalTeaching.contentRef);
+    }
+    check();
+  });
   it("has exactly one/four/four ordered owned definitions and only two S02 children", () => {
     expect([
       c04Catalog.competencies.size,

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { createActor } from "xstate";
+import { createActivityMachine } from "../activity-machine/public";
 import type {
   ActivityContext,
   ActivityDefinition,
@@ -6,6 +8,8 @@ import type {
 } from "../activity-machine/public";
 import { projectSemanticActivityFrame } from "./public";
 import type { FrameContent, FrameInput } from "./public";
+import { ExactDecimal, quantity } from "../../core/public";
+import type { LearnerResponse } from "../../core/public";
 
 // Synthetic enforcement fixtures, NOT authenticated fixed-bank composition.
 const id = "C04-A03" as const;
@@ -102,6 +106,256 @@ function input(
   };
 }
 describe("synthetic semantic exposure enforcement", () => {
+  it.each(["CONFIRMED", "RECONSIDERATION"] as const)(
+    "projects synthetic staged controls and acknowledged terminal teaching for %s without hidden metadata",
+    (outcome) => {
+      const policy: ActivityDefinition = {
+        activityId: "C04-A04",
+        edges: {
+          ENTRY: { CONTINUE: "ACTIVE" },
+          CONFIRMATION: { CONTINUE: "POST_CONFIRMATION_EXPLANATION" },
+          RECONSIDERATION: { CONTINUE: "POST_CONFIRMATION_EXPLANATION" },
+        },
+        support: {
+          ACTIVE: ["REVIEW"],
+          POST_CONFIRMATION_EXPLANATION: ["REVIEW"],
+        },
+        responseStages: {
+          contractId: "synthetic-staged",
+          version: 1,
+          scenarioId: "C04-S04",
+          primaryFields: [
+            {
+              key: "quantity",
+              acceptedKinds: ["EXACT_QUANTITY"],
+              quantityKind: "MONETARY_AMOUNT",
+              unit: "PHP",
+              basis: null,
+            },
+          ],
+          reasoningField: "reason",
+          optionIds: ["one", "two"],
+        },
+        terminalTeaching: { outcomes: "BOTH", contentId: "synthetic-teaching" },
+      };
+      const dependencies: ActivityPorts = {
+        ...ports,
+        evaluate: () => ({
+          outcome,
+          diagnostic: outcome === "CONFIRMED" ? null : "RECONSIDER_UNDEFINED",
+        }),
+      };
+      const a = createActor(
+        createActivityMachine(policy, dependencies),
+      ).start();
+      const source: FrameContent = {
+        responseContract: {
+          id: "synthetic-staged",
+          text: "Enter your response",
+        },
+        modelFacts: [],
+        derivedFacts: [],
+        references: [
+          {
+            content: {
+              id: "synthetic-teaching",
+              text: "HIDDEN_TERMINAL_TRUTH",
+            },
+            phases: ["ACTIVE", "POST_CONFIRMATION_EXPLANATION"],
+            timing: "PUBLIC",
+          },
+        ],
+        responseControls: [
+          {
+            activityId: "C04-A04",
+            contractId: "synthetic-staged",
+            version: 1,
+            stage: "PRIMARY",
+            controls: [{ role: "quantity", acceptedKinds: ["EXACT_QUANTITY"] }],
+          },
+          {
+            activityId: "C04-A04",
+            contractId: "synthetic-staged",
+            version: 1,
+            stage: "REASONING",
+            controls: [
+              {
+                role: "reason",
+                acceptedKinds: ["SINGLE_SELECTION"],
+                options: [
+                  { id: "one", text: "SYNTHETIC_REASON_ONE" },
+                  { id: "two", text: "SYNTHETIC_REASON_TWO" },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const frame = (content = source) =>
+        projectSemanticActivityFrame({
+          definition: policy,
+          ports: dependencies,
+          content,
+          context: a.getSnapshot().context,
+          phase: a.getSnapshot().context.position,
+          support: a.getSnapshot().context.origin ? "REVIEW" : "NONE",
+        });
+      a.send({ type: "CONTINUE" });
+      expect(frame().responseStage).toBe("PRIMARY");
+      expect(frame().responseControls?.map((control) => control.role)).toEqual([
+        "quantity",
+      ]);
+      expect(JSON.stringify(frame())).not.toMatch(
+        /SYNTHETIC_REASON|HIDDEN_TERMINAL_TRUTH|correctId|primaryCommitment/,
+      );
+      expect(frame().allowedLearnerIntents).not.toContain(
+        "COMMIT_PRIMARY_RESPONSE",
+      );
+      const primary: LearnerResponse = {
+        kind: "COMPOSITE",
+        parts: [
+          {
+            key: "quantity",
+            response: {
+              kind: "EXACT_QUANTITY",
+              value: quantity(
+                ExactDecimal.from("7"),
+                "MONETARY_AMOUNT",
+                "PHP",
+                null,
+              ),
+            },
+          },
+        ],
+      };
+      a.send({ type: "RESPONSE_CHANGED", response: primary });
+      expect(frame().allowedLearnerIntents).toContain(
+        "COMMIT_PRIMARY_RESPONSE",
+      );
+      expect(frame().allowedLearnerIntents).not.toContain("CHECK_RESPONSE");
+      a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      expect(frame().responseControls).toEqual([]);
+      expect(frame().allowedLearnerIntents).toEqual(["CLOSE_SUPPORT"]);
+      a.send({ type: "CLOSE_SUPPORT" });
+      a.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+      expect(frame().responseStage).toBe("REASONING");
+      expect(frame().responseControls?.map((control) => control.role)).toEqual([
+        "reason",
+      ]);
+      expect(frame().allowedLearnerIntents).toContain("RETURN_TO_PRIMARY");
+      expect(frame().allowedLearnerIntents).not.toContain("CHECK_RESPONSE");
+      const bad = structuredClone(source);
+      Object.assign(bad.responseControls![1]!.controls[0]!, {
+        correctId: "one",
+      });
+      expect(() => frame(bad)).toThrow();
+      const wrongVersion = structuredClone(source);
+      Object.assign(wrongVersion.responseControls![1]!, { version: 2 });
+      expect(() => frame(wrongVersion)).toThrow();
+      const forged = {
+        ...a.getSnapshot().context,
+        currentPrimaryCommitment: {
+          ...a.getSnapshot().context.currentPrimaryCommitment!,
+          version: 99,
+        },
+      };
+      expect(() =>
+        projectSemanticActivityFrame({
+          definition: policy,
+          ports: dependencies,
+          content: source,
+          context: forged,
+          phase: "ACTIVE",
+          support: "NONE",
+        }),
+      ).toThrow();
+      a.send({
+        type: "RESPONSE_CHANGED",
+        response: {
+          kind: "COMPOSITE",
+          parts: [
+            ...(primary.kind === "COMPOSITE" ? primary.parts : []),
+            {
+              key: "reason",
+              response: { kind: "SINGLE_SELECTION", selectionId: "two" },
+            },
+          ],
+        },
+      });
+      expect(frame().allowedLearnerIntents).toContain("CHECK_RESPONSE");
+      a.send({ type: "CHECK_RESPONSE" });
+      expect(frame().allowedLearnerIntents).not.toContain("CONTINUE");
+      const revision = a.getSnapshot().context.responseRevision;
+      a.send({ type: "FEEDBACK_DELIVERED", revision });
+      expect(frame().allowedLearnerIntents).toContain("CONTINUE");
+      expect(frame().completionActionAvailability).toBe(false);
+      a.send({ type: "CONTINUE" });
+      const deliveredSource: FrameContent = {
+        ...source,
+        references: [
+          {
+            content: {
+              id: "synthetic-teaching",
+              text: "HIDDEN_TERMINAL_TRUTH",
+            },
+            phases: ["POST_CONFIRMATION_EXPLANATION"],
+            timing: "CURRENT_FEEDBACK",
+          },
+        ],
+        feedback: {
+          outcome,
+          revision,
+          content: {
+            id: "synthetic-feedback",
+            text: "Delivered current feedback",
+          },
+        },
+        review: {
+          receivingActivityId: "C04-A04",
+          invokingPhase: "POST_CONFIRMATION_EXPLANATION",
+          relationships: [
+            { id: "principle", text: "Approved synthetic relationship" },
+          ],
+        },
+      };
+      expect(frame(deliveredSource).contentReferences).toEqual([
+        { id: "synthetic-teaching", text: "HIDDEN_TERMINAL_TRUTH" },
+      ]);
+      expect(frame(deliveredSource).feedbackState?.outcome).toBe(outcome);
+      expect(frame(deliveredSource).completionActionAvailability).toBe(false);
+      expect(a.getSnapshot().context.terminalTeachingRevision).toBeNull();
+      a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      expect(frame(deliveredSource).review?.returnTo).toBe(
+        "POST_CONFIRMATION_EXPLANATION",
+      );
+      expect(frame(deliveredSource).responseControls).toEqual([]);
+      a.send({ type: "CLOSE_SUPPORT" });
+      // Explicit test simulation of trusted delivery, never projector side effect.
+      a.send({
+        type: "TERMINAL_TEACHING_DELIVERED",
+        revision,
+        contentId: "synthetic-teaching",
+      });
+      expect(frame(deliveredSource).allowedLearnerIntents).toContain(
+        "FINISH_ACTIVITY",
+      );
+      expect(JSON.stringify(frame(deliveredSource))).not.toMatch(
+        /correctId|Commitment|diagnostic|"magnitude"/,
+      );
+      const stale = { ...a.getSnapshot().context, feedbackRevision: null };
+      expect(() =>
+        projectSemanticActivityFrame({
+          definition: policy,
+          ports: dependencies,
+          content: deliveredSource,
+          context: stale,
+          phase: "POST_CONFIRMATION_EXPLANATION",
+          support: "NONE",
+        }),
+      ).toThrow();
+      a.stop();
+    },
+  );
   it("projects only current confirmed post-confirmation continuation and phase-gated synthetic content", () => {
     const route: ActivityDefinition = {
       ...definition,

@@ -117,7 +117,15 @@ function directories(directory) {
   ];
 }
 
-function restriction(directory) {
+// P10-T027 Stage D exception: exact importer and public targets only.
+const stageDImporter = "src/engine/activity-machine/public.test.ts";
+const stageDPublicTargets = [
+  "study/competencies/c04/public",
+  "competencies/c04-percentage-change/model/public",
+  "competencies/c04-percentage-change/evaluators/public",
+];
+
+function restriction(directory, publicTargets = []) {
   const [owner, module] = directory.split("/");
   const disallowed = [...(forbidden[owner] ?? [])];
   if (owner === "competencies" && forbiddenPeers.includes(module)) {
@@ -163,8 +171,11 @@ function restriction(directory) {
       (item) => item !== owner && !disallowed.includes(item),
     )) {
       const relative = relativePattern(directory, target);
+      const allowed = publicTargets
+        .filter((entry) => entry.startsWith(`${target}/`))
+        .map((entry) => `${escape(entry.slice(target.length + 1))}(?:\\.ts)?$`);
       patterns.push({
-        regex: `^(?:@/${escape(target)}|(?:\\./)?${relative})/(?!public(?:\\.ts)?$)`,
+        regex: `^(?:@/${escape(target)}|(?:\\./)?${relative})/(?!public(?:\\.ts)?$${allowed.length ? `|${allowed.join("|")}` : ""})`,
         message: `Import ${target}/public.ts instead of its internals.`,
       });
     }
@@ -214,5 +225,9 @@ export default tseslint.config(
       ),
     )
     .flatMap(directories)
-    .map(restriction),
+    .map((directory) => restriction(directory)),
+  {
+    ...restriction("engine/activity-machine", stageDPublicTargets),
+    files: [stageDImporter],
+  },
 );

@@ -55,6 +55,14 @@ function retain(value: unknown): ExecutableActivityBinding {
   // T024 definitions are plain, validated graph data; clone before freezing so
   // caller-owned definitions remain mutable without changing registered edges.
   const definition = structuredClone(value.definition);
+  const freezeMetadata = (value: unknown): void => {
+    if (value === null || typeof value !== "object") return;
+    for (const child of Object.values(value) as unknown[])
+      freezeMetadata(child);
+    Object.freeze(value);
+  };
+  if (definition.responseStages) freezeMetadata(definition.responseStages);
+  if (definition.terminalTeaching) freezeMetadata(definition.terminalTeaching);
   for (const edges of Object.values(definition.edges)) Object.freeze(edges);
   for (const modes of Object.values(definition.support)) Object.freeze(modes);
   Object.freeze(definition.edges);

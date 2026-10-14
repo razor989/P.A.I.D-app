@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ExecutableActivityBinding } from "./public";
 import { ActivityRegistry } from "./public";
+import { createActivityActor } from "../activity-runtime/public";
 
 // Test-only structural binding; NOT a canonical C04 Study manifest or answer bank.
 const fixture = (): ExecutableActivityBinding => ({
@@ -21,6 +22,73 @@ const fixture = (): ExecutableActivityBinding => ({
 });
 
 describe("closed executable registry", () => {
+  it("defensively freezes synthetic optional stage/teaching metadata and isolates fresh actors", () => {
+    const input = fixture();
+    const definition = {
+      ...input.definition,
+      edges: {
+        ENTRY: { CONTINUE: "ACTIVE" as const },
+        CONFIRMATION: { CONTINUE: "POST_CONFIRMATION_EXPLANATION" as const },
+        RECONSIDERATION: { CONTINUE: "POST_CONFIRMATION_EXPLANATION" as const },
+      },
+      responseStages: {
+        contractId: "synthetic",
+        version: 1,
+        scenarioId: "C04-S01",
+        primaryFields: [
+          {
+            key: "quantity",
+            acceptedKinds: ["EXACT_QUANTITY" as const],
+            quantityKind: "MONETARY_AMOUNT",
+            unit: "PHP",
+            basis: null,
+          },
+        ],
+        reasoningField: "interpretation",
+        optionIds: ["synthetic-one", "synthetic-two"],
+      },
+      terminalTeaching: {
+        outcomes: "BOTH" as const,
+        contentId: "synthetic-teaching",
+      },
+    };
+    const registry = new ActivityRegistry([{ ...input, definition }]);
+    const retained = registry.resolve(input.activityId).definition;
+    definition.responseStages.contractId = "mutated";
+    definition.responseStages.version = 99;
+    definition.responseStages.primaryFields[0]!.unit = "USD";
+    definition.responseStages.optionIds.push("extra");
+    definition.terminalTeaching.contentId = "mutated";
+    expect(retained.responseStages).toMatchObject({
+      contractId: "synthetic",
+      version: 1,
+      optionIds: ["synthetic-one", "synthetic-two"],
+    });
+    expect(retained.terminalTeaching?.contentId).toBe("synthetic-teaching");
+    const visit = (value: unknown): void => {
+      if (value && typeof value === "object") {
+        expect(Object.isFrozen(value)).toBe(true);
+        Object.values(value).forEach(visit);
+      }
+    };
+    visit(retained);
+    expect(() =>
+      Object.assign(retained.responseStages!.primaryFields[0]!, {
+        unit: "USD",
+      }),
+    ).toThrow();
+    const a = createActivityActor(registry, input.activityId);
+    const b = createActivityActor(registry, input.activityId);
+    a.start();
+    b.start();
+    a.send({ type: "CONTINUE" });
+    expect(a.getSnapshot().context.position).toBe("ACTIVE");
+    expect(b.getSnapshot().context.position).toBe("ENTRY");
+    expect(a.getSnapshot().context).not.toBe(b.getSnapshot().context);
+    expect(a.getSnapshot().context.firstPrimaryCommitment).toBeNull();
+    a.stop();
+    b.stop();
+  });
   it("distinguishes the canonical 4/4/4/4/5/4 universe from bound executions", () => {
     const registry = new ActivityRegistry([]);
     const counts = ["C01", "C02", "C03", "C04", "C05", "C06"].map(

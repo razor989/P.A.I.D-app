@@ -12,6 +12,13 @@ import type {
   ScenarioDefinition,
 } from "../../schemas/public";
 import { c04Copy } from "./content";
+import { validateC04ResponseContracts } from "./response-contracts";
+
+export {
+  c04ResponseContracts,
+  validateC04ResponseContracts,
+} from "./response-contracts";
+export type { C04ResponseContract } from "./response-contracts";
 
 export { c04Copy } from "./content";
 
@@ -260,6 +267,7 @@ export function validateC04Local(
   copy: Readonly<Record<string, string>>,
   roles: readonly (readonly string[])[] = c04RoleKeys,
 ): void {
+  validateC04ResponseContracts();
   if (
     !competencyDefinitionSchema.safeParse(competency).success ||
     !same(competency, parsedCompetency) ||

@@ -1,5 +1,10 @@
 import { isActivityId, isLearnerResponse } from "../../core/public";
 import type { ActivityId } from "../../core/public";
+import {
+  currentPrimaryCommitmentValid,
+  primaryResponseReady,
+  stagedResponseReady,
+} from "../activity-machine/public";
 import type {
   ActivityContext,
   ActivityDefinition,
@@ -26,11 +31,27 @@ export type Exposure = Readonly<{
   /** Explicit reveal is tied to a particular current check, not a boolean. */
   revealRevision?: number;
 }>;
+export type PublicResponseControl = Readonly<{
+  role: string;
+  acceptedKinds: readonly string[];
+  options?: readonly SafeText[];
+}>;
+export type ChoiceExposure = Readonly<{
+  activityId: ActivityId;
+  contractId: string;
+  version: number;
+  stage: "RESPONSE" | "PRIMARY" | "REASONING";
+  controls: readonly PublicResponseControl[];
+}>;
+export type ResponseStageProjection = "PRIMARY" | "REASONING";
 export type FrameContent = Readonly<{
   references: readonly Exposure[];
   modelFacts: readonly Exposure[];
   derivedFacts: readonly Exposure[];
   responseContract: SafeText;
+  /** Trusted composition authenticates Study membership before injection.
+   * This input carries public controls only, never an evaluator answer key. */
+  responseControls?: readonly ChoiceExposure[];
   feedback?: Readonly<{
     outcome: "CONFIRMED" | "RECONSIDERATION";
     revision: number;
@@ -59,6 +80,8 @@ export type SemanticActivityFrame = Readonly<{
   exposedDerivedFacts: readonly SafeText[];
   allowedLearnerIntents: readonly LearnerIntent[];
   responseContract: SafeText;
+  responseStage?: ResponseStageProjection;
+  responseControls?: readonly PublicResponseControl[];
   feedbackState?: Readonly<{
     outcome: "CONFIRMED" | "RECONSIDERATION";
     content: SafeText;
@@ -136,6 +159,8 @@ export function projectSemanticActivityFrame(
   input: FrameInput,
 ): SemanticActivityFrame {
   const { context: c, phase, support, definition, ports, content } = input;
+  const staging = definition.responseStages;
+  const teaching = definition.terminalTeaching;
   if (
     !isActivityId(c.activityId) ||
     c.activityId !== definition.activityId ||
@@ -152,6 +177,27 @@ export function projectSemanticActivityFrame(
     !safeText(content.responseContract)
   )
     throw new TypeError("Invalid semantic projection input");
+  if (
+    staging &&
+    c.responseStage !== "PRIMARY" &&
+    c.responseStage !== "REASONING"
+  )
+    throw new TypeError("Missing response stage");
+  if (
+    staging &&
+    c.responseStage === "REASONING" &&
+    !currentPrimaryCommitmentValid(c, staging)
+  )
+    throw new TypeError("Invalid primary commitment exposure");
+  if (
+    teaching &&
+    phase === "POST_CONFIRMATION_EXPLANATION" &&
+    (c.terminalEntryRevision !== c.responseRevision ||
+      c.checkedRevision !== c.responseRevision ||
+      c.feedbackRevision !== c.responseRevision ||
+      !c.evaluation)
+  )
+    throw new TypeError("Invalid terminal teaching entry");
   const currentCheck =
     c.response !== null &&
     c.hasChecked &&
@@ -161,7 +207,8 @@ export function projectSemanticActivityFrame(
       (phase === "POST_CONFIRMATION_EXPLANATION" &&
         definition.edges.CONFIRMATION?.CONTINUE ===
           "POST_CONFIRMATION_EXPLANATION" &&
-        c.evaluation.outcome === "CONFIRMED" &&
+        (c.evaluation.outcome === "CONFIRMED" ||
+          teaching?.outcomes === "BOTH") &&
         c.feedbackRevision === c.responseRevision) ||
       (phase === "RECONSIDERATION" &&
         c.evaluation.outcome === "RECONSIDERATION") ||
@@ -209,6 +256,10 @@ export function projectSemanticActivityFrame(
   const finish =
     idle &&
     currentFeedback &&
+    (!teaching ||
+      (phase === "POST_CONFIRMATION_EXPLANATION" &&
+        c.terminalEntryRevision === c.responseRevision &&
+        c.terminalTeachingRevision === c.responseRevision)) &&
     ((phase === "CONFIRMATION" &&
       definition.edges.CONFIRMATION?.CONTINUE !==
         "POST_CONFIRMATION_EXPLANATION") ||
@@ -227,10 +278,13 @@ export function projectSemanticActivityFrame(
   if (idle) {
     const edge = definition.edges[phase];
     if (
-      phase === "CONFIRMATION" &&
+      (phase === "CONFIRMATION" ||
+        (phase === "RECONSIDERATION" && teaching?.outcomes === "BOTH")) &&
       edge?.CONTINUE === "POST_CONFIRMATION_EXPLANATION" &&
       currentFeedback &&
-      c.evaluation?.outcome === "CONFIRMED"
+      (phase === "CONFIRMATION"
+        ? c.evaluation?.outcome === "CONFIRMED"
+        : c.evaluation?.outcome === "RECONSIDERATION")
     )
       intents.push("CONTINUE");
     if (
@@ -269,15 +323,32 @@ export function projectSemanticActivityFrame(
       (phase === "ACTIVE" || phase === "REVISION") &&
       c.response !== null &&
       isLearnerResponse(c.response) &&
+      (!staging || stagedResponseReady(c, staging)) &&
       c.checkedRevision !== c.responseRevision &&
       authorized(() => ports.ready(c.response!))
     ) {
       if (phase === "ACTIVE" && !c.hasChecked) intents.push("CHECK_RESPONSE");
       if (c.hasChecked) intents.push("CHECK_AGAIN");
     }
+    if (staging && (phase === "ACTIVE" || phase === "REVISION")) {
+      if (
+        c.responseStage === "PRIMARY" &&
+        primaryResponseReady(c.response, staging) &&
+        Number.isSafeInteger(c.commitmentSequence) &&
+        c.commitmentSequence! < Number.MAX_SAFE_INTEGER
+      )
+        intents.push("COMMIT_PRIMARY_RESPONSE");
+      if (
+        c.responseStage === "REASONING" &&
+        currentPrimaryCommitmentValid(c, staging) &&
+        c.responseRevision < Number.MAX_SAFE_INTEGER
+      )
+        intents.push("RETURN_TO_PRIMARY");
+    }
     if (
       (phase === "CONFIRMATION" || phase === "RECONSIDERATION") &&
-      c.response !== null
+      c.response !== null &&
+      (!staging || c.responseRevision < Number.MAX_SAFE_INTEGER)
     )
       intents.push("REVISE");
     if (finish) intents.push("FINISH_ACTIVITY");
@@ -294,25 +365,162 @@ export function projectSemanticActivityFrame(
     content.feedback.outcome === c.evaluation?.outcome
       ? safeText(content.feedback.content)
       : null;
+  const editable = idle && (phase === "ACTIVE" || phase === "REVISION");
+  const controls: PublicResponseControl[] = [];
+  // Boolean structural check deliberately avoids Array.isArray's any[] type
+  // predicate erasing the declared readonly element types at this boundary.
+  const array = (value: unknown): boolean => Array.isArray(value);
+  const exact = (value: unknown, keys: readonly string[]): boolean =>
+    value !== null &&
+    typeof value === "object" &&
+    Object.getPrototypeOf(value) === Object.prototype &&
+    Reflect.ownKeys(value).length === keys.length &&
+    keys.every(
+      (key) => Object.getOwnPropertyDescriptor(value, key)?.value !== undefined,
+    );
+  if (content.responseControls) {
+    if (!array(content.responseControls))
+      throw new TypeError("Invalid control exposures");
+    const stages = new Set<string>();
+    for (const exposure of content.responseControls) {
+      if (
+        !exact(exposure, [
+          "activityId",
+          "contractId",
+          "version",
+          "stage",
+          "controls",
+        ]) ||
+        exposure.activityId !== c.activityId ||
+        exposure.contractId !==
+          (staging?.contractId ?? content.responseContract.id) ||
+        !Number.isSafeInteger(exposure.version) ||
+        exposure.version < 1 ||
+        (staging && exposure.version !== staging.version) ||
+        !["RESPONSE", "PRIMARY", "REASONING"].includes(exposure.stage) ||
+        (staging
+          ? exposure.stage === "RESPONSE"
+          : exposure.stage !== "RESPONSE") ||
+        stages.has(exposure.stage) ||
+        !array(exposure.controls)
+      )
+        throw new TypeError("Unauthorized control exposure");
+      stages.add(exposure.stage);
+      const seen = new Set<string>();
+      for (const control of exposure.controls) {
+        if (
+          !exact(control, [
+            "role",
+            "acceptedKinds",
+            ...(control.options ? ["options"] : []),
+          ]) ||
+          typeof control.role !== "string" ||
+          !control.role ||
+          control.role.trim() !== control.role ||
+          seen.has(control.role) ||
+          !array(control.acceptedKinds) ||
+          !control.acceptedKinds.length ||
+          new Set(control.acceptedKinds).size !==
+            control.acceptedKinds.length ||
+          !control.acceptedKinds.every((kind: string) =>
+            [
+              "EXACT_QUANTITY",
+              "SEMANTIC_BOUNDARY",
+              "SINGLE_SELECTION",
+            ].includes(kind),
+          )
+        )
+          throw new TypeError("Invalid public control");
+        seen.add(control.role);
+        if (staging) {
+          const field = staging.primaryFields.find(
+            (item) => item.key === control.role,
+          );
+          if (
+            exposure.stage === "PRIMARY"
+              ? !field ||
+                control.options !== undefined ||
+                JSON.stringify(control.acceptedKinds) !==
+                  JSON.stringify(field.acceptedKinds)
+              : control.role !== staging.reasoningField ||
+                JSON.stringify(control.acceptedKinds) !==
+                  JSON.stringify(["SINGLE_SELECTION"])
+          )
+            throw new TypeError("Wrong-stage control");
+        }
+        let options: readonly SafeText[] | undefined;
+        if (control.options) {
+          if (
+            !array(control.options) ||
+            control.options.length < 2 ||
+            new Set(control.options.map((item: SafeText) => item.id)).size !==
+              control.options.length ||
+            control.options.some(
+              (item: SafeText) =>
+                !exact(item, ["id", "text"]) || !safeText(item),
+            )
+          )
+            throw new TypeError("Invalid selectable options");
+          if (
+            staging &&
+            JSON.stringify(control.options.map((item: SafeText) => item.id)) !==
+              JSON.stringify(staging.optionIds)
+          )
+            throw new TypeError("Wrong option authority");
+          options = Object.freeze(
+            control.options.map((item: SafeText) => safeText(item)!),
+          );
+        } else if (control.acceptedKinds.includes("SINGLE_SELECTION"))
+          throw new TypeError("Missing selectable options");
+        if (editable && exposure.stage === (c.responseStage ?? "RESPONSE"))
+          controls.push(
+            Object.freeze({
+              role: control.role,
+              acceptedKinds: Object.freeze([...control.acceptedKinds]),
+              ...(options ? { options } : {}),
+            }),
+          );
+      }
+      if (
+        staging &&
+        (exposure.stage === "PRIMARY"
+          ? seen.size !== staging.primaryFields.length
+          : seen.size !== 1)
+      )
+        throw new TypeError("Incomplete stage controls");
+    }
+  }
+  // The declared terminal reference cannot be smuggled through a PUBLIC exposure
+  // in an earlier phase. Projection is not a delivery acknowledgment.
+  const exposures = (items: readonly Exposure[]): readonly Exposure[] =>
+    teaching
+      ? items.filter(
+          (item) =>
+            item.content.id !== teaching.contentId ||
+            (phase === "POST_CONFIRMATION_EXPLANATION" &&
+              currentFeedback &&
+              item.timing === "CURRENT_FEEDBACK"),
+        )
+      : items;
   return Object.freeze({
     activityId: c.activityId,
     stateId: support === "NONE" ? phase : `${support}[${phase}]`,
     contentReferences: projectFacts(
-      content.references,
+      exposures(content.references),
       phase,
       c,
       currentCheck,
       currentFeedback,
     ),
     exposedModelFacts: projectFacts(
-      content.modelFacts,
+      exposures(content.modelFacts),
       phase,
       c,
       currentCheck,
       currentFeedback,
     ),
     exposedDerivedFacts: projectFacts(
-      content.derivedFacts,
+      exposures(content.derivedFacts),
       phase,
       c,
       currentCheck,
@@ -320,6 +528,10 @@ export function projectSemanticActivityFrame(
     ),
     allowedLearnerIntents: Object.freeze(intents),
     responseContract: safeText(content.responseContract)!,
+    ...(staging ? { responseStage: c.responseStage! } : {}),
+    ...(content.responseControls
+      ? { responseControls: Object.freeze(controls) }
+      : {}),
     ...(feedback
       ? {
           feedbackState: Object.freeze({
