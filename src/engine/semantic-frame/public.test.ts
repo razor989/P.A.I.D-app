@@ -102,6 +102,129 @@ function input(
   };
 }
 describe("synthetic semantic exposure enforcement", () => {
+  it("projects only current confirmed post-confirmation continuation and phase-gated synthetic content", () => {
+    const route: ActivityDefinition = {
+      ...definition,
+      edges: {
+        ...definition.edges,
+        CONFIRMATION: { CONTINUE: "POST_CONFIRMATION_EXPLANATION" },
+      },
+      support: {
+        ...definition.support,
+        POST_CONFIRMATION_EXPLANATION: ["REVIEW"],
+      },
+    };
+    const explanation = "SYNTHETIC_UNDEFINED_RESULT_EXPLANATION";
+    const source: FrameContent = {
+      ...content,
+      references: [
+        ...content.references,
+        {
+          content: { id: "c04/S04/undefined-result", text: explanation },
+          phases: ["POST_CONFIRMATION_EXPLANATION"],
+          timing: "CURRENT_FEEDBACK",
+        },
+      ],
+      derivedFacts: [
+        {
+          content: { id: "synthetic-answer", text: "SYNTHETIC_BOUNDARY" },
+          phases: ["POST_CONFIRMATION_EXPLANATION"],
+          timing: "CURRENT_FEEDBACK",
+        },
+        {
+          content: { id: "unrelated", text: "UNRELATED_SECRET" },
+          phases: ["ACTIVE"],
+          timing: "PUBLIC",
+        },
+      ],
+      review: {
+        receivingActivityId: id,
+        invokingPhase: "POST_CONFIRMATION_EXPLANATION",
+        relationships: [
+          { id: "synthetic-relation", text: "Synthetic reference" },
+        ],
+      },
+    };
+    const checked: Partial<ActivityContext> = {
+      hasChecked: true,
+      checkedRevision: 3,
+      feedbackRevision: 3,
+      evaluation: { outcome: "CONFIRMED", diagnostic: "PRIVATE_DIAGNOSTIC" },
+    };
+    const frame = (
+      phase: ActivityContext["position"],
+      evidence = checked,
+      support: FrameInput["support"] = "NONE",
+      selected = route,
+    ) =>
+      projectSemanticActivityFrame({
+        ...input(evidence, phase, support, source),
+        definition: selected,
+      });
+    const before = frame("ACTIVE", {});
+    const confirmation = frame("CONFIRMATION");
+    expect(before.allowedLearnerIntents).not.toContain("CONTINUE");
+    expect(confirmation.allowedLearnerIntents).toContain("CONTINUE");
+    expect(confirmation.allowedLearnerIntents).not.toContain("FINISH_ACTIVITY");
+    for (const result of [
+      before,
+      confirmation,
+      frame("CONFIRMATION", { ...checked, feedbackRevision: null }),
+    ]) {
+      expect(JSON.stringify(result)).not.toContain(explanation);
+      expect(JSON.stringify(result)).not.toContain("SYNTHETIC_BOUNDARY");
+    }
+    expect(
+      frame("CONFIRMATION", { ...checked, feedbackRevision: null })
+        .allowedLearnerIntents,
+    ).not.toContain("CONTINUE");
+    for (const evidence of [
+      { ...checked, checkedRevision: 2 },
+      { ...checked, responseRevision: 4 },
+      { ...checked, evaluation: null },
+      { ...checked, hasChecked: false },
+    ]) {
+      expect(
+        frame("CONFIRMATION", evidence).allowedLearnerIntents,
+      ).not.toContain("CONTINUE");
+      expect(
+        frame("POST_CONFIRMATION_EXPLANATION", evidence).contentReferences,
+      ).toEqual([]);
+    }
+    const explained = frame("POST_CONFIRMATION_EXPLANATION");
+    expect(explained.contentReferences).toContainEqual({
+      id: "c04/S04/undefined-result",
+      text: explanation,
+    });
+    expect(explained.allowedLearnerIntents).toContain("FINISH_ACTIVITY");
+    expect(explained.allowedLearnerIntents).not.toContain("CONTINUE");
+    expect(explained.reviewAvailability).toBe(true);
+    expect(explained.sourceReviewAvailability).toBe(false);
+    expect(JSON.stringify(explained)).not.toContain("UNRELATED_SECRET");
+    expect(JSON.stringify(explained)).not.toContain("PRIVATE_DIAGNOSTIC");
+    expect(explained).not.toHaveProperty("context");
+    const stale = frame("POST_CONFIRMATION_EXPLANATION", {
+      ...checked,
+      feedbackRevision: null,
+    });
+    expect(stale.contentReferences).toEqual([]);
+    expect(stale.exposedDerivedFacts).toEqual([]);
+    expect(stale.completionActionAvailability).toBe(false);
+    const review = frame("POST_CONFIRMATION_EXPLANATION", checked, "REVIEW");
+    expect(review.stateId).toBe("REVIEW[POST_CONFIRMATION_EXPLANATION]");
+    expect(review.review?.returnTo).toBe("POST_CONFIRMATION_EXPLANATION");
+    expect(review.allowedLearnerIntents).toEqual(["CLOSE_SUPPORT"]);
+    expect(
+      frame("POST_CONFIRMATION_EXPLANATION", checked, "NONE", {
+        ...route,
+        support: { ACTIVE: ["REVIEW"] },
+      }).reviewAvailability,
+    ).toBe(false);
+    expect(() =>
+      frame("POST_CONFIRMATION_EXPLANATION", checked, "NONE", definition),
+    ).toThrow();
+    expect(source.references[1]?.content.text).toBe(explanation);
+  });
   it("omits hidden answers, nested metadata, diagnostics and stale evidence before check and during support", () => {
     for (const data of [
       input(),

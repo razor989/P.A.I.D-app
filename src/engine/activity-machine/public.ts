@@ -8,6 +8,7 @@ export type InstructionalPhase =
   | "ACTIVE"
   | "REVISION"
   | "CONFIRMATION"
+  | "POST_CONFIRMATION_EXPLANATION"
   | "RECONSIDERATION"
   | "INFO_NEEDED"
   | "COMPLETE";
@@ -18,6 +19,7 @@ export type Position =
   | "ACTIVE"
   | "REVISION"
   | "CONFIRMATION"
+  | "POST_CONFIRMATION_EXPLANATION"
   | "RECONSIDERATION"
   | "INFO_NEEDED"
   | "COMPLETE"
@@ -86,6 +88,7 @@ export type ActivityContext = Readonly<{
 const position = (value: string): value is Position =>
   value === "ENTRY" ||
   value === "ACTIVE" ||
+  value === "CONFIRMATION" ||
   value === "INFO_NEEDED" ||
   (/^EXP-[0-9]{2,}$/.test(value) && value !== "EXP-00");
 const own = (value: unknown): value is Record<string, unknown> =>
@@ -119,14 +122,24 @@ export function validateActivityDefinition(
     throw new TypeError("Invalid activity definition");
   const nodes = new Set<Position>(["ENTRY", "ACTIVE", "INFO_NEEDED"]);
   for (const [from, edges] of Object.entries(value.edges)) {
-    if (!position(from) || !own(edges))
+    if (
+      !position(from) ||
+      !own(edges) ||
+      (from === "CONFIRMATION" && !fields(edges, ["CONTINUE"]))
+    )
       throw new TypeError("Invalid activity edge");
     nodes.add(from);
     for (const [intent, target] of Object.entries(edges)) {
       if (
         !intents.some((item) => item === intent) ||
         typeof target !== "string" ||
-        !position(target) ||
+        !(position(target) || target === "POST_CONFIRMATION_EXPLANATION") ||
+        target === "CONFIRMATION" ||
+        (from === "CONFIRMATION" &&
+          (intent !== "CONTINUE" ||
+            target !== "POST_CONFIRMATION_EXPLANATION")) ||
+        (target === "POST_CONFIRMATION_EXPLANATION" &&
+          (from !== "CONFIRMATION" || intent !== "CONTINUE")) ||
         (intent === "INFO_NEEDED" && target !== "INFO_NEEDED") ||
         (from === "INFO_NEEDED" &&
           (intent !== "PREVIOUS" || target === "INFO_NEEDED")) ||
@@ -318,6 +331,10 @@ export function createActivityMachine(
     if (
       !valid(event) ||
       !idle({ context }) ||
+      (context.position === "CONFIRMATION" &&
+        edges.CONFIRMATION?.CONTINUE === "POST_CONFIRMATION_EXPLANATION") ||
+      (context.position === "POST_CONFIRMATION_EXPLANATION" &&
+        edges.CONFIRMATION?.CONTINUE !== "POST_CONFIRMATION_EXPLANATION") ||
       context.response === null ||
       context.checkedRevision !== context.responseRevision ||
       context.feedbackRevision !== context.responseRevision ||
@@ -552,6 +569,30 @@ export function createActivityMachine(
           target: "reconsideration",
         },
         on: {
+          CONTINUE: {
+            guard: ({
+              context,
+              event,
+            }: {
+              context: ActivityContext;
+              event: ActivityEvent;
+            }) =>
+              valid(event) &&
+              idle({ context }) &&
+              edges.CONFIRMATION?.CONTINUE ===
+                "POST_CONFIRMATION_EXPLANATION" &&
+              context.position === "CONFIRMATION" &&
+              context.response !== null &&
+              context.hasChecked &&
+              context.checkedRevision === context.responseRevision &&
+              context.evaluation?.outcome === "CONFIRMED" &&
+              context.feedbackRevision === context.responseRevision,
+            target: "postConfirmationExplanation",
+            actions: [
+              assign({ position: "POST_CONFIRMATION_EXPLANATION" }),
+              seal,
+            ],
+          },
           FEEDBACK_DELIVERED: {
             guard: ({
               context,
@@ -584,6 +625,15 @@ export function createActivityMachine(
             target: "revision",
             actions: [assign({ position: "REVISION" }), seal],
           },
+          FINISH_ACTIVITY: {
+            guard: finish,
+            target: "complete",
+            actions: [assign({ position: "COMPLETE" }), seal],
+          },
+        },
+      },
+      postConfirmationExplanation: {
+        on: {
           FINISH_ACTIVITY: {
             guard: finish,
             target: "complete",

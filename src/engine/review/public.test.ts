@@ -41,6 +41,33 @@ const provider: SourceReviewAuthorization = {
   ],
 };
 describe("read-only synthetic Review and Source Review", () => {
+  it("retains exact post-confirmation origin without leaking or mutating synthetic authorization", () => {
+    const auth = {
+      receivingActivityId: "C04-A04" as const,
+      invokingPhase: "POST_CONFIRMATION_EXPLANATION" as const,
+      relationships: [{ id: "synthetic", text: "Synthetic relationship" }],
+    };
+    const projection = projectReview(
+      "C04-A04",
+      auth.invokingPhase,
+      auth.invokingPhase,
+      "REVIEW",
+      auth,
+    );
+    expect(projection?.returnTo).toBe(auth.invokingPhase);
+    expect(projection?.invokingPhase).toBe(auth.invokingPhase);
+    expect(
+      projectReview(
+        "C04-A04",
+        auth.invokingPhase,
+        "CONFIRMATION",
+        "REVIEW",
+        auth,
+      ),
+    ).toBeNull();
+    expect(Object.isFrozen(projection?.relationships[0])).toBe(true);
+    expect(auth.relationships[0]?.text).toBe("Synthetic relationship");
+  });
   it("preserves exact origin, rejects mismatched content and never modifies the supplied record", () => {
     const auth = {
       receivingActivityId: "C04-A03" as const,

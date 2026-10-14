@@ -75,6 +75,7 @@ const phaseValid = (value: unknown): value is Position =>
   value === "ACTIVE" ||
   value === "REVISION" ||
   value === "CONFIRMATION" ||
+  value === "POST_CONFIRMATION_EXPLANATION" ||
   value === "RECONSIDERATION" ||
   value === "INFO_NEEDED" ||
   value === "COMPLETE" ||
@@ -106,6 +107,9 @@ function projectFacts(
   currentCheck: boolean,
   currentFeedback: boolean,
 ): readonly SafeText[] {
+  // This phase is reachable only after delivery for the current confirmed check.
+  if (phase === "POST_CONFIRMATION_EXPLANATION" && !currentFeedback)
+    return Object.freeze([]);
   if (!Array.isArray(items)) return Object.freeze([]);
   const entries: readonly Exposure[] = items;
   const output: SafeText[] = [];
@@ -136,6 +140,9 @@ export function projectSemanticActivityFrame(
     !isActivityId(c.activityId) ||
     c.activityId !== definition.activityId ||
     !phaseValid(phase) ||
+    (phase === "POST_CONFIRMATION_EXPLANATION" &&
+      definition.edges.CONFIRMATION?.CONTINUE !==
+        "POST_CONFIRMATION_EXPLANATION") ||
     c.position !== phase ||
     !["NONE", "REVIEW", "SOURCE_REVIEW", "REINFORCEMENT"].includes(support) ||
     (support === "NONE" ? c.origin !== null : c.origin !== phase) ||
@@ -151,6 +158,11 @@ export function projectSemanticActivityFrame(
     c.checkedRevision === c.responseRevision &&
     c.evaluation !== null &&
     ((phase === "CONFIRMATION" && c.evaluation.outcome === "CONFIRMED") ||
+      (phase === "POST_CONFIRMATION_EXPLANATION" &&
+        definition.edges.CONFIRMATION?.CONTINUE ===
+          "POST_CONFIRMATION_EXPLANATION" &&
+        c.evaluation.outcome === "CONFIRMED" &&
+        c.feedbackRevision === c.responseRevision) ||
       (phase === "RECONSIDERATION" &&
         c.evaluation.outcome === "RECONSIDERATION") ||
       phase === "COMPLETE");
@@ -197,7 +209,11 @@ export function projectSemanticActivityFrame(
   const finish =
     idle &&
     currentFeedback &&
-    (phase === "CONFIRMATION" || phase === "RECONSIDERATION") &&
+    ((phase === "CONFIRMATION" &&
+      definition.edges.CONFIRMATION?.CONTINUE !==
+        "POST_CONFIRMATION_EXPLANATION") ||
+      phase === "POST_CONFIRMATION_EXPLANATION" ||
+      phase === "RECONSIDERATION") &&
     authorized(() =>
       ports.completionEligible({
         activityId: c.activityId,
@@ -210,6 +226,13 @@ export function projectSemanticActivityFrame(
   const intents: LearnerIntent[] = [];
   if (idle) {
     const edge = definition.edges[phase];
+    if (
+      phase === "CONFIRMATION" &&
+      edge?.CONTINUE === "POST_CONFIRMATION_EXPLANATION" &&
+      currentFeedback &&
+      c.evaluation?.outcome === "CONFIRMED"
+    )
+      intents.push("CONTINUE");
     if (
       (phase === "ENTRY" || phase.startsWith("EXP-")) &&
       edge?.CONTINUE &&

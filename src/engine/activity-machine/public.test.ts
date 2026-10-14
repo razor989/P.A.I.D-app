@@ -27,6 +27,15 @@ const a01: ActivityDefinition = {
   edges: { ENTRY: { CONTINUE: "ACTIVE" } },
   support: { ACTIVE: ["REVIEW"] },
 };
+// Synthetic optional route; not the production C04-A04 manifest.
+const post: ActivityDefinition = {
+  activityId: "C04-A04",
+  edges: {
+    ENTRY: { CONTINUE: "ACTIVE" },
+    CONFIRMATION: { CONTINUE: "POST_CONFIRMATION_EXPLANATION" },
+  },
+  support: { POST_CONFIRMATION_EXPLANATION: ["REVIEW"] },
+};
 const response = {
   kind: "SINGLE_SELECTION" as const,
   selectionId: "learner-choice",
@@ -53,6 +62,120 @@ const actor = (definition = a01, dependencies = ports()) => {
 };
 
 describe("shared parallel activity grammar", () => {
+  it("requires a declared, current, learner-controlled post-confirmation route and preserves exact Review origin", () => {
+    expect(() => validateActivityDefinition(post)).not.toThrow();
+    const a = actor(post);
+    a.send({ type: "CONTINUE" });
+    a.send({ type: "CONTINUE" });
+    expect(a.getSnapshot().context.position).toBe("ACTIVE");
+    a.send({ type: "RESPONSE_CHANGED", response });
+    a.send({ type: "CHECK_RESPONSE" });
+    a.send({ type: "CONTINUE" });
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().context.position).toBe("CONFIRMATION");
+    a.send({ type: "FEEDBACK_DELIVERED", revision: 0 });
+    a.send({ type: "CONTINUE" });
+    expect(a.getSnapshot().context.position).toBe("CONFIRMATION");
+    a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+    const evidence = a.getSnapshot().context;
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().context.position).toBe("CONFIRMATION");
+    a.send({ type: "CONTINUE" });
+    expect(a.getSnapshot().value).toEqual({
+      instructional: "postConfirmationExplanation",
+      support: "none",
+    });
+    expect(a.getSnapshot().context).toMatchObject({
+      hasChecked: true,
+      responseRevision: evidence.responseRevision,
+      checkedRevision: evidence.checkedRevision,
+      feedbackRevision: evidence.feedbackRevision,
+      checkedResponse: evidence.checkedResponse,
+      evaluation: evidence.evaluation,
+    });
+    a.send({ type: "OPEN_SUPPORT", mode: "SOURCE_REVIEW" });
+    expect(a.getSnapshot().value).toHaveProperty("support", "none");
+    a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+    expect(a.getSnapshot().context.origin).toBe(
+      "POST_CONFIRMATION_EXPLANATION",
+    );
+    const during = a.getSnapshot().context;
+    for (const type of [
+      "CONTINUE",
+      "FINISH_ACTIVITY",
+      "REVISE",
+      "CHECK_AGAIN",
+    ] as const)
+      a.send({ type });
+    expect(a.getSnapshot().context).toEqual(during);
+    a.send({ type: "CLOSE_SUPPORT" });
+    expect(a.getSnapshot().context.position).toBe(
+      "POST_CONFIRMATION_EXPLANATION",
+    );
+    a.send({ type: "CONTINUE" });
+    expect(a.getSnapshot().context.position).toBe(
+      "POST_CONFIRMATION_EXPLANATION",
+    );
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().context.position).toBe("COMPLETE");
+    a.stop();
+  });
+
+  it("rejects undeclared or conflicting destinations and preserves legacy/reconsideration Finish", () => {
+    for (const edges of [
+      { ENTRY: { CONTINUE: "POST_CONFIRMATION_EXPLANATION" } },
+      { ENTRY: { CONTINUE: "ACTIVE" }, CONFIRMATION: { CONTINUE: "ACTIVE" } },
+      {
+        ENTRY: { CONTINUE: "ACTIVE" },
+        CONFIRMATION: { PREVIOUS: "POST_CONFIRMATION_EXPLANATION" },
+      },
+      {
+        ENTRY: { CONTINUE: "ACTIVE" },
+        CONFIRMATION: {
+          CONTINUE: "POST_CONFIRMATION_EXPLANATION",
+          PREVIOUS: "ACTIVE",
+        },
+      },
+    ])
+      expect(() => validateActivityDefinition({ ...post, edges })).toThrow();
+    for (const definition of [a01, post]) {
+      const a = actor(definition, ports("RECONSIDERATION"));
+      a.send({ type: "CONTINUE" });
+      a.send({ type: "RESPONSE_CHANGED", response });
+      a.send({ type: "CHECK_RESPONSE" });
+      a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+      a.send({ type: "CONTINUE" });
+      expect(a.getSnapshot().context.position).toBe("RECONSIDERATION");
+      a.send({ type: "FINISH_ACTIVITY" });
+      expect(a.getSnapshot().context.position).toBe("COMPLETE");
+      a.stop();
+    }
+  });
+  it("does not progress on missing check or feedback, and Finish still obeys completion eligibility", () => {
+    const a = actor(post, ports("CONFIRMED", false));
+    a.send({ type: "CONTINUE" });
+    a.send({ type: "RESPONSE_CHANGED", response });
+    a.send({ type: "CONTINUE" });
+    expect(a.getSnapshot().context.position).toBe("ACTIVE");
+    a.send({ type: "CHECK_RESPONSE" });
+    a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+    a.send({ type: "CONTINUE" });
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().context.position).toBe(
+      "POST_CONFIRMATION_EXPLANATION",
+    );
+    a.stop();
+    const legacy = actor(a01);
+    legacy.send({ type: "CONTINUE" });
+    legacy.send({ type: "RESPONSE_CHANGED", response });
+    legacy.send({ type: "CHECK_RESPONSE" });
+    legacy.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+    legacy.send({ type: "CONTINUE" });
+    expect(legacy.getSnapshot().context.position).toBe("CONFIRMATION");
+    legacy.send({ type: "FINISH_ACTIVITY" });
+    expect(legacy.getSnapshot().context.position).toBe("COMPLETE");
+    legacy.stop();
+  });
   it("constructs at ENTRY/NONE and follows only explicit explanation edges", () => {
     const a = actor(a02);
     expect(a.getSnapshot().value).toEqual({
