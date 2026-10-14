@@ -93,7 +93,9 @@ describe("shared parallel activity grammar", () => {
       });
       expect(a.getSnapshot().context.checkedRevision).toBe(1);
       a.send({ type: "FINISH_ACTIVITY" });
-      expect(a.getSnapshot().context.position).toBe("ACTIVE");
+      expect(a.getSnapshot().context.position).toBe(
+        outcome === "CONFIRMED" ? "CONFIRMATION" : "RECONSIDERATION",
+      );
       a.send({ type: "FEEDBACK_DELIVERED", revision: 0 });
       expect(a.getSnapshot().context.feedbackRevision).toBeNull();
       a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
@@ -284,9 +286,8 @@ describe("shared parallel activity grammar", () => {
     a.send({ type: "OPEN_SUPPORT", mode: "SOURCE_REVIEW" });
     expect(a.getSnapshot().value).toEqual({
       instructional: "confirmation",
-      support: "sourceReview",
+      support: "none",
     });
-    a.send({ type: "CLOSE_SUPPORT" });
     expect(a.getSnapshot().context).toEqual(before);
     a.stop();
     const b = actor(
@@ -460,7 +461,7 @@ describe("shared parallel activity grammar", () => {
     a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
     a.send({ type: "CHECK_RESPONSE" });
     a.send({ type: "FINISH_ACTIVITY" });
-    expect(a.getSnapshot().context.position).toBe("ACTIVE");
+    expect(a.getSnapshot().context.position).toBe("REVISION");
     a.send({ type: "CHECK_AGAIN" });
     a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
     expect(a.getSnapshot().context.feedbackRevision).toBeNull();
@@ -474,5 +475,239 @@ describe("shared parallel activity grammar", () => {
     a.send({ type: "FINISH_ACTIVITY" });
     expect(a.getSnapshot().context).toEqual(snapshot.context);
     a.stop();
+  });
+
+  it("uses check history rather than response edit count to select first check and recheck", () => {
+    let evaluations = 0;
+    const a = actor(a01, {
+      ...ports("RECONSIDERATION"),
+      evaluate: () => {
+        evaluations++;
+        return {
+          outcome: "RECONSIDERATION",
+          diagnostic: "RECONSIDER_INTERPRETATION",
+        };
+      },
+    });
+    a.send({ type: "CONTINUE" });
+    a.send({ type: "RESPONSE_CHANGED", response });
+    a.send({
+      type: "RESPONSE_CHANGED",
+      response: { ...response, selectionId: "second" },
+    });
+    a.send({
+      type: "RESPONSE_CHANGED",
+      response: { ...response, selectionId: "third" },
+    });
+    expect(a.getSnapshot().context).toMatchObject({
+      responseRevision: 3,
+      hasChecked: false,
+      checkedRevision: null,
+    });
+    a.send({ type: "CHECK_AGAIN" });
+    expect(evaluations).toBe(0);
+    a.send({ type: "CHECK_RESPONSE" });
+    expect(evaluations).toBe(1);
+    expect(a.getSnapshot().context).toMatchObject({
+      position: "RECONSIDERATION",
+      hasChecked: true,
+      checkedRevision: 3,
+      feedbackRevision: null,
+    });
+    a.send({ type: "CHECK_RESPONSE" });
+    a.send({ type: "CHECK_AGAIN" });
+    expect(evaluations).toBe(1);
+    a.send({ type: "FEEDBACK_DELIVERED", revision: 3 });
+    a.send({ type: "REVISE" });
+    a.send({
+      type: "RESPONSE_CHANGED",
+      response: { ...response, selectionId: "fourth" },
+    });
+    expect(a.getSnapshot().context).toMatchObject({
+      position: "REVISION",
+      hasChecked: true,
+      responseRevision: 4,
+      checkedResponse: null,
+      checkedRevision: null,
+      feedbackRevision: null,
+      evaluation: null,
+    });
+    a.send({ type: "FINISH_ACTIVITY" });
+    a.send({ type: "CHECK_RESPONSE" });
+    expect(evaluations).toBe(1);
+    expect(a.getSnapshot().value).toEqual({
+      instructional: "revision",
+      support: "none",
+    });
+    a.send({ type: "CHECK_AGAIN" });
+    expect(evaluations).toBe(2);
+    expect(a.getSnapshot().context.checkedRevision).toBe(4);
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().value).toEqual({
+      instructional: "reconsideration",
+      support: "none",
+    });
+    a.send({ type: "FEEDBACK_DELIVERED", revision: 3 });
+    expect(a.getSnapshot().context.feedbackRevision).toBeNull();
+    a.send({ type: "FEEDBACK_DELIVERED", revision: 4 });
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().value).toEqual({
+      instructional: "complete",
+      support: "none",
+    });
+    a.stop();
+  });
+
+  it.each(["CONFIRMED", "RECONSIDERATION"] as const)(
+    "enforces phase-specific support origins and preserves %s evidence on return",
+    (outcome) => {
+      const phase =
+        outcome === "CONFIRMED" ? "CONFIRMATION" : "RECONSIDERATION";
+      const support: ActivityDefinition["support"] = {
+        ACTIVE: ["REVIEW"],
+        [phase]: ["REVIEW", "SOURCE_REVIEW"] as const,
+        COMPLETE: ["REVIEW"],
+      };
+      const sourceOrigins: string[] = [];
+      const a = actor(
+        { ...a01, support },
+        {
+          ...ports(outcome),
+          sourceReviewAvailable: (id, origin) => {
+            sourceOrigins.push(origin);
+            return id === "C04-A01" && origin === phase;
+          },
+        },
+      );
+      a.send({ type: "CONTINUE" });
+      a.send({ type: "RESPONSE_CHANGED", response });
+      a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      expect(a.getSnapshot().context.origin).toBe("ACTIVE");
+      a.send({ type: "CLOSE_SUPPORT" });
+      a.send({ type: "CHECK_RESPONSE" });
+      const beforeFeedback = a.getSnapshot().context;
+      a.send({ type: "OPEN_SUPPORT", mode: "SOURCE_REVIEW" });
+      expect(sourceOrigins.length).toBeGreaterThan(0);
+      expect(sourceOrigins.every((origin) => origin === phase)).toBe(true);
+      expect(a.getSnapshot().value).toEqual({
+        instructional:
+          outcome === "CONFIRMED" ? "confirmation" : "reconsideration",
+        support: "sourceReview",
+      });
+      expect(a.getSnapshot().context.origin).toBe(phase);
+      a.send({ type: "CHECK_AGAIN" });
+      a.send({ type: "FINISH_ACTIVITY" });
+      expect(a.getSnapshot().context.checkedRevision).toBe(1);
+      expect(a.getSnapshot().context.feedbackRevision).toBeNull();
+      a.send({ type: "CLOSE_SUPPORT" });
+      expect(a.getSnapshot().context).toEqual(beforeFeedback);
+      a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+      const afterFeedback = a.getSnapshot().context;
+      a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      expect(a.getSnapshot().context.origin).toBe(phase);
+      a.send({ type: "CLOSE_SUPPORT" });
+      expect(a.getSnapshot().context).toEqual(afterFeedback);
+      a.send({ type: "FINISH_ACTIVITY" });
+      expect(a.getSnapshot().context.position).toBe("COMPLETE");
+      a.send({ type: "OPEN_SUPPORT", mode: "SOURCE_REVIEW" });
+      expect(a.getSnapshot().value).toEqual({
+        instructional: "complete",
+        support: "none",
+      });
+      a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      expect(a.getSnapshot().context.origin).toBe("COMPLETE");
+      a.send({ type: "CLOSE_SUPPORT" });
+      expect(a.getSnapshot().context.position).toBe("COMPLETE");
+      a.stop();
+    },
+  );
+
+  it.each(["CONFIRMED", "RECONSIDERATION"] as const)(
+    "does not inherit ACTIVE-only support in %s or COMPLETE",
+    (outcome) => {
+      const a = actor(a01, ports(outcome));
+      a.send({ type: "CONTINUE" });
+      a.send({ type: "RESPONSE_CHANGED", response });
+      a.send({ type: "CHECK_RESPONSE" });
+      const checked = a.getSnapshot().context;
+      a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      expect(a.getSnapshot().context).toEqual(checked);
+      expect(a.getSnapshot().value.support).toBe("none");
+      a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+      a.send({ type: "FINISH_ACTIVITY" });
+      const complete = a.getSnapshot().context;
+      a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      expect(a.getSnapshot().context).toEqual(complete);
+      expect(a.getSnapshot().value).toEqual({
+        instructional: "complete",
+        support: "none",
+      });
+      a.stop();
+    },
+  );
+
+  it("permits the first check after exactly one edit and never treats a repeated check as a new evaluation", () => {
+    let evaluations = 0;
+    const a = actor(a01, {
+      ...ports(),
+      evaluate: () => {
+        evaluations++;
+        return { outcome: "CONFIRMED", diagnostic: null };
+      },
+    });
+    a.send({ type: "CONTINUE" });
+    a.send({ type: "RESPONSE_CHANGED", response });
+    a.send({ type: "CHECK_RESPONSE" });
+    const checked = a.getSnapshot().context;
+    expect(checked).toMatchObject({
+      position: "CONFIRMATION",
+      hasChecked: true,
+      checkedRevision: 1,
+    });
+    a.send({ type: "CHECK_RESPONSE" });
+    a.send({ type: "CHECK_AGAIN" });
+    expect(evaluations).toBe(1);
+    expect(a.getSnapshot().context).toEqual(checked);
+    a.stop();
+  });
+
+  it("keeps REVISION support permission and origin separate from ACTIVE", () => {
+    const a = actor(
+      { ...a01, support: { ACTIVE: ["REVIEW"], REVISION: ["REVIEW"] } },
+      ports("RECONSIDERATION"),
+    );
+    a.send({ type: "CONTINUE" });
+    a.send({ type: "RESPONSE_CHANGED", response });
+    a.send({ type: "CHECK_RESPONSE" });
+    a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+    a.send({ type: "REVISE" });
+    a.send({
+      type: "RESPONSE_CHANGED",
+      response: { ...response, selectionId: "revised" },
+    });
+    const before = a.getSnapshot().context;
+    expect(before.position).toBe("REVISION");
+    a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+    expect(a.getSnapshot().context.origin).toBe("REVISION");
+    expect(a.getSnapshot().value).toEqual({
+      instructional: "revision",
+      support: "review",
+    });
+    a.send({ type: "CHECK_AGAIN" });
+    expect(a.getSnapshot().context.checkedRevision).toBeNull();
+    a.send({ type: "CLOSE_SUPPORT" });
+    expect(a.getSnapshot().context).toEqual(before);
+    a.stop();
+    const denied = actor(a01, ports("RECONSIDERATION"));
+    denied.send({ type: "CONTINUE" });
+    denied.send({ type: "RESPONSE_CHANGED", response });
+    denied.send({ type: "CHECK_RESPONSE" });
+    denied.send({ type: "REVISE" });
+    denied.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+    expect(denied.getSnapshot().value).toEqual({
+      instructional: "revision",
+      support: "none",
+    });
+    denied.stop();
   });
 });

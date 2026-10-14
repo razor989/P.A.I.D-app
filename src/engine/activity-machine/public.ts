@@ -13,7 +13,15 @@ export type InstructionalPhase =
   | "COMPLETE";
 export type SupportPhase =
   "NONE" | "REVIEW" | "SOURCE_REVIEW" | "REINFORCEMENT";
-export type Position = "ENTRY" | "ACTIVE" | "INFO_NEEDED" | `EXP-${string}`;
+export type Position =
+  | "ENTRY"
+  | "ACTIVE"
+  | "REVISION"
+  | "CONFIRMATION"
+  | "RECONSIDERATION"
+  | "INFO_NEEDED"
+  | "COMPLETE"
+  | `EXP-${string}`;
 export type Evaluation = Readonly<{
   outcome: "CONFIRMED" | "RECONSIDERATION";
   diagnostic: string | null;
@@ -69,6 +77,7 @@ export type ActivityContext = Readonly<{
   response: LearnerResponse | null;
   checkedResponse: LearnerResponse | null;
   responseRevision: number;
+  hasChecked: boolean;
   checkedRevision: number | null;
   feedbackRevision: number | null;
   evaluation: Evaluation | null;
@@ -130,6 +139,14 @@ export function validateActivityDefinition(
       nodes.add(target);
     }
   }
+  // These are instructional phases, not graph edges. Support must name its actual origin.
+  for (const phase of [
+    "REVISION",
+    "CONFIRMATION",
+    "RECONSIDERATION",
+    "COMPLETE",
+  ] as const)
+    nodes.add(phase);
   for (const [from, allowed] of Object.entries(value.support)) {
     if (
       !nodes.has(from as Position) ||
@@ -262,8 +279,8 @@ export function createActivityMachine(
     context.response !== null &&
     ports.ready(context.response) &&
     context.checkedRevision !== context.responseRevision &&
-    ((event.type === "CHECK_RESPONSE" && context.responseRevision === 1) ||
-      (event.type === "CHECK_AGAIN" && context.responseRevision > 1));
+    ((event.type === "CHECK_RESPONSE" && !context.hasChecked) ||
+      (event.type === "CHECK_AGAIN" && context.hasChecked));
   const checked = assign(({ context }: { context: ActivityContext }) => {
     const response = context.response!;
     const result = ports.evaluate(response);
@@ -279,6 +296,9 @@ export function createActivityMachine(
     )
       throw new TypeError("Invalid evaluation result");
     return {
+      hasChecked: true,
+      position:
+        result.outcome === "CONFIRMED" ? "CONFIRMATION" : "RECONSIDERATION",
       checkedResponse: response,
       checkedRevision: context.responseRevision,
       evaluation: Object.freeze({
@@ -562,8 +582,13 @@ export function createActivityMachine(
             }) =>
               valid(event) && idle({ context }) && context.response !== null,
             target: "revision",
+            actions: [assign({ position: "REVISION" }), seal],
           },
-          FINISH_ACTIVITY: { guard: finish, target: "complete" },
+          FINISH_ACTIVITY: {
+            guard: finish,
+            target: "complete",
+            actions: [assign({ position: "COMPLETE" }), seal],
+          },
         },
       },
       reconsideration: {
@@ -598,8 +623,13 @@ export function createActivityMachine(
             }) =>
               valid(event) && idle({ context }) && context.response !== null,
             target: "revision",
+            actions: [assign({ position: "REVISION" }), seal],
           },
-          FINISH_ACTIVITY: { guard: finish, target: "complete" },
+          FINISH_ACTIVITY: {
+            guard: finish,
+            target: "complete",
+            actions: [assign({ position: "COMPLETE" }), seal],
+          },
         },
       },
       revision: {
@@ -668,6 +698,7 @@ export function createActivityMachine(
       response: null,
       checkedResponse: null,
       responseRevision: 0,
+      hasChecked: false,
       checkedRevision: null,
       feedbackRevision: null,
       evaluation: null,
