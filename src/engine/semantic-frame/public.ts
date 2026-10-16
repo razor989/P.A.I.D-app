@@ -2,6 +2,7 @@ import { isActivityId, isLearnerResponse } from "../../core/public";
 import type { ActivityId } from "../../core/public";
 import {
   currentPrimaryCommitmentValid,
+  availableModelSelections,
   primaryResponseReady,
   stagedResponseReady,
 } from "../activity-machine/public";
@@ -52,6 +53,7 @@ export type FrameContent = Readonly<{
   /** Trusted composition authenticates Study membership before injection.
    * This input carries public controls only, never an evaluator answer key. */
   responseControls?: readonly ChoiceExposure[];
+  modelSelectionOptions?: readonly SafeText[];
   feedback?: Readonly<{
     outcome: "CONFIRMED" | "RECONSIDERATION";
     revision: number;
@@ -82,6 +84,13 @@ export type SemanticActivityFrame = Readonly<{
   responseContract: SafeText;
   responseStage?: ResponseStageProjection;
   responseControls?: readonly PublicResponseControl[];
+  modelSelectionControl?: Readonly<{
+    modelId: string;
+    revision: number;
+    position: Position;
+    selectedId: string;
+    options: readonly SafeText[];
+  }>;
   feedbackState?: Readonly<{
     outcome: "CONFIRMED" | "RECONSIDERATION";
     content: SafeText;
@@ -275,6 +284,42 @@ export function projectSemanticActivityFrame(
       } satisfies CompletionEvidence),
     );
   const intents: LearnerIntent[] = [];
+  const allowedModels = idle
+    ? availableModelSelections(c, definition.modelSelection)
+    : [];
+  let modelSelectionControl: SemanticActivityFrame["modelSelectionControl"];
+  if (
+    definition.modelSelection &&
+    c.model &&
+    allowedModels.length &&
+    content.modelSelectionOptions
+  ) {
+    const supplied = content.modelSelectionOptions;
+    if (
+      !((value: unknown): boolean => Array.isArray(value))(supplied) ||
+      supplied.length !== definition.modelSelection.selectionIds.length ||
+      new Set(supplied.map((item) => item.id)).size !== supplied.length ||
+      supplied.some(
+        (item) =>
+          Reflect.ownKeys(item).length !== 2 ||
+          !safeText(item) ||
+          !definition.modelSelection!.selectionIds.includes(item.id),
+      )
+    )
+      throw new TypeError("Invalid model selection labels");
+    modelSelectionControl = Object.freeze({
+      modelId: c.model.modelId,
+      revision: c.model.revision,
+      position: phase,
+      selectedId: c.model.value.selectionId,
+      options: Object.freeze(
+        allowedModels.map((id) =>
+          safeText(supplied.find((item) => item.id === id))!,
+        ),
+      ),
+    });
+    intents.push("SELECT_MODEL_CHILD");
+  }
   if (idle) {
     const edge = definition.edges[phase];
     if (
@@ -527,6 +572,7 @@ export function projectSemanticActivityFrame(
       currentFeedback,
     ),
     allowedLearnerIntents: Object.freeze(intents),
+    ...(modelSelectionControl ? { modelSelectionControl } : {}),
     responseContract: safeText(content.responseContract)!,
     ...(staging ? { responseStage: c.responseStage! } : {}),
     ...(content.responseControls

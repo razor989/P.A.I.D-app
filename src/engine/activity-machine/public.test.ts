@@ -1,18 +1,28 @@
 import { createActor } from "xstate";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createActivityMachine,
   isActivityEvent,
   validateActivityDefinition,
+  availableModelSelections,
 } from "./public";
-import type { ActivityDefinition, ActivityPorts } from "./public";
+import type {
+  ActivityDefinition,
+  ActivityPorts,
+  ActivityModelAdapter,
+  ActivityEvent,
+} from "./public";
 import { ExactDecimal, quantity } from "../../core/public";
 import type { LearnerResponse } from "../../core/public";
 import {
   c04ResponseContracts,
   c04Scenarios,
 } from "../../study/competencies/c04/public";
-import { createC04ModelState } from "../../competencies/c04-percentage-change/model/public";
+import {
+  createC04ModelState,
+  applyC04ModelIntent,
+  deriveC04ModelState,
+} from "../../competencies/c04-percentage-change/model/public";
 import type { C04ModelDefinition } from "../../competencies/c04-percentage-change/model/public";
 import { evaluateC04Response } from "../../competencies/c04-percentage-change/evaluators/public";
 import type { C04EvaluationDefinition } from "../../competencies/c04-percentage-change/evaluators/public";
@@ -37,6 +47,323 @@ const a01: ActivityDefinition = {
   edges: { ENTRY: { CONTINUE: "ACTIVE" } },
   support: { ACTIVE: ["REVIEW"] },
 };
+
+describe("synthetic actor-local model compatibility", () => {
+  const definition: ActivityDefinition = {
+    ...a02,
+    modelSelection: {
+      modelId: "synthetic-model",
+      scenarioId: "C04-S02",
+      initialSelectionId: "A",
+      selectionIds: ["A", "B"],
+      allowedSelections: {
+        "EXP-02": ["A"],
+        "EXP-03": ["B"],
+        ACTIVE: ["A", "B"],
+        REVISION: ["A", "B"],
+      },
+    },
+  };
+  const issue = (selectionId: string) => ({
+    selectionId,
+    state: Object.freeze({ selectionId, privateTruth: "HIDDEN" }),
+  });
+  const adapter = (): ActivityModelAdapter => ({
+    initialize: vi.fn(() => issue("A")),
+    select: vi.fn(
+      (_current: import("./public").ActivityModelValue, id: string) =>
+        issue(id),
+    ),
+  });
+  const event = (
+    a: ReturnType<typeof actor>,
+    selectionId: string,
+  ): ActivityEvent => ({
+    type: "SELECT_MODEL_CHILD",
+    modelId: "synthetic-model",
+    selectionId,
+    revision: a.getSnapshot().context.model!.revision,
+    position: a.getSnapshot().context.position,
+  });
+  const make = (dependency = adapter()) =>
+    createActor(createActivityMachine(definition, ports(), dependency)).start();
+  const advance = (a: ReturnType<typeof make>, count: number) => {
+    for (let i = 0; i < count; i++) a.send({ type: "CONTINUE" });
+  };
+
+  it("initializes once per actor sharing logic, without answer or check evidence", () => {
+    const dependency = adapter();
+    const logic = createActivityMachine(definition, ports(), dependency);
+    const a = createActor(logic).start();
+    const b = createActor(logic).start();
+    expect(dependency.initialize).toHaveBeenCalledTimes(2);
+    expect(a.getSnapshot().context.model!.value.state).not.toBe(
+      b.getSnapshot().context.model!.value.state,
+    );
+    expect(a.getSnapshot().context.model).toMatchObject({
+      revision: 0,
+      value: { selectionId: "A" },
+    });
+    expect(a.getSnapshot().context).toMatchObject({
+      response: null,
+      responseRevision: 0,
+      checkedRevision: null,
+      feedbackRevision: null,
+      evaluation: null,
+    });
+    a.stop();
+    b.stop();
+  });
+  it("retains genuine T022 issuance across actor assignment without structural cloning", () => {
+    const source: C04ModelDefinition = {
+      activityId: "C04-A02",
+      scenarioId: "C04-S02",
+      cases: [
+        {
+          childId: "C04-S02-A",
+          original: {
+            role: "C04-S02-A Original",
+            value: quantity(
+              ExactDecimal.from("20000"),
+              "MONETARY_AMOUNT",
+              "PHP",
+              "per month",
+            ),
+          },
+          newValue: {
+            role: "C04-S02-A New",
+            value: quantity(
+              ExactDecimal.from("22000"),
+              "MONETARY_AMOUNT",
+              "PHP",
+              "per month",
+            ),
+          },
+        },
+        {
+          childId: "C04-S02-B",
+          original: {
+            role: "C04-S02-B Original",
+            value: quantity(
+              ExactDecimal.from("10000"),
+              "MONETARY_AMOUNT",
+              "PHP",
+              "per month",
+            ),
+          },
+          newValue: {
+            role: "C04-S02-B New",
+            value: quantity(
+              ExactDecimal.from("12000"),
+              "MONETARY_AMOUNT",
+              "PHP",
+              "per month",
+            ),
+          },
+        },
+      ],
+    };
+    const dependency: ActivityModelAdapter = {
+      initialize: () => {
+        const state = createC04ModelState(source);
+        deriveC04ModelState(state);
+        return { selectionId: "A", state };
+      },
+      select: (current, selectionId) => {
+        const state = applyC04ModelIntent(
+          current.state as ReturnType<typeof createC04ModelState>,
+          {
+            type: "SELECT_CHILD",
+            childId: selectionId === "A" ? "C04-S02-A" : "C04-S02-B",
+          },
+        );
+        deriveC04ModelState(state);
+        return { selectionId, state };
+      },
+    };
+    const a = make(dependency);
+    const initial = a.getSnapshot().context.model!.value.state as ReturnType<
+      typeof createC04ModelState
+    >;
+    expect(deriveC04ModelState(initial).state).toBe(initial);
+    advance(a, 3);
+    a.send(event(a, "B"));
+    const selected = a.getSnapshot().context.model!.value.state as ReturnType<
+      typeof createC04ModelState
+    >;
+    expect(deriveC04ModelState(selected).state.selectedChildId).toBe(
+      "C04-S02-B",
+    );
+    expect(selected).not.toBe(initial);
+    expect(() => deriveC04ModelState(structuredClone(selected))).toThrow(
+      "Unissued",
+    );
+    a.stop();
+  });
+  it("fails closed on missing adapter and invalid initialization", () => {
+    expect(() => createActivityMachine(definition, ports())).toThrow(
+      "supplied together",
+    );
+    const dependency = { ...adapter(), initialize: () => issue("B") };
+    const a = createActor(
+      createActivityMachine(definition, ports(), dependency),
+    );
+    expect(a.getSnapshot().status).toBe("error");
+    expect(a.getSnapshot().error).toBeInstanceOf(TypeError);
+    expect(actor().getSnapshot().context).not.toHaveProperty("model");
+  });
+  it("fails closed on unsafe current revisions, malformed evidence and information origins", () => {
+    const a = make();
+    advance(a, 2);
+    const context = a.getSnapshot().context;
+    for (const revision of [
+      -1,
+      Number.MAX_SAFE_INTEGER,
+      Number.MAX_SAFE_INTEGER + 1,
+      NaN,
+    ])
+      expect(
+        availableModelSelections(
+          { ...context, model: { ...context.model!, revision } },
+          definition.modelSelection,
+        ),
+      ).toEqual([]);
+    expect(
+      availableModelSelections(
+        { ...context, infoOrigin: "EXP-02" },
+        definition.modelSelection,
+      ),
+    ).toEqual([]);
+    expect(
+      availableModelSelections(
+        {
+          ...context,
+          model: { ...context.model!, value: null },
+        } as unknown as typeof context,
+        definition.modelSelection,
+      ),
+    ).toEqual([]);
+    a.stop();
+  });
+  it("permits same-child engagement once, separates responses and isolates actors", () => {
+    const dependency = adapter();
+    const a = make(dependency);
+    const b = make();
+    advance(a, 2);
+    advance(b, 3);
+    const before = a.getSnapshot().context;
+    a.send(event(a, "A"));
+    b.send(event(b, "B"));
+    expect(dependency.select).toHaveBeenCalledTimes(1);
+    const { model: previous, ...oldAnswer } = before;
+    const { model: current, ...newAnswer } = a.getSnapshot().context;
+    expect(newAnswer).toEqual(oldAnswer);
+    expect(current!.revision).toBe(1);
+    expect(current!.value.state).not.toBe(previous!.value.state);
+    expect(b.getSnapshot().context.model!.value.selectionId).toBe("B");
+    a.stop();
+    b.stop();
+  });
+  it.each([
+    { selectionId: "B" },
+    { selectionId: "unknown" },
+    { modelId: "wrong" },
+    { revision: 1 },
+    { revision: Number.MAX_SAFE_INTEGER + 1 },
+    { position: "EXP-03" },
+    { extra: true },
+  ])(
+    "rejects invalid or stale event %j without semantic mutation",
+    (override) => {
+      const dependency = adapter();
+      const a = make(dependency);
+      advance(a, 2);
+      const before = a.getSnapshot().context;
+      a.send({ ...event(a, "A"), ...override } as ActivityEvent);
+      expect(a.getSnapshot().context).toEqual(before);
+      expect(dependency.select).not.toHaveBeenCalled();
+      a.stop();
+    },
+  );
+  it.each(["null", "throw", "wrong", "mutable", "same"])(
+    "retains all evidence on adapter %s",
+    (mode) => {
+      const dependency: ActivityModelAdapter = {
+        initialize: () => issue("A"),
+        select: (current) => {
+          if (mode === "throw") throw new Error("rejected");
+          if (mode === "null") return null;
+          if (mode === "same") return current;
+          if (mode === "mutable") return { selectionId: "A", state: {} };
+          return issue("B");
+        },
+      };
+      const a = make(dependency);
+      advance(a, 2);
+      const before = a.getSnapshot().context;
+      a.send(event(a, "A"));
+      expect(a.getSnapshot().context).toEqual(before);
+      a.stop();
+    },
+  );
+  it("retains B on A-focused re-entry and exact Review origin; navigation never selects", () => {
+    const dependency = adapter();
+    const a = make(dependency);
+    advance(a, 3);
+    a.send(event(a, "B"));
+    a.send({ type: "PREVIOUS" });
+    expect(a.getSnapshot().context.position).toBe("EXP-02");
+    expect(a.getSnapshot().context.model!.value.selectionId).toBe("B");
+    a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+    const before = a.getSnapshot().context;
+    a.send(event(a, "A"));
+    expect(a.getSnapshot().context).toEqual(before);
+    expect(before.origin).toBe("EXP-02");
+    a.send({ type: "CLOSE_SUPPORT" });
+    expect(a.getSnapshot().context.model).toBe(before.model);
+    expect(dependency.select).toHaveBeenCalledTimes(1);
+    a.stop();
+  });
+  it("rejects prohibited positions and preserves model through Check, Revise and Complete", () => {
+    const a = make();
+    a.send(event(a, "A"));
+    expect(a.getSnapshot().context.model!.revision).toBe(0);
+    advance(a, 1);
+    a.send(event(a, "A"));
+    expect(a.getSnapshot().context.model!.revision).toBe(0);
+    advance(a, 3);
+    a.send(event(a, "A"));
+    expect(a.getSnapshot().context.model!.revision).toBe(0);
+    advance(a, 1);
+    a.send(event(a, "A"));
+    expect(a.getSnapshot().context.model!.revision).toBe(0);
+    advance(a, 1);
+    a.send(event(a, "B"));
+    a.send({ type: "RESPONSE_CHANGED", response });
+    const answer = a.getSnapshot().context.response;
+    a.send(event(a, "A"));
+    expect(a.getSnapshot().context.response).toBe(answer);
+    a.send({ type: "CHECK_RESPONSE" });
+    const checked = a.getSnapshot().context;
+    a.send(event(a, "B"));
+    expect(a.getSnapshot().context).toEqual(checked);
+    a.send({ type: "REVISE" });
+    a.send(event(a, "B"));
+    expect(a.getSnapshot().context.model!.revision).toBe(3);
+    a.send({ type: "RESPONSE_CHANGED", response });
+    a.send({ type: "CHECK_AGAIN" });
+    a.send({
+      type: "FEEDBACK_DELIVERED",
+      revision: a.getSnapshot().context.responseRevision,
+    });
+    a.send({ type: "FINISH_ACTIVITY" });
+    const complete = a.getSnapshot().context;
+    expect(complete.position).toBe("COMPLETE");
+    a.send(event(a, "A"));
+    expect(a.getSnapshot().context).toEqual(complete);
+    a.stop();
+  });
+});
 // Synthetic optional route; not the production C04-A04 manifest.
 const post: ActivityDefinition = {
   activityId: "C04-A04",

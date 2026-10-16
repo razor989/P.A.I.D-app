@@ -1,9 +1,13 @@
 import { isActivityId } from "../../core/public";
 import type { ActivityId } from "../../core/public";
-import { validateActivityDefinition } from "../activity-machine/public";
+import {
+  validateActivityDefinition,
+  validateActivityModelAdapter,
+} from "../activity-machine/public";
 import type {
   ActivityDefinition,
   ActivityPorts,
+  ActivityModelAdapter,
 } from "../activity-machine/public";
 
 /** Structural executable binding, NOT authentication of a canonical Study manifest. */
@@ -11,6 +15,7 @@ export type ExecutableActivityBinding = Readonly<{
   activityId: ActivityId;
   definition: ActivityDefinition;
   ports: ActivityPorts;
+  modelAdapter?: ActivityModelAdapter;
 }>;
 
 const portNames = [
@@ -31,7 +36,7 @@ const plain = (value: unknown): value is Record<string, unknown> =>
 function retain(value: unknown): ExecutableActivityBinding {
   if (
     !plain(value) ||
-    Reflect.ownKeys(value).length !== 3 ||
+    Reflect.ownKeys(value).length !== ("modelAdapter" in value ? 4 : 3) ||
     !["activityId", "definition", "ports"].every((key) =>
       Object.prototype.hasOwnProperty.call(value, key),
     ) ||
@@ -41,6 +46,9 @@ function retain(value: unknown): ExecutableActivityBinding {
   validateActivityDefinition(value.definition);
   if (value.activityId !== value.definition.activityId)
     throw new TypeError("Conflicting activity identity");
+  if (!!value.definition.modelSelection !== "modelAdapter" in value)
+    throw new TypeError("Model metadata and adapter must be supplied together");
+  if ("modelAdapter" in value) validateActivityModelAdapter(value.modelAdapter);
   if (
     !plain(value.ports) ||
     Reflect.ownKeys(value.ports).length !== portNames.length ||
@@ -63,6 +71,7 @@ function retain(value: unknown): ExecutableActivityBinding {
   };
   if (definition.responseStages) freezeMetadata(definition.responseStages);
   if (definition.terminalTeaching) freezeMetadata(definition.terminalTeaching);
+  if (definition.modelSelection) freezeMetadata(definition.modelSelection);
   for (const edges of Object.values(definition.edges)) Object.freeze(edges);
   for (const modes of Object.values(definition.support)) Object.freeze(modes);
   Object.freeze(definition.edges);
@@ -79,7 +88,20 @@ function retain(value: unknown): ExecutableActivityBinding {
     informationNeeded: supplied.informationNeeded,
     informationReturn: supplied.informationReturn,
   });
-  return Object.freeze({ activityId: value.activityId, definition, ports });
+  const adapter = value.modelAdapter as ActivityModelAdapter | undefined;
+  return Object.freeze({
+    activityId: value.activityId,
+    definition,
+    ports,
+    ...(adapter
+      ? {
+          modelAdapter: Object.freeze({
+            initialize: adapter.initialize,
+            select: adapter.select,
+          }),
+        }
+      : {}),
+  });
 }
 
 /** Closed approved ID set, constructor-only bindings; no plugin/discovery API. */

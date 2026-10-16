@@ -7,7 +7,13 @@ export function createActivityActor(registry: ActivityRegistry, id: unknown) {
   if (!(registry instanceof ActivityRegistry))
     throw new TypeError("Invalid activity registry");
   const binding = registry.resolve(id);
-  return createActor(createActivityMachine(binding.definition, binding.ports));
+  return createActor(
+    createActivityMachine(
+      binding.definition,
+      binding.ports,
+      binding.modelAdapter,
+    ),
+  );
 }
 
 export type ActivityActor = ReturnType<typeof createActivityActor>;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ActivityModelAdapter } from "../activity-machine/public";
 import type { ExecutableActivityBinding } from "./public";
 import { ActivityRegistry } from "./public";
 import { createActivityActor } from "../activity-runtime/public";
@@ -22,6 +23,97 @@ const fixture = (): ExecutableActivityBinding => ({
 });
 
 describe("closed executable registry", () => {
+  const modelFixture = () => {
+    const base = fixture();
+    const modelAdapter: ActivityModelAdapter = {
+      initialize: () => ({
+        selectionId: "A",
+        state: Object.freeze({ private: true }),
+      }),
+      select: (_current, selectionId) => ({
+        selectionId,
+        state: Object.freeze({ private: true }),
+      }),
+    };
+    return {
+      ...base,
+      definition: {
+        ...base.definition,
+        modelSelection: {
+          modelId: "synthetic",
+          scenarioId: "C04-S01",
+          initialSelectionId: "A",
+          selectionIds: ["A", "B"],
+          allowedSelections: { ACTIVE: ["A", "B"] },
+        },
+      },
+      modelAdapter,
+    };
+  };
+  it("retains immutable model policy and detached adapter functions", () => {
+    const input = modelFixture();
+    const initialize = input.modelAdapter.initialize;
+    const registry = new ActivityRegistry([input]);
+    input.definition.modelSelection.allowedSelections.ACTIVE.pop();
+    input.modelAdapter = {
+      ...input.modelAdapter,
+      initialize: () => {
+        throw new Error("replaced");
+      },
+    };
+    const retained = registry.resolve(input.activityId);
+    expect(retained.modelAdapter!.initialize).toBe(initialize);
+    expect(
+      retained.definition.modelSelection!.allowedSelections.ACTIVE,
+    ).toEqual(["A", "B"]);
+    expect(
+      Object.isFrozen(
+        retained.definition.modelSelection!.allowedSelections.ACTIVE,
+      ),
+    ).toBe(true);
+    expect(Object.keys(retained.ports)).toHaveLength(6);
+    expect(() => new ActivityRegistry([retained, retained])).toThrow(
+      "Duplicate",
+    );
+  });
+  it.each(["missing", "orphan", "bad", "extra", "callback"])(
+    "rejects model binding %s",
+    (mode) => {
+      const input = modelFixture();
+      let malformed: unknown = input;
+      if (mode === "missing") {
+        const { modelAdapter: omitted, ...rest } = input;
+        expect(omitted).toBeDefined();
+        malformed = rest;
+      }
+      if (mode === "orphan")
+        malformed = { ...fixture(), modelAdapter: input.modelAdapter };
+      if (mode === "bad")
+        malformed = {
+          ...input,
+          modelAdapter: { initialize: null, select: input.modelAdapter.select },
+        };
+      if (mode === "extra")
+        malformed = {
+          ...input,
+          modelAdapter: { ...input.modelAdapter, extra: true },
+        };
+      if (mode === "callback")
+        malformed = {
+          ...input,
+          definition: {
+            ...input.definition,
+            modelSelection: {
+              ...input.definition.modelSelection,
+              callback: () => true,
+            },
+          },
+        };
+      expect(
+        () => new ActivityRegistry([malformed as ExecutableActivityBinding]),
+      ).toThrow();
+    },
+  );
   it("defensively freezes synthetic optional stage/teaching metadata and isolates fresh actors", () => {
     const input = fixture();
     const definition = {

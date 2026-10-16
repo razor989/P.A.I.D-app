@@ -106,6 +106,175 @@ function input(
   };
 }
 describe("synthetic semantic exposure enforcement", () => {
+  it("omits model controls on absent or invalid evidence and rejects unsafe option labels", () => {
+    const base = input();
+    const policy: ActivityDefinition = {
+      ...definition,
+      modelSelection: {
+        modelId: "synthetic",
+        scenarioId: "C04-S03",
+        initialSelectionId: "A",
+        selectionIds: ["A", "B"],
+        allowedSelections: { ACTIVE: ["A", "B"] },
+      },
+    };
+    const source: FrameContent = {
+      ...content,
+      modelSelectionOptions: [
+        { id: "A", text: "A" },
+        { id: "B", text: "B" },
+      ],
+    };
+    const valid: FrameInput = {
+      ...base,
+      definition: policy,
+      content: source,
+      context: {
+        ...base.context,
+        model: {
+          modelId: "synthetic",
+          revision: 0,
+          value: { selectionId: "A", state: Object.freeze({ private: true }) },
+        },
+      },
+    };
+    expect(
+      projectSemanticActivityFrame({ ...valid, context: base.context })
+        .modelSelectionControl,
+    ).toBeUndefined();
+    expect(
+      projectSemanticActivityFrame({
+        ...valid,
+        context: {
+          ...valid.context,
+          model: { ...valid.context.model!, modelId: "wrong" },
+        },
+      }).modelSelectionControl,
+    ).toBeUndefined();
+    expect(
+      projectSemanticActivityFrame({
+        ...valid,
+        context: {
+          ...valid.context,
+          model: { ...valid.context.model!, revision: Number.MAX_SAFE_INTEGER },
+        },
+      }).modelSelectionControl,
+    ).toBeUndefined();
+    expect(
+      projectSemanticActivityFrame({ ...valid, content }).modelSelectionControl,
+    ).toBeUndefined();
+    expect(() =>
+      projectSemanticActivityFrame({
+        ...valid,
+        content: {
+          ...source,
+          modelSelectionOptions: [
+            { id: "A", text: "A", correctId: "hidden" } as never,
+            { id: "B", text: "B" },
+          ],
+        },
+      }),
+    ).toThrow("Invalid model selection labels");
+    expect(projectSemanticActivityFrame(base)).not.toHaveProperty(
+      "modelSelectionControl",
+    );
+  });
+  it.each([
+    ["ENTRY", []],
+    ["EXP-01", []],
+    ["EXP-02", ["A"]],
+    ["EXP-03", ["B"]],
+    ["EXP-04", []],
+    ["EXP-05", []],
+    ["ACTIVE", ["A", "B"]],
+    ["REVISION", ["A", "B"]],
+    ["CONFIRMATION", []],
+    ["RECONSIDERATION", []],
+    ["COMPLETE", []],
+    ["INFO_NEEDED", []],
+  ] as const)(
+    "projects safe synthetic model options at %s without relabelling facts",
+    (phase, expected) => {
+      const base = input({}, phase);
+      const modelDefinition: ActivityDefinition = {
+        ...definition,
+        modelSelection: {
+          modelId: "synthetic",
+          scenarioId: "C04-S03",
+          initialSelectionId: "A",
+          selectionIds: ["A", "B"],
+          allowedSelections: {
+            "EXP-02": ["A"],
+            "EXP-03": ["B"],
+            ACTIVE: ["A", "B"],
+            REVISION: ["A", "B"],
+          },
+        },
+      };
+      const source: FrameContent = {
+        ...content,
+        modelSelectionOptions: [
+          { id: "A", text: "Synthetic A" },
+          { id: "B", text: "Synthetic B" },
+        ],
+        modelFacts: [
+          {
+            content: { id: "focus-A", text: "Authored A focus" },
+            phases: ["EXP-02"],
+            timing: "PUBLIC",
+          },
+        ],
+      };
+      const withModel: FrameInput = {
+        ...base,
+        definition: modelDefinition,
+        content: source,
+        context: {
+          ...base.context,
+          model: {
+            modelId: "synthetic",
+            revision: 2,
+            value: {
+              selectionId: "B",
+              state: Object.freeze({
+                privateTruth: "PRIVATE_ISSUANCE",
+                correctId: "SECRET",
+              }),
+            },
+          },
+        },
+      };
+      const frame = projectSemanticActivityFrame(withModel);
+      expect(
+        frame.modelSelectionControl?.options.map((item) => item.id) ?? [],
+      ).toEqual(expected);
+      expect(frame.allowedLearnerIntents.includes("SELECT_MODEL_CHILD")).toBe(
+        expected.length > 0,
+      );
+      if (expected.length)
+        expect(frame.modelSelectionControl).toMatchObject({
+          revision: 2,
+          selectedId: "B",
+          position: phase,
+        });
+      if (phase === "EXP-02")
+        expect(frame.exposedModelFacts).toEqual([
+          { id: "focus-A", text: "Authored A focus" },
+        ]);
+      expect(JSON.stringify(frame)).not.toMatch(
+        /PRIVATE_ISSUANCE|correctId|initialize|"state"/,
+      );
+      const supported = projectSemanticActivityFrame({
+        ...withModel,
+        support: "REVIEW",
+        context: { ...withModel.context, origin: phase },
+      });
+      expect(supported.modelSelectionControl).toBeUndefined();
+      expect(supported.allowedLearnerIntents).not.toContain(
+        "SELECT_MODEL_CHILD",
+      );
+    },
+  );
   it.each(["CONFIRMED", "RECONSIDERATION"] as const)(
     "projects synthetic staged controls and acknowledged terminal teaching for %s without hidden metadata",
     (outcome) => {

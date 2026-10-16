@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ExecutableActivityBinding } from "../registry/public";
 import { ActivityRegistry } from "../registry/public";
 import { createActivityActor } from "./public";
@@ -22,6 +22,79 @@ const fixture = (): ExecutableActivityBinding => ({
 });
 
 describe("generic T024 actor factory", () => {
+  it("independently initializes, selects, checks, supports and resets synthetic model actors", () => {
+    const base = fixture();
+    const initialize = vi.fn(() => ({
+      selectionId: "A",
+      state: Object.freeze({ private: true }),
+    }));
+    const binding: ExecutableActivityBinding = {
+      ...base,
+      definition: {
+        ...base.definition,
+        modelSelection: {
+          modelId: "synthetic",
+          scenarioId: "C04-S01",
+          initialSelectionId: "A",
+          selectionIds: ["A", "B"],
+          allowedSelections: { ACTIVE: ["A", "B"] },
+        },
+      },
+      modelAdapter: {
+        initialize,
+        select: (_current, selectionId) => ({
+          selectionId,
+          state: Object.freeze({ selectionId }),
+        }),
+      },
+    };
+    const registry = new ActivityRegistry([binding]);
+    const a = createActivityActor(registry, base.activityId).start();
+    const b = createActivityActor(registry, base.activityId).start();
+    expect(initialize).toHaveBeenCalledTimes(2);
+    expect(a.getSnapshot().context.model!.value.state).not.toBe(
+      b.getSnapshot().context.model!.value.state,
+    );
+    a.send({ type: "CONTINUE" });
+    b.send({ type: "CONTINUE" });
+    const select = (actor: typeof a, selectionId: string) =>
+      actor.send({
+        type: "SELECT_MODEL_CHILD",
+        modelId: "synthetic",
+        selectionId,
+        revision: actor.getSnapshot().context.model!.revision,
+        position: actor.getSnapshot().context.position,
+      });
+    select(a, "A");
+    select(b, "B");
+    const second = b.getSnapshot().context.model;
+    select(a, "B");
+    expect(a.getSnapshot().context.model!.revision).toBe(2);
+    expect(second!.revision).toBe(1);
+    expect(b.getSnapshot().context.model).toBe(second);
+    a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+    select(a, "A");
+    a.send({ type: "CLOSE_SUPPORT" });
+    a.send({
+      type: "RESPONSE_CHANGED",
+      response: { kind: "SINGLE_SELECTION", selectionId: "synthetic" },
+    });
+    a.send({ type: "CHECK_RESPONSE" });
+    expect(b.getSnapshot().context.response).toBeNull();
+    expect(b.getSnapshot().context.model).toBe(second);
+    a.stop();
+    const fresh = createActivityActor(registry, base.activityId);
+    expect(initialize).toHaveBeenCalledTimes(3);
+    expect(fresh.getSnapshot().context.model).toMatchObject({
+      revision: 0,
+      value: { selectionId: "A" },
+    });
+    expect(fresh.getSnapshot().context.model!.value.state).not.toBe(
+      second!.value.state,
+    );
+    fresh.stop();
+    b.stop();
+  });
   it("constructs unstarted actors; the caller starts, advances and disposes them", () => {
     const registry = new ActivityRegistry([fixture()]);
     const a = createActivityActor(registry, "C04-A01");

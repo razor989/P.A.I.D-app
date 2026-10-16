@@ -60,6 +60,30 @@ export type TerminalTeachingDefinition = Readonly<{
   outcomes: "BOTH";
   contentId: string;
 }>;
+export type ModelSelectionDefinition = Readonly<{
+  modelId: string;
+  scenarioId: string;
+  initialSelectionId: string;
+  selectionIds: readonly string[];
+  allowedSelections: Readonly<Partial<Record<Position, readonly string[]>>>;
+}>;
+export type ActivityModelValue = Readonly<{
+  selectionId: string;
+  state: unknown;
+}>;
+/** Trusted composition authenticates issuance; callbacks own no mutable actor state. */
+export type ActivityModelAdapter = Readonly<{
+  initialize: () => ActivityModelValue;
+  select: (
+    current: ActivityModelValue,
+    selectionId: string,
+  ) => ActivityModelValue | null;
+}>;
+export type ActivityModelContext = Readonly<{
+  modelId: string;
+  revision: number;
+  value: ActivityModelValue;
+}>;
 export type PrimaryCommitment = Readonly<{
   sequence: number;
   activityId: ActivityId;
@@ -88,6 +112,7 @@ export type ActivityDefinition = Readonly<{
   >;
   responseStages?: StagedResponseDefinition;
   terminalTeaching?: TerminalTeachingDefinition;
+  modelSelection?: ModelSelectionDefinition;
 }>;
 export type ActivityPorts = Readonly<{
   ready: (response: LearnerResponse) => boolean;
@@ -101,6 +126,13 @@ export type ActivityPorts = Readonly<{
   informationReturn: (activityId: ActivityId, origin: Position) => boolean;
 }>;
 export type ActivityEvent =
+  | {
+      type: "SELECT_MODEL_CHILD";
+      modelId: string;
+      selectionId: string;
+      revision: number;
+      position: Position;
+    }
   | { type: "CONTINUE" | "PREVIOUS" | "INFO_NEEDED" }
   | { type: "RESPONSE_CHANGED"; response: LearnerResponse }
   | { type: "CHECK_RESPONSE" | "CHECK_AGAIN" | "REVISE" | "FINISH_ACTIVITY" }
@@ -116,6 +148,7 @@ export type ActivityEvent =
 export type ActivityContext = Readonly<{
   activityId: ActivityId;
   position: Position;
+  model?: ActivityModelContext;
   origin: Position | null;
   infoOrigin: Position | null;
   response: LearnerResponse | null;
@@ -167,6 +200,101 @@ const strings = (value: unknown): value is readonly string[] =>
   Reflect.ownKeys(value).length === value.length + 1 &&
   value.every(identity) &&
   new Set(value).size === value.length;
+
+function validateModelSelection(
+  value: unknown,
+): asserts value is ModelSelectionDefinition {
+  if (
+    !fields(value, [
+      "modelId",
+      "scenarioId",
+      "initialSelectionId",
+      "selectionIds",
+      "allowedSelections",
+    ]) ||
+    !identity(value.modelId) ||
+    !isScenarioId(value.scenarioId) ||
+    !identity(value.initialSelectionId) ||
+    !strings(value.selectionIds) ||
+    !value.selectionIds.includes(value.initialSelectionId) ||
+    !own(value.allowedSelections)
+  )
+    throw new TypeError("Invalid model selection definition");
+  for (const key of Reflect.ownKeys(value.allowedSelections)) {
+    const allowed =
+      typeof key === "string" ? value.allowedSelections[key] : undefined;
+    if (
+      typeof key !== "string" ||
+      !(
+        key === "ACTIVE" ||
+        key === "REVISION" ||
+        (/^EXP-[0-9]{2,}$/.test(key) && key !== "EXP-00")
+      ) ||
+      !strings(allowed) ||
+      !allowed.every((id) =>
+        (value.selectionIds as readonly string[]).includes(id),
+      )
+    )
+      throw new TypeError("Invalid model selection permissions");
+  }
+}
+
+export function validateActivityModelAdapter(
+  value: unknown,
+): asserts value is ActivityModelAdapter {
+  if (
+    !fields(value, ["initialize", "select"]) ||
+    typeof value.initialize !== "function" ||
+    typeof value.select !== "function"
+  )
+    throw new TypeError("Invalid activity model adapter");
+}
+
+function modelValue(
+  value: unknown,
+  selectionId: string,
+): ActivityModelValue | null {
+  if (
+    !fields(value, ["selectionId", "state"]) ||
+    value.selectionId !== selectionId ||
+    value.state === null ||
+    typeof value.state !== "object" ||
+    !Object.isFrozen(value.state)
+  )
+    return null;
+  // Do not clone: domain issuance may be associated with this exact object identity.
+  return Object.freeze({ selectionId, state: value.state });
+}
+
+/** Shared structural availability predicate; no executable adapter is called here. */
+export function availableModelSelections(
+  context: ActivityContext,
+  policy?: ModelSelectionDefinition,
+): readonly string[] {
+  const model = context.model;
+  if (
+    !policy ||
+    !model ||
+    !fields(model, ["modelId", "revision", "value"]) ||
+    model.modelId !== policy.modelId ||
+    !Number.isSafeInteger(model.revision) ||
+    model.revision < 0 ||
+    model.revision >= Number.MAX_SAFE_INTEGER ||
+    !fields(model.value, ["selectionId", "state"]) ||
+    !identity(model.value.selectionId) ||
+    !modelValue(model.value, model.value.selectionId) ||
+    !policy.selectionIds.includes(model.value.selectionId) ||
+    context.origin !== null ||
+    context.infoOrigin !== null ||
+    !(
+      context.position === "ACTIVE" ||
+      context.position === "REVISION" ||
+      context.position.startsWith("EXP-")
+    )
+  )
+    return [];
+  return policy.allowedSelections[context.position] ?? [];
+}
 
 function validateStages(
   value: unknown,
@@ -231,6 +359,7 @@ export function validateActivityDefinition(
       "support",
       ...("responseStages" in value ? ["responseStages"] : []),
       ...("terminalTeaching" in value ? ["terminalTeaching"] : []),
+      ...("modelSelection" in value ? ["modelSelection"] : []),
     ]) ||
     !isActivityId(value.activityId) ||
     !own(value.edges) ||
@@ -238,6 +367,7 @@ export function validateActivityDefinition(
   )
     throw new TypeError("Invalid activity definition");
   if ("responseStages" in value) validateStages(value.responseStages);
+  if ("modelSelection" in value) validateModelSelection(value.modelSelection);
   const both = "terminalTeaching" in value;
   if (
     both &&
@@ -316,6 +446,13 @@ export function validateActivityDefinition(
     )
       throw new TypeError("Unspecified explanation step");
   const entry = value.edges.ENTRY;
+  if (value.modelSelection) {
+    for (const phase of Object.keys(
+      (value.modelSelection as ModelSelectionDefinition).allowedSelections,
+    ))
+      if (!nodes.has(phase as Position))
+        throw new TypeError("Unknown model selection position");
+  }
   if (
     !own(entry) ||
     typeof entry.CONTINUE !== "string" ||
@@ -328,6 +465,28 @@ export function validateActivityDefinition(
 export function isActivityEvent(value: unknown): value is ActivityEvent {
   if (!own(value)) return false;
   switch (value.type) {
+    case "SELECT_MODEL_CHILD":
+      return (
+        fields(value, [
+          "type",
+          "modelId",
+          "selectionId",
+          "revision",
+          "position",
+        ]) &&
+        identity(value.modelId) &&
+        identity(value.selectionId) &&
+        Number.isSafeInteger(value.revision) &&
+        (value.revision as number) >= 0 &&
+        typeof value.position === "string" &&
+        (position(value.position) ||
+          [
+            "REVISION",
+            "RECONSIDERATION",
+            "POST_CONFIRMATION_EXPLANATION",
+            "COMPLETE",
+          ].includes(value.position))
+      );
     case "CONTINUE":
     case "PREVIOUS":
     case "INFO_NEEDED":
@@ -509,8 +668,44 @@ export function stagedResponseReady(
 export function createActivityMachine(
   definition: ActivityDefinition,
   ports: ActivityPorts,
+  modelAdapter?: ActivityModelAdapter,
 ) {
   validateActivityDefinition(definition);
+  if (!!definition.modelSelection !== (modelAdapter !== undefined))
+    throw new TypeError("Model metadata and adapter must be supplied together");
+  if (modelAdapter !== undefined) validateActivityModelAdapter(modelAdapter);
+  const adapter = modelAdapter
+    ? Object.freeze({
+        initialize: modelAdapter.initialize,
+        select: modelAdapter.select,
+      })
+    : undefined;
+  const modelPolicy = definition.modelSelection
+    ? structuredClone(definition.modelSelection)
+    : undefined;
+  if (modelPolicy) {
+    Object.freeze(modelPolicy.selectionIds);
+    for (const ids of Object.values(modelPolicy.allowedSelections))
+      Object.freeze(ids);
+    Object.freeze(modelPolicy.allowedSelections);
+    Object.freeze(modelPolicy);
+  }
+  const initializeModel = (): ActivityModelContext => {
+    try {
+      const value = modelValue(
+        adapter!.initialize(),
+        modelPolicy!.initialSelectionId,
+      );
+      if (!value) throw new TypeError("Invalid model value");
+      return Object.freeze({
+        modelId: modelPolicy!.modelId,
+        revision: 0,
+        value,
+      });
+    } catch {
+      throw new TypeError("Invalid activity model initialization");
+    }
+  };
   if (
     !own(ports) ||
     typeof ports.ready !== "function" ||
@@ -1203,33 +1398,72 @@ export function createActivityMachine(
   return machineSetup.createMachine({
     id: "activity",
     type: "parallel",
-    context: Object.freeze({
-      activityId,
-      position: "ENTRY",
-      origin: null,
-      infoOrigin: null,
-      response: null,
-      checkedResponse: null,
-      responseRevision: 0,
-      hasChecked: false,
-      checkedRevision: null,
-      feedbackRevision: null,
-      evaluation: null,
-      ...(staging
-        ? {
-            responseStage: "PRIMARY" as const,
-            firstPrimaryCommitment: null,
-            currentPrimaryCommitment: null,
-            commitmentSequence: 0,
-            reasoningExposed: false,
-            explanationCommitmentSequence: null,
-            checkedCommitmentSequence: null,
-          }
-        : {}),
-      ...(teaching
-        ? { terminalEntryRevision: null, terminalTeachingRevision: null }
-        : {}),
-    }),
+    context: () =>
+      Object.freeze({
+        activityId,
+        ...(modelPolicy ? { model: initializeModel() } : {}),
+        position: "ENTRY",
+        origin: null,
+        infoOrigin: null,
+        response: null,
+        checkedResponse: null,
+        responseRevision: 0,
+        hasChecked: false,
+        checkedRevision: null,
+        feedbackRevision: null,
+        evaluation: null,
+        ...(staging
+          ? {
+              responseStage: "PRIMARY" as const,
+              firstPrimaryCommitment: null,
+              currentPrimaryCommitment: null,
+              commitmentSequence: 0,
+              reasoningExposed: false,
+              explanationCommitmentSequence: null,
+              checkedCommitmentSequence: null,
+            }
+          : {}),
+        ...(teaching
+          ? { terminalEntryRevision: null, terminalTeachingRevision: null }
+          : {}),
+      }),
+    on: {
+      "*": { guard: ({ event }) => !valid(event) },
+      SELECT_MODEL_CHILD: {
+        guard: ({ context, event }) =>
+          !!adapter &&
+          isActivityEvent(event) &&
+          event.modelId === context.model?.modelId &&
+          event.revision === context.model.revision &&
+          event.position === context.position &&
+          availableModelSelections(context, modelPolicy).includes(
+            event.selectionId,
+          ),
+        actions: [
+          assign(({ context, event }) => {
+            if (event.type !== "SELECT_MODEL_CHILD") return {};
+            try {
+              const previous = context.model!;
+              const value = modelValue(
+                adapter!.select(previous.value, event.selectionId),
+                event.selectionId,
+              );
+              if (!value || value.state === previous.value.state) return {};
+              return {
+                model: Object.freeze({
+                  modelId: previous.modelId,
+                  revision: previous.revision + 1,
+                  value,
+                }),
+              };
+            } catch {
+              return {};
+            }
+          }),
+          seal,
+        ],
+      },
+    },
     states: {
       instructional: instruction,
       support: {
@@ -1310,6 +1544,5 @@ export function createActivityMachine(
         },
       },
     },
-    on: { "*": { guard: ({ event }) => !valid(event) } },
   });
 }
