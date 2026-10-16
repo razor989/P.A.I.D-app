@@ -125,6 +125,12 @@ const stageDPublicTargets = [
   "competencies/c04-percentage-change/evaluators/public",
 ];
 
+// P10-T027 Stage E: one production composition root; no private targets.
+const stageEPublicTargets = [
+  ...stageDPublicTargets,
+  "competencies/c04-percentage-change/completion/public",
+];
+
 function restriction(directory, publicTargets = []) {
   const [owner, module] = directory.split("/");
   const disallowed = [...(forbidden[owner] ?? [])];
@@ -229,5 +235,16 @@ export default tseslint.config(
   {
     ...restriction("engine/activity-machine", stageDPublicTargets),
     files: [stageDImporter],
+  },
+  {
+    ...restriction("engine/c04-activity-binding", stageEPublicTargets),
+    files: ["src/engine/c04-activity-binding/public.ts"],
+  },
+  {
+    ...restriction(
+      "engine/c04-activity-binding",
+      stageDPublicTargets.slice(0, 2),
+    ),
+    files: ["src/engine/c04-activity-binding/public.test.ts"],
   },
 );
