@@ -247,4 +247,27 @@ export default tseslint.config(
     ),
     files: ["src/engine/c04-activity-binding/public.test.ts"],
   },
+  // P10-D177/S1: exact production consumers, never a directory grant.
+  {
+    ...restriction("recovery/projection", [
+      "engine/activity-machine/public",
+      "engine/activity-runtime/public",
+      "engine/c04-activity-binding/public",
+    ]),
+    files: ["src/recovery/projection/public.ts"],
+  },
+  {
+    ...restriction("recovery/checkpoint", ["study/revision/public"]),
+    files: [
+      "src/recovery/checkpoint/public.ts",
+      "src/recovery/checkpoint/public.test.ts",
+    ],
+  },
+  // Exact T029 test consumer, not a directory grant.
+  {
+    ...restriction("recovery/projection", [
+      "engine/c04-activity-binding/public",
+    ]),
+    files: ["src/recovery/projection/public.test.ts"],
+  },
 );

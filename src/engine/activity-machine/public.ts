@@ -145,10 +145,27 @@ export type ActivityEvent =
       contentId: string;
     };
 
+/** D044/S1: presence, not a delivery acknowledgment or an interaction log. */
+export type C04A02StageEngagementV1 = Readonly<{
+  "EXP-02": Readonly<{ "C04-S02-A": boolean }>;
+  "EXP-03": Readonly<{ "C04-S02-B": boolean }>;
+}>;
+
+function stageEngagement(
+  employeeA: boolean,
+  employeeB: boolean,
+): C04A02StageEngagementV1 {
+  return Object.freeze({
+    "EXP-02": Object.freeze({ "C04-S02-A": employeeA }),
+    "EXP-03": Object.freeze({ "C04-S02-B": employeeB }),
+  });
+}
+
 export type ActivityContext = Readonly<{
   activityId: ActivityId;
   position: Position;
   model?: ActivityModelContext;
+  c04A02StageEngagement?: C04A02StageEngagementV1;
   origin: Position | null;
   infoOrigin: Position | null;
   response: LearnerResponse | null;
@@ -190,6 +207,25 @@ const fields = (
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     return descriptor !== undefined && "value" in descriptor;
   });
+
+/** Validate detached presence only; this never creates actor or model state. */
+export function validateC04A02StageEngagementV1(
+  value: unknown,
+): C04A02StageEngagementV1 {
+  if (
+    !fields(value, ["EXP-02", "EXP-03"]) ||
+    !fields(value["EXP-02"], ["C04-S02-A"]) ||
+    !fields(value["EXP-03"], ["C04-S02-B"]) ||
+    typeof value["EXP-02"]["C04-S02-A"] !== "boolean" ||
+    typeof value["EXP-03"]["C04-S02-B"] !== "boolean"
+  )
+    throw new TypeError("Invalid C04-A02 stage engagement evidence");
+  return stageEngagement(
+    value["EXP-02"]["C04-S02-A"],
+    value["EXP-03"]["C04-S02-B"],
+  );
+}
+
 const modes = ["REVIEW", "SOURCE_REVIEW", "REINFORCEMENT"] as const;
 const intents = ["CONTINUE", "PREVIOUS", "INFO_NEEDED"] as const;
 const identity = (value: unknown): value is string =>
@@ -1402,6 +1438,9 @@ export function createActivityMachine(
       Object.freeze({
         activityId,
         ...(modelPolicy ? { model: initializeModel() } : {}),
+        ...(activityId === "C04-A02"
+          ? { c04A02StageEngagement: stageEngagement(false, false) }
+          : {}),
         position: "ENTRY",
         origin: null,
         infoOrigin: null,
@@ -1450,6 +1489,18 @@ export function createActivityMachine(
               );
               if (!value || value.state === previous.value.state) return {};
               return {
+                ...(context.c04A02StageEngagement
+                  ? {
+                      c04A02StageEngagement: stageEngagement(
+                        context.c04A02StageEngagement["EXP-02"]["C04-S02-A"] ||
+                          (context.position === "EXP-02" &&
+                            event.selectionId === "C04-S02-A"),
+                        context.c04A02StageEngagement["EXP-03"]["C04-S02-B"] ||
+                          (context.position === "EXP-03" &&
+                            event.selectionId === "C04-S02-B"),
+                      ),
+                    }
+                  : {}),
                 model: Object.freeze({
                   modelId: previous.modelId,
                   revision: previous.revision + 1,

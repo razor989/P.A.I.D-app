@@ -26,6 +26,13 @@ export type C04ModelState = Readonly<{
   selectedChildId: C04ChildId | null;
 }>;
 
+/** D061/S1: evidence only; never an issued live model or derived answer. */
+export type C04PersistedModelV1 = Readonly<{
+  activityId: "C04-A02";
+  scenarioId: "C04-S02";
+  selectedChildId: C04ChildId;
+}>;
+
 export type C04ModelIntent = Readonly<{
   type: "SELECT_CHILD";
   childId: C04ChildId;
@@ -230,6 +237,75 @@ function requireState(value: unknown): {
     throw new TypeError("Corrupted C04 model state");
   }
   return { state, definition };
+}
+
+function checkpointAuthority(input: C04ModelDefinition): C04ModelDefinition {
+  const definition = copyDefinition(input);
+  if (
+    definition.activityId !== "C04-A02" ||
+    definition.scenarioId !== "C04-S02"
+  )
+    throw new TypeError("Unsupported C04 checkpoint model authority");
+  return definition;
+}
+
+/** Trusted composition authenticates source membership before supplying authority.
+ * Parsing validates evidence only and deliberately does not call issue(). */
+export function validateC04PersistedModelV1(
+  value: unknown,
+  authority: C04ModelDefinition,
+): C04PersistedModelV1 {
+  const definition = checkpointAuthority(authority);
+  if (
+    !record(value, ["activityId", "scenarioId", "selectedChildId"]) ||
+    !Object.values(Object.getOwnPropertyDescriptors(value)).every(
+      (descriptor) => descriptor.enumerable,
+    ) ||
+    value.activityId !== definition.activityId ||
+    value.scenarioId !== definition.scenarioId ||
+    (value.selectedChildId !== "C04-S02-A" &&
+      value.selectedChildId !== "C04-S02-B") ||
+    !definition.cases.some((item) => item.childId === value.selectedChildId)
+  )
+    throw new TypeError("Invalid C04 persisted model evidence");
+  return Object.freeze({
+    activityId: "C04-A02",
+    scenarioId: "C04-S02",
+    selectedChildId: value.selectedChildId,
+  });
+}
+
+/** Read-only live projection verifies domain issuance AND the supplied source.
+ * It never selects, reissues, restores, or exposes the private definition. */
+export function projectC04PersistedModelV1(
+  value: unknown,
+  authority: C04ModelDefinition,
+): C04PersistedModelV1 {
+  const source = checkpointAuthority(authority);
+  const { state, definition } = requireState(value);
+  if (
+    definition.activityId !== source.activityId ||
+    definition.scenarioId !== source.scenarioId ||
+    definition.cases.length !== source.cases.length ||
+    definition.cases.some((item, index) => {
+      const expected = source.cases[index]!;
+      return (
+        item.childId !== expected.childId ||
+        (["original", "newValue"] as const).some(
+          (role) =>
+            item[role].role !== expected[role].role ||
+            !item[role].value.magnitude.equals(
+              expected[role].value.magnitude,
+            ) ||
+            item[role].value.kind !== expected[role].value.kind ||
+            item[role].value.unit !== expected[role].value.unit ||
+            item[role].value.basis !== expected[role].value.basis,
+        )
+      );
+    })
+  )
+    throw new TypeError("C04 live model source mismatch");
+  return validateC04PersistedModelV1(state, source);
 }
 
 /** A selection changes the entire approved case, never a numeric field. */

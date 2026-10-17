@@ -5,6 +5,8 @@ import {
   applyC04ModelIntent,
   createC04ModelState,
   deriveC04ModelState,
+  projectC04PersistedModelV1,
+  validateC04PersistedModelV1,
 } from "./public";
 import type {
   C04ModelDefinition,
@@ -19,7 +21,7 @@ const pair = (
   original: string,
   next: string,
   label: string,
-  childId: string | null = null,
+  childId: "C04-S02-A" | "C04-S02-B" | null = null,
 ) => ({
   childId,
   original: { role: `Original ${label} (reference)`, value: money(original) },
@@ -52,8 +54,7 @@ const fixtures = {
 } as const;
 const select = (childId: string) =>
   ({ type: "SELECT_CHILD", childId }) as C04ModelIntent;
-const create = (id: keyof typeof fixtures) =>
-  createC04ModelState(fixtures[id] as C04ModelDefinition);
+const create = (id: keyof typeof fixtures) => createC04ModelState(fixtures[id]);
 // Match T021's separate test-only oracle import convention without production dependencies.
 const oraclePath: string = "../../../../tests/oracles/public";
 const { resolveOracle } = (await import(/* @vite-ignore */ oraclePath)) as {
@@ -67,6 +68,127 @@ const { resolveOracle } = (await import(/* @vite-ignore */ oraclePath)) as {
     }> | null;
   }>;
 };
+
+describe("D061/S1 read-only model checkpoint evidence", () => {
+  it("projects issued A/B selections, freezes evidence and preserves input", () => {
+    const a = create("C04-A02");
+    const b = applyC04ModelIntent(a, select("C04-S02-B"));
+    const before = deriveC04ModelState(a);
+    for (const state of [a, b]) {
+      const evidence = projectC04PersistedModelV1(state, fixtures["C04-A02"]);
+      expect(evidence).toEqual(state);
+      expect(evidence).not.toBe(state);
+      expect(Object.isFrozen(evidence)).toBe(true);
+      expect(Reflect.ownKeys(evidence)).toEqual([
+        "activityId",
+        "scenarioId",
+        "selectedChildId",
+      ]);
+      const parsed: unknown = JSON.parse(JSON.stringify(evidence));
+      expect(validateC04PersistedModelV1(parsed, fixtures["C04-A02"])).toEqual(
+        evidence,
+      );
+      expect(() =>
+        projectC04PersistedModelV1(parsed, fixtures["C04-A02"]),
+      ).toThrow(TypeError);
+      expect(() =>
+        projectC04PersistedModelV1(evidence, fixtures["C04-A02"]),
+      ).toThrow(TypeError);
+    }
+    expect(deriveC04ModelState(a)).toEqual(before);
+    expect(a.selectedChildId).toBe("C04-S02-A");
+  });
+
+  it("rejects unissued, forged, non-A02 and wrong-authority live states", () => {
+    const state = create("C04-A02");
+    for (const value of [
+      null,
+      undefined,
+      {},
+      { ...state },
+      { ...state, selectedChildId: "bad" },
+      { ...state, scenarioId: "C04-S01" },
+      create("C04-A01"),
+      create("C04-A03"),
+      create("C04-A04"),
+    ])
+      expect(() =>
+        projectC04PersistedModelV1(value, fixtures["C04-A02"]),
+      ).toThrow(TypeError);
+    expect(() =>
+      projectC04PersistedModelV1(state, fixtures["C04-A01"]),
+    ).toThrow(TypeError);
+    const changed = {
+      ...fixtures["C04-A02"],
+      cases: [
+        pair("25000", "22000", "C04-S02-A monthly salary", "C04-S02-A"),
+        fixtures["C04-A02"].cases[1],
+      ],
+    };
+    expect(() => projectC04PersistedModelV1(state, changed)).toThrow(TypeError);
+    expect(() =>
+      projectC04PersistedModelV1(
+        createC04ModelState(changed),
+        fixtures["C04-A02"],
+      ),
+    ).toThrow(TypeError);
+    expect(Reflect.set(state, "selectedChildId", "bad")).toBe(false);
+  });
+
+  it("strictly rejects malformed persisted structures without invoking accessors", () => {
+    const good = {
+      activityId: "C04-A02",
+      scenarioId: "C04-S02",
+      selectedChildId: "C04-S02-A",
+    };
+    let reads = 0;
+    const accessor = { ...good };
+    Object.defineProperty(accessor, "selectedChildId", {
+      get() {
+        reads++;
+        return "C04-S02-A";
+      },
+    });
+    const inherited: unknown = Object.create(good);
+    const nullPrototype: unknown = Object.create(
+      null,
+      Object.getOwnPropertyDescriptors(good),
+    );
+    const nonenumerable = { ...good };
+    Object.defineProperty(nonenumerable, "selectedChildId", {
+      enumerable: false,
+    });
+    const bad = [
+      null,
+      undefined,
+      [],
+      "C04-A02",
+      1,
+      {},
+      { ...good, activityId: "C04-A01" },
+      { ...good, scenarioId: "C04-S01" },
+      { ...good, selectedChildId: "C04-S02-C" },
+      { ...good, selectedChildId: null },
+      { ...good, selectedChildId: 1 },
+      { ...good, selectedChildId: " C04-S02-A" },
+      { ...good, revision: 1 },
+      { ...good, [Symbol("private")]: 1 },
+      { activityId: "C04-A02", scenarioId: "C04-S02" },
+      accessor,
+      inherited,
+      nullPrototype,
+      nonenumerable,
+    ];
+    for (const value of bad)
+      expect(() =>
+        validateC04PersistedModelV1(value, fixtures["C04-A02"]),
+      ).toThrow(TypeError);
+    expect(reads).toBe(0);
+    expect(() =>
+      validateC04PersistedModelV1(good, fixtures["C04-A01"]),
+    ).toThrow(TypeError);
+  });
+});
 
 describe("C04 injected pure model", () => {
   const rows = [
@@ -201,7 +323,7 @@ describe("C04 injected pure model", () => {
         newValue: { ...item.newValue },
       })),
     };
-    const state = createC04ModelState(mutable as C04ModelDefinition);
+    const state = createC04ModelState(mutable);
     const before = deriveC04ModelState(state);
     mutable.cases[0]!.original.role = "Original corrupted";
     expect(deriveC04ModelState(state)).toEqual(before);

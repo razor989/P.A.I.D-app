@@ -1,4 +1,4 @@
-import { isLearnerResponse } from "../../core/public";
+import { ExactDecimal, isLearnerResponse } from "../../core/public";
 import type { LearnerResponse } from "../../core/public";
 import {
   c04Activities,
@@ -15,11 +15,14 @@ import {
   applyC04ModelIntent,
   createC04ModelState,
   deriveC04ModelState,
+  projectC04PersistedModelV1,
+  validateC04PersistedModelV1,
 } from "../../competencies/c04-percentage-change/model/public";
 import type {
   C04ModelDefinition,
   C04ModelSnapshot,
   C04ModelState,
+  C04PersistedModelV1,
 } from "../../competencies/c04-percentage-change/model/public";
 import { evaluateC04Response } from "../../competencies/c04-percentage-change/evaluators/public";
 import type {
@@ -99,6 +102,115 @@ export function authenticateC04BindingSource(source: Source = canonical): void {
   }
 }
 
+/** D061/S2: source identity, not model state or a caller-controlled mapping. */
+export function projectC04CheckpointIdentity(activityId: unknown): Readonly<{
+  activityId: string;
+  scenarioId: string;
+}> {
+  authenticateC04BindingSource();
+  const activity = c04Activities.find((item) => item.id === activityId);
+  const scenario =
+    activity &&
+    c04Scenarios.find(
+      (item) =>
+        item.id === activity.scenarioIds[0] && item.activityId === activity.id,
+    );
+  if (!activity || !scenario)
+    throw new TypeError("Invalid C04 checkpoint identity");
+  return Object.freeze({ activityId: activity.id, scenarioId: scenario.id });
+}
+
+// Reject accessors, prototypes, sparse arrays and hidden properties before Core
+// structural checks. Decimal methods authenticate their private value, not instanceof alone.
+function responseData(value: unknown, seen = new Set<object>()): boolean {
+  if (value === null || typeof value === "string" || typeof value === "boolean")
+    return true;
+  if (typeof value !== "object" || seen.has(value)) return false;
+  if (value instanceof ExactDecimal) {
+    try {
+      return ExactDecimal.prototype.toString.call(value) === value.toString();
+    } catch {
+      return false;
+    }
+  }
+  if (
+    Object.getPrototypeOf(value) !==
+    (Array.isArray(value) ? Array.prototype : Object.prototype)
+  )
+    return false;
+  seen.add(value);
+  const keys = Reflect.ownKeys(value);
+  const result =
+    (!Array.isArray(value) ||
+      (keys.length === value.length + 1 &&
+        Array.from({ length: value.length }, (_, index) =>
+          Object.prototype.hasOwnProperty.call(value, index),
+        ).every(Boolean))) &&
+    keys.every((key) => {
+      if (Array.isArray(value) && key === "length") return true;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      return (
+        typeof key === "string" &&
+        descriptor !== undefined &&
+        descriptor.enumerable &&
+        "value" in descriptor &&
+        responseData(descriptor.value, seen)
+      );
+    });
+  seen.delete(value);
+  return result;
+}
+
+/** D019/S1: supplied-field membership only; never readiness or correctness.
+ * REASONING may carry retained primary fields; commitment equality is checked
+ * separately by the checkpoint/actor, not authorized by this predicate.
+ */
+export function validateC04PartialResponseV1(
+  activityId: unknown,
+  response: unknown,
+  stage: unknown,
+): boolean {
+  try {
+    authenticateC04BindingSource();
+    const contract = c04ResponseContracts.find(
+      (item) => item.activityId === activityId,
+    );
+    const policy = contract?.stages.find((item) => item.id === stage);
+    if (
+      !contract ||
+      !policy ||
+      !responseData(response) ||
+      !isLearnerResponse(response) ||
+      response.kind !== "COMPOSITE"
+    )
+      return false;
+    const retained =
+      stage === "REASONING" ? (contract.commitment?.fields ?? []) : [];
+    return response.parts.every(({ key, response: part }) => {
+      if (!policy.editableFields.includes(key) && !retained.includes(key))
+        return false;
+      const field = contract.fields.find((item) => item.role === key);
+      if (!field?.acceptedKinds.includes(part.kind)) return false;
+      if (part.kind === "SINGLE_SELECTION")
+        return contract.choices.some(
+          (choice) =>
+            choice.role === key &&
+            choice.visibleStages.includes(policy.id) &&
+            choice.options.some((option) => option.id === part.selectionId),
+        );
+      return (
+        part.kind === "SEMANTIC_BOUNDARY" ||
+        (part.kind === "EXACT_QUANTITY" &&
+          part.value.kind === field.quantityKind &&
+          part.value.unit === field.unit &&
+          part.value.basis === field.basis)
+      );
+    });
+  } catch {
+    return false;
+  }
+}
+
 function sourceModel(index: number): C04ModelDefinition {
   const scenario = c04Scenarios[index]!;
   const pair = (offset: number, childId: "C04-S02-A" | "C04-S02-B" | null) => {
@@ -123,6 +235,22 @@ function sourceModel(index: number): C04ModelDefinition {
         ? [pair(0, "C04-S02-A"), pair(2, "C04-S02-B")]
         : [pair(0, null)],
   };
+}
+
+/** D061/S1: authenticates fixed Study provenance before reading live issuance. */
+export function projectC04CheckpointModelV1(
+  state: unknown,
+): C04PersistedModelV1 {
+  authenticateC04BindingSource();
+  return projectC04PersistedModelV1(state, sourceModel(1));
+}
+
+/** Validates detached JSON evidence, without restoring or issuing live state. */
+export function validateC04CheckpointModelV1(
+  evidence: unknown,
+): C04PersistedModelV1 {
+  authenticateC04BindingSource();
+  return validateC04PersistedModelV1(evidence, sourceModel(1));
 }
 
 function ready(

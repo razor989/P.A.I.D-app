@@ -5,6 +5,7 @@ import {
   isActivityEvent,
   validateActivityDefinition,
   availableModelSelections,
+  validateC04A02StageEngagementV1,
 } from "./public";
 import type {
   ActivityDefinition,
@@ -26,6 +27,195 @@ import {
 import type { C04ModelDefinition } from "../../competencies/c04-percentage-change/model/public";
 import { evaluateC04Response } from "../../competencies/c04-percentage-change/evaluators/public";
 import type { C04EvaluationDefinition } from "../../competencies/c04-percentage-change/evaluators/public";
+
+describe("D044/S1 bounded stage engagement", () => {
+  it("strictly validates detached exact evidence without accepting delivery or arbitrary stages", () => {
+    const good = {
+      "EXP-02": { "C04-S02-A": true },
+      "EXP-03": { "C04-S02-B": false },
+    };
+    const checked = validateC04A02StageEngagementV1(
+      JSON.parse(JSON.stringify(good)),
+    );
+    expect(checked).toEqual(good);
+    expect(checked).not.toBe(good);
+    expect(Object.isFrozen(checked["EXP-02"])).toBe(true);
+    for (const bad of [
+      null,
+      undefined,
+      {},
+      [],
+      { ...good, delivered: true },
+      { ...good, "EXP-02": { "C04-S02-A": 1 } },
+      { ...good, "EXP-02": { "C04-S02-B": true } },
+      { ...good, "EXP-04": {} },
+      { ...good, "EXP-03": { "C04-S02-B": false, revision: 2 } },
+      Object.create(good),
+      Object.defineProperty({ ...good }, "EXP-02", {
+        get: () => {
+          throw new Error("must not run");
+        },
+      }),
+    ])
+      expect(() => validateC04A02StageEngagementV1(bad)).toThrow(TypeError);
+  });
+
+  const definition: ActivityDefinition = {
+    activityId: "C04-A02",
+    edges: {
+      ENTRY: { CONTINUE: "EXP-01" },
+      "EXP-01": { CONTINUE: "EXP-02" },
+      "EXP-02": { CONTINUE: "EXP-03", PREVIOUS: "EXP-01" },
+      "EXP-03": { CONTINUE: "EXP-04", PREVIOUS: "EXP-02" },
+      "EXP-04": { CONTINUE: "ACTIVE", PREVIOUS: "EXP-03" },
+    },
+    support: { "EXP-02": ["REVIEW", "REINFORCEMENT"] },
+    modelSelection: {
+      modelId: "fixture",
+      scenarioId: "C04-S02",
+      initialSelectionId: "C04-S02-A",
+      selectionIds: ["C04-S02-A", "C04-S02-B"],
+      allowedSelections: {
+        "EXP-02": ["C04-S02-A"],
+        "EXP-03": ["C04-S02-B"],
+        ACTIVE: ["C04-S02-A", "C04-S02-B"],
+      },
+    },
+  };
+  const issue = (selectionId: string) => ({
+    selectionId,
+    state: Object.freeze({}),
+  });
+  const make = (
+    select: ActivityModelAdapter["select"] = (_, id) => issue(id),
+  ) =>
+    createActor(
+      createActivityMachine(definition, ports(), {
+        initialize: () => issue("C04-S02-A"),
+        select,
+      }),
+    ).start();
+  const advance = (a: ReturnType<typeof make>, count = 1) => {
+    for (let i = 0; i < count; i++) a.send({ type: "CONTINUE" });
+  };
+  const select = (a: ReturnType<typeof make>, selectionId: string) => {
+    const c = a.getSnapshot().context;
+    a.send({
+      type: "SELECT_MODEL_CHILD",
+      modelId: c.model!.modelId,
+      revision: c.model!.revision,
+      position: c.position,
+      selectionId,
+    });
+  };
+  const evidence = (a: ReturnType<typeof make>) =>
+    a.getSnapshot().context.c04A02StageEngagement!;
+
+  it("distinguishes A then B from B twice despite equal final selection and revision", () => {
+    const a = make(),
+      b = make();
+    advance(a, 2);
+    advance(b, 2);
+    select(a, "C04-S02-A");
+    advance(a);
+    advance(b);
+    select(a, "C04-S02-B");
+    select(b, "C04-S02-B");
+    select(b, "C04-S02-B");
+    advance(a);
+    advance(b);
+    expect(a.getSnapshot().context.model?.revision).toBe(2);
+    expect(b.getSnapshot().context.model?.revision).toBe(2);
+    expect(a.getSnapshot().context.position).toBe("EXP-04");
+    expect(b.getSnapshot().context.position).toBe("EXP-04");
+    expect(a.getSnapshot().context.model?.value.selectionId).toBe(
+      b.getSnapshot().context.model?.value.selectionId,
+    );
+    expect(evidence(a)).toEqual({
+      "EXP-02": { "C04-S02-A": true },
+      "EXP-03": { "C04-S02-B": true },
+    });
+    expect(evidence(b)).toEqual({
+      "EXP-02": { "C04-S02-A": false },
+      "EXP-03": { "C04-S02-B": true },
+    });
+    a.stop();
+    b.stop();
+  });
+
+  it("initialization, unauthorized/stale/wrong-position events and navigation create no evidence", () => {
+    const a = make();
+    select(a, "C04-S02-A");
+    advance(a, 2);
+    select(a, "C04-S02-B");
+    for (const patch of [
+      { revision: 99 },
+      { modelId: "wrong" },
+      { position: "EXP-03" as const },
+    ])
+      a.send({
+        type: "SELECT_MODEL_CHILD",
+        modelId: "fixture",
+        revision: 0,
+        position: "EXP-02",
+        selectionId: "C04-S02-A",
+        ...patch,
+      });
+    a.send({ type: "PREVIOUS" });
+    advance(a);
+    expect(evidence(a)["EXP-02"]["C04-S02-A"]).toBe(false);
+    expect(evidence(a)["EXP-03"]["C04-S02-B"]).toBe(false);
+    expect(a.getSnapshot().context.model?.revision).toBe(0);
+    a.stop();
+  });
+
+  it.each(["reject", "throw", "same", "malformed"])(
+    "does not count an adapter %s",
+    (mode) => {
+      const a = make((current, id) => {
+        if (mode === "throw") throw new Error("rejected");
+        if (mode === "same") return current;
+        if (mode === "malformed") return { selectionId: id, state: null };
+        return null;
+      });
+      advance(a, 2);
+      select(a, "C04-S02-A");
+      expect(evidence(a)["EXP-02"]["C04-S02-A"]).toBe(false);
+      expect(a.getSnapshot().context.model?.revision).toBe(0);
+      a.stop();
+    },
+  );
+
+  it("preserves frozen presence across re-entry and support; Review selections remain rejected", () => {
+    const a = make();
+    advance(a, 2);
+    a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+    expect(evidence(a)["EXP-02"]["C04-S02-A"]).toBe(false);
+    select(a, "C04-S02-A");
+    select(a, "C04-S02-A");
+    expect(a.getSnapshot().context.model?.revision).toBe(0);
+    expect(evidence(a)["EXP-02"]["C04-S02-A"]).toBe(false);
+    a.send({ type: "CLOSE_SUPPORT" });
+    select(a, "C04-S02-A");
+    select(a, "C04-S02-A");
+    expect(a.getSnapshot().context.model?.revision).toBe(2);
+    expect(evidence(a)["EXP-02"]["C04-S02-A"]).toBe(true);
+    const saved = evidence(a);
+    expect(Object.isFrozen(saved)).toBe(true);
+    expect(Object.isFrozen(saved["EXP-02"])).toBe(true);
+    expect(Object.isFrozen(saved["EXP-03"])).toBe(true);
+    a.send({ type: "CLOSE_SUPPORT" });
+    a.send({ type: "PREVIOUS" });
+    advance(a);
+    a.send({ type: "OPEN_SUPPORT", mode: "REINFORCEMENT" });
+    a.send({ type: "CLOSE_SUPPORT" });
+    expect(evidence(a)).toEqual(saved);
+    advance(a, 3);
+    select(a, "C04-S02-B");
+    expect(evidence(a)["EXP-03"]["C04-S02-B"]).toBe(false);
+    a.stop();
+  });
+});
 
 // Fixtures below exercise injected contracts; they are NOT canonical source manifests.
 

@@ -20,7 +20,282 @@ import {
   createC04ActivityActor,
   createC04ActivityBindings,
   createC04ActivityRegistry,
+  projectC04CheckpointModelV1,
+  validateC04CheckpointModelV1,
+  projectC04CheckpointIdentity,
+  validateC04PartialResponseV1,
 } from "./public";
+
+describe("D061/S2 identity and D019/S1 supplied-response membership", () => {
+  it.each(c04Activities)(
+    "projects immutable canonical identity for $id",
+    (activity) => {
+      const descriptor = projectC04CheckpointIdentity(activity.id);
+      expect(descriptor).toEqual({
+        activityId: activity.id,
+        scenarioId: activity.scenarioIds[0],
+      });
+      expect(Object.keys(descriptor).sort()).toEqual([
+        "activityId",
+        "scenarioId",
+      ]);
+      expect(Object.isFrozen(descriptor)).toBe(true);
+      expect(projectC04CheckpointIdentity(activity.id)).not.toBe(descriptor);
+      expect(
+        createC04ActivityRegistry().resolve(activity.id).definition.activityId,
+      ).toBe(activity.id);
+    },
+  );
+  it.each([null, undefined, 1, {}, "C05-A01", " C04-A01", "C04-A99"])(
+    "rejects identity %j",
+    (id) => {
+      expect(() => projectC04CheckpointIdentity(id)).toThrow();
+      expect(
+        validateC04PartialResponseV1(
+          id,
+          composite({ difference: boundary }),
+          "RESPONSE",
+        ),
+      ).toBe(false);
+    },
+  );
+  it.each(["C04-A01", "C04-A03"])(
+    "separates incomplete/invalid drafts without changing %s actor behavior",
+    (id) => {
+      const actor = active(id);
+      try {
+        const binding = createC04ActivityRegistry().resolve(id);
+        const valid = composite({ difference: boundary });
+        const invalid = [
+          composite({ stranger: boundary }),
+          composite({
+            difference: { kind: "SINGLE_SELECTION", selectionId: "unknown" },
+          }),
+        ];
+        for (const draft of [valid, ...invalid]) {
+          expect(validateC04PartialResponseV1(id, draft, "RESPONSE")).toBe(
+            draft === valid,
+          );
+          expect(binding.ports.ready(draft)).toBe(false);
+          actor.send({ type: "RESPONSE_CHANGED", response: draft });
+          expect(actor.getSnapshot().context.response).toEqual(draft);
+        }
+      } finally {
+        actor.stop();
+      }
+    },
+  );
+  it.each(c04ResponseContracts)(
+    "validates complete and incorrect responses for $activityId without correctness",
+    (contract) => {
+      const actor = active(contract.activityId);
+      try {
+        if (contract.activityId === "C04-A04") {
+          actor.send({
+            type: "RESPONSE_CHANGED",
+            response: composite({
+              difference: money("1500"),
+              percentage: boundary,
+            }),
+          });
+          actor.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+        }
+        const stage =
+          contract.activityId === "C04-A04" ? "REASONING" : "RESPONSE";
+        expect(
+          validateC04PartialResponseV1(
+            contract.activityId,
+            response(actor),
+            stage,
+          ),
+        ).toBe(true);
+        expect(
+          validateC04PartialResponseV1(
+            contract.activityId,
+            response(actor, true),
+            stage,
+          ),
+        ).toBe(true);
+        expect(
+          validateC04PartialResponseV1(
+            contract.activityId,
+            response(actor),
+            "bogus",
+          ),
+        ).toBe(false);
+        expect(
+          validateC04PartialResponseV1(contract.activityId, null, stage),
+        ).toBe(false);
+      } finally {
+        actor.stop();
+      }
+    },
+  );
+  it("rejects quantities, duplicate roles, malformed data, hidden/accessor values and cross-stage choices", () => {
+    const id = "C04-A01";
+    for (const q of [
+      quantity(ExactDecimal.from("1"), "OTHER", "PHP", "per month"),
+      quantity(ExactDecimal.from("1"), "MONETARY_AMOUNT", "USD", "per month"),
+      quantity(ExactDecimal.from("1"), "MONETARY_AMOUNT", "PHP", null),
+    ]) {
+      expect(
+        validateC04PartialResponseV1(
+          id,
+          composite({ difference: { kind: "EXACT_QUANTITY", value: q } }),
+          "RESPONSE",
+        ),
+      ).toBe(false);
+    }
+    const draft = composite({ difference: boundary });
+    expect(
+      validateC04PartialResponseV1(
+        id,
+        {
+          kind: "COMPOSITE",
+          parts: [
+            { key: "difference", response: boundary },
+            { key: "difference", response: boundary },
+          ],
+        },
+        "RESPONSE",
+      ),
+    ).toBe(false);
+    expect(
+      validateC04PartialResponseV1(
+        id,
+        { kind: "COMPOSITE", parts: [] },
+        "RESPONSE",
+      ),
+    ).toBe(false);
+    expect(
+      validateC04PartialResponseV1(id, Object.create(draft), "RESPONSE"),
+    ).toBe(false);
+    const getter = Object.defineProperty({}, "kind", {
+      get() {
+        throw new Error("must not run");
+      },
+      enumerable: true,
+    });
+    expect(validateC04PartialResponseV1(id, getter, "RESPONSE")).toBe(false);
+    const choice = composite({
+      explanation: {
+        kind: "SINGLE_SELECTION",
+        selectionId: c04ResponseContracts[3]!.choices[0]!.options[0]!.id,
+      },
+    });
+    expect(validateC04PartialResponseV1("C04-A04", choice, "PRIMARY")).toBe(
+      false,
+    );
+    expect(validateC04PartialResponseV1("C04-A04", choice, "REASONING")).toBe(
+      true,
+    );
+    expect(
+      validateC04PartialResponseV1(
+        "C04-A04",
+        composite({ difference: boundary }),
+        "PRIMARY",
+      ),
+    ).toBe(true);
+    expect(validateC04PartialResponseV1(id, choice, "RESPONSE")).toBe(false);
+    expect(
+      validateC04PartialResponseV1(
+        "C04-A04",
+        composite({
+          explanation: { kind: "SINGLE_SELECTION", selectionId: "forged" },
+        }),
+        "REASONING",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("D061/S1 source-authenticated checkpoint model facade", () => {
+  it("retains the original model-history collision separately from D044/S1 engagement", () => {
+    const engaged = createC04ActivityActor("C04-A02").start();
+    const skipped = createC04ActivityActor("C04-A02").start();
+    try {
+      advance(engaged, 2);
+      advance(skipped, 2);
+      expect(engaged.getSnapshot().context.position).toBe("EXP-02");
+      // Only this history performs an employee-A action at EXP-02.
+      select(engaged, "C04-S02-A");
+      expect(engaged.getSnapshot().context.model!.revision).toBe(1);
+      expect(skipped.getSnapshot().context.model!.revision).toBe(0);
+      advance(engaged);
+      advance(skipped);
+      select(engaged, "C04-S02-B");
+      // Two permitted employee-B actions at EXP-03 erase the revision distinction.
+      select(skipped, "C04-S02-B");
+      select(skipped, "C04-S02-B");
+      advance(engaged);
+      advance(skipped);
+      const left = engaged.getSnapshot().context;
+      const right = skipped.getSnapshot().context;
+      expect(left.position).toBe("EXP-04");
+      expect(left.model!.revision).toBe(2);
+      expect(left.model).toEqual(right.model);
+      expect(left.c04A02StageEngagement).not.toEqual(
+        right.c04A02StageEngagement,
+      );
+      expect(projectC04CheckpointModelV1(left.model!.value.state)).toEqual(
+        projectC04CheckpointModelV1(right.model!.value.state),
+      );
+      // Model evidence still collides; D044/S1 actor evidence now distinguishes it.
+      // This is NOT whole-checkpoint preservation acceptance.
+    } finally {
+      engaged.stop();
+      skipped.stop();
+    }
+  });
+
+  it("reads the exact actor-owned issued state and follows approved selections", () => {
+    const actor = createC04ActivityActor("C04-A02").start();
+    try {
+      const initial = actor.getSnapshot().context.model!.value.state;
+      expect(projectC04CheckpointModelV1(initial)).toEqual({
+        activityId: "C04-A02",
+        scenarioId: "C04-S02",
+        selectedChildId: "C04-S02-A",
+      });
+      advance(actor, 3);
+      select(actor, "C04-S02-B");
+      const state = actor.getSnapshot().context.model!.value.state;
+      const evidence = projectC04CheckpointModelV1(state);
+      expect(evidence.selectedChildId).toBe("C04-S02-B");
+      expect(projectC04CheckpointModelV1(initial).selectedChildId).toBe(
+        "C04-S02-A",
+      );
+      const parsed: unknown = JSON.parse(JSON.stringify(evidence));
+      expect(validateC04CheckpointModelV1(parsed)).toEqual(evidence);
+      expect(() => projectC04CheckpointModelV1(parsed)).toThrow(TypeError);
+      expect(() => projectC04CheckpointModelV1({ ...evidence })).toThrow(
+        TypeError,
+      );
+      expect(() =>
+        projectC04CheckpointModelV1(validateC04CheckpointModelV1(parsed)),
+      ).toThrow(TypeError);
+      expect(actor.getSnapshot().context.model!.value.state).toBe(state);
+    } finally {
+      actor.stop();
+    }
+  });
+
+  it("rejects self-declared identities and extra persisted fields", () => {
+    const good = {
+      activityId: "C04-A02",
+      scenarioId: "C04-S02",
+      selectedChildId: "C04-S02-A",
+    };
+    for (const value of [
+      { ...good, activityId: "C04-A04" },
+      { ...good, scenarioId: "C04-S04" },
+      { ...good, selectedChildId: "C04-S02-C" },
+      { ...good, original: "20000" },
+      { ...good, revision: 2 },
+    ])
+      expect(() => validateC04CheckpointModelV1(value)).toThrow(TypeError);
+  });
+});
 
 const money = (value: string) => ({
   kind: "EXACT_QUANTITY" as const,
