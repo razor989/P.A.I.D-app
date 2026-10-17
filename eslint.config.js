@@ -283,4 +283,21 @@ export default tseslint.config(
     ]),
     files: ["src/recovery/rehydration/public.test.ts"],
   },
+  // D177/S4: only the exact Session composition consumers and used targets.
+  {
+    ...restriction("session/app-machine", [
+      "engine/c04-activity-binding/public",
+      "recovery/rehydration/public",
+      "study/catalog/public",
+    ]),
+    files: ["src/session/app-machine/public.ts"],
+  },
+  {
+    ...restriction("session/app-machine", [
+      "engine/c04-activity-binding/public",
+      "recovery/rehydration/public",
+      "study/catalog/public",
+    ]),
+    files: ["src/session/app-machine/public.test.ts"],
+  },
 );
