@@ -131,7 +131,7 @@ const stageEPublicTargets = [
   "competencies/c04-percentage-change/completion/public",
 ];
 
-function restriction(directory, publicTargets = []) {
+function restriction(directory, publicTargets = [], extraPatterns = []) {
   const [owner, module] = directory.split("/");
   const disallowed = [...(forbidden[owner] ?? [])];
   if (owner === "competencies" && forbiddenPeers.includes(module)) {
@@ -144,6 +144,7 @@ function restriction(directory, publicTargets = []) {
 
   const patterns = [
     testOnly,
+    ...extraPatterns,
     {
       regex: "^@/(?:src/|(?:[^/]+/)*\\.\\./)",
       message: "Use the single canonical @/ source alias.",
@@ -299,5 +300,20 @@ export default tseslint.config(
       "study/catalog/public",
     ]),
     files: ["src/session/app-machine/public.test.ts"],
+  },
+  // D177/S5: the two actually used T033 test collaborators only.
+  {
+    ...restriction(
+      "session/navigation",
+      ["study/catalog/public", "engine/activity-machine/public"],
+      [
+        {
+          regex: "^\\.\\./\\.\\./(?:engine|study)/",
+          message:
+            "D177/S5 test collaborators use their exact @/ public targets.",
+        },
+      ],
+    ),
+    files: ["src/session/navigation/public.test.ts"],
   },
 );

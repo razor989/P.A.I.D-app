@@ -1,4 +1,4 @@
-import { assign, createActor, fromCallback, setup } from "xstate";
+import { and, assign, createActor, fromCallback, setup, stateIn } from "xstate";
 import { isActivityId, isCompetencyId, isScenarioId } from "@/core/public";
 import type { ActivityId, CompetencyId } from "@/core/public";
 import { createC04ActivityActor } from "@/engine/c04-activity-binding/public";
@@ -23,6 +23,7 @@ export type SessionInput = Readonly<{
   completion?: CompletionKnowledge;
 }>;
 export type SessionEvent =
+  | Readonly<{ type: "RETURN_TO_LIBRARY" }>
   | Readonly<{ type: "SELECT_COMPETENCY"; competencyId: CompetencyId }>
   | Readonly<{ type: "SELECT_ACTIVITY"; activityId: ActivityId }>
   | Readonly<{ type: "TECHNICAL_STARTED" }>
@@ -58,6 +59,7 @@ export function isSessionEvent(value: unknown): value is SessionEvent {
       );
     case "SELECT_ACTIVITY":
       return exact(["type", "activityId"]) && isActivityId(event.activityId);
+    case "RETURN_TO_LIBRARY":
     case "TECHNICAL_STARTED":
     case "TECHNICAL_SUCCEEDED":
       return exact(["type"]);
@@ -215,6 +217,10 @@ const machine = setup({
     ),
   },
   guards: {
+    returnToLibrary: and([
+      "eventValid",
+      stateIn({ session: { decision: "none" } }),
+    ]),
     noCheckpoint: ({ context }) => context.recovery?.status === "NO_CHECKPOINT",
     validCheckpoint: ({ context }) =>
       context.recovery?.status === "VALID_CHECKPOINT",
@@ -314,7 +320,14 @@ const machine = setup({
           },
           states: {
             library: { entry: "library" },
-            competency: {},
+            competency: {
+              on: {
+                RETURN_TO_LIBRARY: {
+                  guard: "returnToLibrary",
+                  target: "library",
+                },
+              },
+            },
             activity: {},
           },
         },

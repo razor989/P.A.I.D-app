@@ -588,6 +588,111 @@ describe("T032 externally composed T031 outcomes (no startup read orchestration)
     outcome.actor.stop();
   });
 
+  it("D015/S1 returns only from competency, preserving exact actor and parallel state", () => {
+    const actor = session();
+    const event = { type: "RETURN_TO_LIBRARY" } as const;
+    expect(isSessionEvent(event)).toBe(true);
+    expect(actor.getSnapshot().can(event)).toBe(false);
+    const a = open(actor, "C04-A02");
+    a.send({ type: "CONTINUE" });
+    const activityBefore = a.getSnapshot();
+    expect(actor.getSnapshot().can(event)).toBe(false);
+    const stop = vi.spyOn(a, "stop");
+    actor.send({ type: "SELECT_COMPETENCY", competencyId: "C04" });
+    actor.send({ type: "TECHNICAL_STARTED" });
+    actor.send({
+      type: "TECHNICAL_FAILED",
+      recoverable: true,
+      error: "controlled",
+    });
+    const before = selectSession(actor);
+    expect(actor.getSnapshot().can(event)).toBe(true);
+    actor.send(event);
+    expect(selectSession(actor)).toEqual({
+      ...before,
+      destination: { kind: "library" },
+    });
+    expect(selectSession(actor).currentActivity).toBe(a);
+    expect(a.getSnapshot()).toBe(activityBefore);
+    expect(stop).not.toHaveBeenCalled();
+    expect(actor.getSnapshot().can(event)).toBe(false);
+    expect(open(actor, "C04-A02")).toBe(a);
+    expect(a.getSnapshot()).toBe(activityBefore);
+  });
+
+  it("D015/S1 preserves real checked feedback and mathematical values through Library and re-entry", () => {
+    const actor = session();
+    const a = open(actor);
+    a.send({ type: "CONTINUE" });
+    const role = composeC04ActivityFrame(a).responseControls!.find(
+      (control) => control.role === "interpretation",
+    )!;
+    a.send({
+      type: "RESPONSE_CHANGED",
+      response: composite({
+        original: money("18000"),
+        new: money("18000"),
+        difference: money("0"),
+        percentage: percent("0"),
+        interpretation: {
+          kind: "SINGLE_SELECTION",
+          selectionId: role.options![0]!.id,
+        },
+      }),
+    });
+    a.send({ type: "CHECK_RESPONSE" });
+    expect(a.getSnapshot().context.checkedResponse).not.toBeNull();
+    a.send({
+      type: "FEEDBACK_DELIVERED",
+      revision: a.getSnapshot().context.responseRevision,
+    });
+    const before = a.getSnapshot();
+    const frame = composeC04ActivityFrame(a);
+    actor.send({ type: "SELECT_COMPETENCY", competencyId: "C04" });
+    actor.send({ type: "RETURN_TO_LIBRARY" });
+    expect(open(actor)).toBe(a);
+    expect(a.getSnapshot()).toBe(before);
+    expect(composeC04ActivityFrame(a)).toEqual(frame);
+  });
+
+  it("D015/S1 rejects malformed returns and startup/recovery barriers", async () => {
+    const actor = session();
+    actor.send({ type: "SELECT_COMPETENCY", competencyId: "C04" });
+    const get = vi.fn(() => "RETURN_TO_LIBRARY");
+    for (const bad of [
+      { type: "RETURN_TO_LIBRARY", extra: true },
+      { type: "RETURN_TO_LIBRARY", [Symbol()]: true },
+      Object.create({ type: "RETURN_TO_LIBRARY" }) as unknown,
+      Object.defineProperty({}, "type", { get }),
+    ]) {
+      expect(isSessionEvent(bad)).toBe(false);
+    }
+    expect(get).not.toHaveBeenCalled();
+    // XState itself reads event.type before guard dispatch. Keep its raw-input
+    // rejection check separate from our validator's getter-free guarantee.
+    expect(
+      actor
+        .getSnapshot()
+        .can({ type: "RETURN_TO_LIBRARY", extra: true } as never),
+    ).toBe(false);
+    for (const recovery of [
+      undefined,
+      { status: "UNUSABLE_CHECKPOINT" as const, reason: "invalid" as const },
+      await recovered(),
+    ]) {
+      const blocked = createAppSessionActor({
+        catalog: catalog(),
+        ...(recovery ? { recovery } : {}),
+      });
+      sessions.push(blocked);
+      blocked.start();
+      const before = blocked.getSnapshot();
+      expect(before.can({ type: "RETURN_TO_LIBRARY" })).toBe(false);
+      blocked.send({ type: "RETURN_TO_LIBRARY" });
+      expect(blocked.getSnapshot()).toBe(before);
+    }
+  });
+
   it("rejects invalid composition rather than manufacturing a fallback Session", () => {
     expect(() => createAppSessionActor({ catalog: null as never })).toThrow(
       "catalog",
