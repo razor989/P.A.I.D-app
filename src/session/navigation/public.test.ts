@@ -236,13 +236,20 @@ describe("T033 real C04 Session semantic navigation", () => {
       evaluation: null,
       hasChecked: false,
     });
-    for (const id of ["C04-A01", "C01-A01", "C04-A05", "C99-A01"])
+    for (const id of ["C01-A01", "C04-A05", "C99-A01"])
       expect(navigate(s, { type: "SELECT_ACTIVITY", activityId: id })).toBe(
         "rejected",
       );
     expect(selectSession(s).currentActivity).toBe(a);
     expect(a.getSnapshot()).toBe(before);
     expect(selectSession(s).decision).toBe("none");
+    expect(
+      navigate(s, { type: "SELECT_ACTIVITY", activityId: "C04-A01" }),
+    ).toBe("destination-changed");
+    expect(selectSession(s).decision).toBe("activitySwitchChoice");
+    expect(back(s)).toBe("destination-changed");
+    expect(selectSession(s).currentActivity).toBe(a);
+    expect(a.getSnapshot()).toBe(before);
   });
 
   it("keeps independent Sessions isolated", () => {

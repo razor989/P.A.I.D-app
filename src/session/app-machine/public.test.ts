@@ -114,7 +114,12 @@ describe("T032 authoritative headless Session core", () => {
   it("accepts explicit absent classification into Library and all three regions", () => {
     const actor = session();
     expect(actor.getSnapshot().value).toEqual({
-      session: { destination: "library", decision: "none", technical: "idle" },
+      session: {
+        destination: "library",
+        decision: "none",
+        technical: "idle",
+        lifecycle: "idle",
+      },
     });
     expect(selectSession(actor)).toMatchObject({
       destination: { kind: "library" },
@@ -179,17 +184,21 @@ describe("T032 authoritative headless Session core", () => {
     });
   });
 
-  it("explicitly guards conflicting requests without approximating T034 switch decisions", () => {
+  it("opens authorized T034 executable conflicts without losing A and rejects unavailable B", () => {
     const actor = session();
     const a = open(actor);
     const stop = vi.spyOn(a, "stop");
     const before = actor.getSnapshot();
     for (const id of ["C04-A02", "C04-A03", "C04-A04", "C01-A01"] as const) {
       const event = { type: "SELECT_ACTIVITY" as const, activityId: id };
-      expect(actor.getSnapshot().can(event)).toBe(false);
+      expect(actor.getSnapshot().can(event)).toBe(id !== "C01-A01");
       actor.send(event);
       expect(selectSession(actor).currentActivity).toBe(a);
-      expect(actor.getSnapshot()).toBe(before);
+      if (id !== "C01-A01") {
+        expect(selectSession(actor).decision).toBe("activitySwitchChoice");
+        actor.send({ type: "CANCEL_PENDING_ACTIVITY_SWITCH" });
+      }
+      expect(selectSession(actor).destination).toBe(before.context.destination);
     }
     expect(stop).not.toHaveBeenCalled();
     expect(selectSession(actor).decision).toBe("none");
@@ -438,13 +447,13 @@ describe("T032 authoritative headless Session core", () => {
     ).toEqual({ kind: "known", activityIds: ["C04-A01"] });
   });
 
-  it("leaves completed replay unavailable and rejects bad completion composition", () => {
+  it("permits source-authorized completed replay and rejects bad completion composition", () => {
     const actor = session({ kind: "known", activityIds: ["C04-A01"] });
     expect(
       actor
         .getSnapshot()
         .can({ type: "SELECT_ACTIVITY", activityId: "C04-A01" }),
-    ).toBe(false);
+    ).toBe(true);
     for (const activityIds of [
       ["C04-A01", "C04-A01"],
       ["C03-A01"],

@@ -301,6 +301,38 @@ export default tseslint.config(
     ]),
     files: ["src/session/app-machine/public.test.ts"],
   },
+  // D177/S6: only these actually consumed T034 pairs.
+  {
+    ...restriction(
+      "session/app-machine",
+      [
+        "engine/c04-activity-binding/public",
+        "recovery/rehydration/public",
+        "study/catalog/public",
+        "recovery/store/public",
+      ],
+      [
+        {
+          regex: "^\\.\\./\\.\\./recovery/store/",
+          message: "D177/S6 uses the exact @/ Recovery public target.",
+        },
+      ],
+    ),
+    files: ["src/session/app-machine/public.ts"],
+  },
+  {
+    ...restriction(
+      "session/completion",
+      ["recovery/store/public", "study/catalog/public"],
+      [
+        {
+          regex: "^\\.\\./\\.\\./(?:recovery|study)/",
+          message: "D177/S6 fixtures use exact @/ public targets.",
+        },
+      ],
+    ),
+    files: ["src/session/completion/public.test.ts"],
+  },
   // D177/S5: the two actually used T033 test collaborators only.
   {
     ...restriction(

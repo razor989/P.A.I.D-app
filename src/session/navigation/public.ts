@@ -73,7 +73,20 @@ export function navigate(
   const snapshot = session.getSnapshot();
   const state = selectSession(session);
   if (
+    snapshot.status === "active" &&
+    intent.type === "SYSTEM_BACK" &&
+    state.decision === "activitySwitchChoice"
+  ) {
+    const cancel = { type: "CANCEL_PENDING_ACTIVITY_SWITCH" } as const;
+    if (!snapshot.can(cancel)) return "rejected";
+    session.send(cancel);
+    return "destination-changed";
+  }
+  if (
     snapshot.status !== "active" ||
+    state.lifecyclePhase === "finish-clear-in-flight" ||
+    state.lifecyclePhase === "abandon-clear-in-flight" ||
+    state.lifecyclePhase === "failed" ||
     !snapshot.matches({ session: { decision: "none" } }) ||
     !state.destination
   )
