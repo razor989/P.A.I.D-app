@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { ExecutableActivityBinding } from "../registry/public";
 import { ActivityRegistry } from "../registry/public";
 import { createActivityActor } from "./public";
+import { createActivityRestoration } from "../activity-machine/public";
 
 // Fixture is synthetic execution data; T027 must authenticate source C04 bindings.
 const fixture = (): ExecutableActivityBinding => ({
@@ -22,6 +23,39 @@ const fixture = (): ExecutableActivityBinding => ({
 });
 
 describe("generic T024 actor factory", () => {
+  it("forwards only issued restoration bound to the resolved evaluator", () => {
+    const registry = new ActivityRegistry([fixture()]);
+    const binding = registry.resolve("C04-A01");
+    const fresh = createActivityActor(registry, "C04-A01");
+    const context = {
+      ...fresh.getSnapshot().context,
+      position: "ACTIVE" as const,
+    };
+    const token = createActivityRestoration(
+      binding.definition,
+      binding.ports,
+      context,
+    );
+    const restored = createActivityActor(registry, "C04-A01", token);
+    expect(restored.getSnapshot().value).toEqual({
+      instructional: "active",
+      support: "none",
+    });
+    let published = 0;
+    restored.subscribe(() => published++);
+    expect(published).toBe(0);
+    restored.start();
+    expect(restored.getSnapshot().context.position).toBe("ACTIVE");
+    expect(fresh.getSnapshot().context.position).toBe("ENTRY");
+    expect(() =>
+      createActivityActor(registry, "C04-A01", { activityId: "C04-A01" }),
+    ).toThrow("Unissued");
+    expect(() =>
+      createActivityActor(new ActivityRegistry([fixture()]), "C04-A01", token),
+    ).toThrow("Unissued");
+    restored.stop();
+    fresh.stop();
+  });
   it("independently initializes, selects, checks, supports and resets synthetic model actors", () => {
     const base = fixture();
     const initialize = vi.fn(() => ({

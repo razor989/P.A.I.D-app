@@ -270,4 +270,17 @@ export default tseslint.config(
     ]),
     files: ["src/recovery/projection/public.test.ts"],
   },
+  // D177/S3: only the actually consumed C04 source-composition facade.
+  {
+    ...restriction("recovery/rehydration", [
+      "engine/c04-activity-binding/public",
+    ]),
+    files: ["src/recovery/rehydration/public.ts"],
+  },
+  {
+    ...restriction("recovery/rehydration", [
+      "engine/c04-activity-binding/public",
+    ]),
+    files: ["src/recovery/rehydration/public.test.ts"],
+  },
 );

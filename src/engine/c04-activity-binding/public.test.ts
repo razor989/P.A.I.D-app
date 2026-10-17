@@ -18,6 +18,7 @@ import {
   authenticateC04BindingSource,
   composeC04ActivityFrame,
   createC04ActivityActor,
+  createC04RestoredActivityActor,
   createC04ActivityBindings,
   createC04ActivityRegistry,
   projectC04CheckpointModelV1,
@@ -25,6 +26,73 @@ import {
   projectC04CheckpointIdentity,
   validateC04PartialResponseV1,
 } from "./public";
+import type { C04Restoration } from "./public";
+
+describe("D061/S3 source-authenticated reissuance", () => {
+  it.each(["C04-S02-A", "C04-S02-B"] as const)(
+    "reissues independent %s with no new learner engagement",
+    (child) => {
+      const fresh = createC04ActivityActor("C04-A02");
+      const c = fresh.getSnapshot().context;
+      const input: C04Restoration = {
+        scenarioId: "C04-S02",
+        context: {
+          ...c,
+          position: "ACTIVE",
+          model: { revision: 2, value: { selectionId: child, state: null } },
+        },
+        modelEvidence: {
+          activityId: "C04-A02",
+          scenarioId: "C04-S02",
+          selectedChildId: child,
+        },
+      };
+      const left = createC04RestoredActivityActor(input),
+        right = createC04RestoredActivityActor(input);
+      const lm = left.getSnapshot().context.model!,
+        rm = right.getSnapshot().context.model!;
+      expect(lm.value.state).not.toBe(rm.value.state);
+      expect(projectC04CheckpointModelV1(lm.value.state)).toEqual(
+        input.modelEvidence,
+      );
+      expect(deriveC04ModelState(lm.value.state as C04ModelState)).toEqual(
+        deriveC04ModelState(rm.value.state as C04ModelState),
+      );
+      expect(left.getSnapshot().context.c04A02StageEngagement).toEqual(
+        c.c04A02StageEngagement,
+      );
+      expect(left.getSnapshot().context.responseRevision).toBe(0);
+      expect(() =>
+        createC04RestoredActivityActor({
+          ...input,
+          context: {
+            ...input.context,
+            model: {
+              revision: 0,
+              value: { selectionId: "C04-S02-B", state: null },
+            },
+          },
+          modelEvidence: {
+            activityId: "C04-A02",
+            scenarioId: "C04-S02",
+            selectedChildId: "C04-S02-B",
+          },
+        }),
+      ).toThrow();
+      expect(() =>
+        createC04RestoredActivityActor({
+          ...input,
+          context: c as unknown as C04Restoration["context"],
+        }),
+      ).toThrow();
+      const before = left.getSnapshot().context;
+      Object.assign(input.context, { responseRevision: 999 });
+      expect(left.getSnapshot().context).toBe(before);
+      expect(before.responseRevision).toBe(0);
+      for (const actor of [fresh, left, right]) actor.stop();
+    },
+  );
+});
 
 describe("D061/S2 identity and D019/S1 supplied-response membership", () => {
   it.each(c04Activities)(

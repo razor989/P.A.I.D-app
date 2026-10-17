@@ -31,6 +31,7 @@ import type {
 } from "../../competencies/c04-percentage-change/evaluators/public";
 import { c04CompletionEligible } from "../../competencies/c04-percentage-change/completion/public";
 import type {
+  ActivityContext,
   ActivityDefinition,
   ActivityModelAdapter,
   ActivityPorts,
@@ -38,6 +39,7 @@ import type {
   PrimaryField,
   SupportPhase,
 } from "../activity-machine/public";
+import { createActivityRestoration } from "../activity-machine/public";
 import { createActivityActor } from "../activity-runtime/public";
 import type { ActivityActor } from "../activity-runtime/public";
 import { ActivityRegistry } from "../registry/public";
@@ -437,6 +439,177 @@ export function createC04ActivityRegistry(): ActivityRegistry {
 /** Returns a fresh unstarted T025 actor; start/stop and delivery remain caller-owned. */
 export function createC04ActivityActor(id: unknown): ActivityActor {
   return createActivityActor(createC04ActivityRegistry(), id);
+}
+
+export type C04Restoration = Readonly<{
+  scenarioId: string;
+  context: Omit<ActivityContext, "model"> &
+    Readonly<{
+      model?: Readonly<{
+        revision: number;
+        value: Readonly<{ selectionId: string; state: null }>;
+      }>;
+    }>;
+  modelEvidence?: C04PersistedModelV1;
+}>;
+
+/** D061/S3: the only recovery-facing source/model composition. No live model
+ * supplied by a caller is accepted; every A02 restore issues a new domain state.
+ */
+export function createC04RestoredActivityActor(
+  input: C04Restoration,
+): ActivityActor {
+  const exact = (value: unknown, keys: readonly string[]): boolean => {
+    if (
+      value === null ||
+      typeof value !== "object" ||
+      Object.getPrototypeOf(value) !== Object.prototype
+    )
+      return false;
+    return (
+      Reflect.ownKeys(value).length === keys.length &&
+      keys.every((key) => {
+        const d = Object.getOwnPropertyDescriptor(value, key);
+        return d !== undefined && d.enumerable && "value" in d;
+      })
+    );
+  };
+  if (
+    !exact(input, [
+      "scenarioId",
+      "context",
+      ...(Object.prototype.hasOwnProperty.call(input, "modelEvidence")
+        ? ["modelEvidence"]
+        : []),
+    ])
+  )
+    throw new TypeError("Invalid C04 restoration input");
+  const inspect = (value: unknown, seen = new Set<object>()): void => {
+    if (
+      value === null ||
+      typeof value === "string" ||
+      typeof value === "boolean" ||
+      (typeof value === "number" && Number.isFinite(value))
+    )
+      return;
+    if (value instanceof ExactDecimal) {
+      ExactDecimal.prototype.toString.call(value);
+      return;
+    }
+    if (
+      typeof value !== "object" ||
+      seen.has(value) ||
+      Object.getPrototypeOf(value) !==
+        (Array.isArray(value) ? Array.prototype : Object.prototype)
+    )
+      throw new TypeError("Non-data C04 restoration");
+    seen.add(value);
+    if (
+      Array.isArray(value) &&
+      Reflect.ownKeys(value).length !== value.length + 1
+    )
+      throw new TypeError("Sparse restoration array");
+    for (const key of Reflect.ownKeys(value)) {
+      if (Array.isArray(value) && key === "length") continue;
+      const d = Object.getOwnPropertyDescriptor(value, key);
+      if (typeof key !== "string" || !d || !d.enumerable || !("value" in d))
+        throw new TypeError("Non-data restoration property");
+      inspect(d.value, seen);
+    }
+    seen.delete(value);
+  };
+  inspect(input);
+  authenticateC04BindingSource();
+  if (
+    input.context === null ||
+    typeof input.context !== "object" ||
+    Object.getPrototypeOf(input.context) !== Object.prototype ||
+    !Reflect.ownKeys(input.context).every((key) => {
+      const d = Object.getOwnPropertyDescriptor(input.context, key);
+      return (
+        typeof key === "string" &&
+        d !== undefined &&
+        d.enumerable &&
+        "value" in d
+      );
+    })
+  )
+    throw new TypeError("Invalid C04 restoration source");
+  const identity = projectC04CheckpointIdentity(input.context.activityId);
+  if (identity.scenarioId !== input.scenarioId)
+    throw new TypeError("Invalid C04 restoration scenario");
+  const registry = createC04ActivityRegistry();
+  const binding = registry.resolve(identity.activityId);
+  const stage = input.context.responseStage ?? "RESPONSE";
+  for (const [response, responseStage] of [
+    [input.context.response, stage],
+    [
+      input.context.checkedResponse,
+      binding.definition.responseStages ? "REASONING" : "RESPONSE",
+    ],
+  ] as const)
+    if (
+      response !== null &&
+      !validateC04PartialResponseV1(
+        identity.activityId,
+        response,
+        responseStage,
+      )
+    )
+      throw new TypeError("Invalid restoration response");
+  for (const commitment of [
+    input.context.firstPrimaryCommitment,
+    input.context.currentPrimaryCommitment,
+  ])
+    if (
+      commitment != null &&
+      !validateC04PartialResponseV1(
+        identity.activityId,
+        commitment.response,
+        "PRIMARY",
+      )
+    )
+      throw new TypeError("Invalid restoration commitment");
+  let context: ActivityContext;
+  if (binding.definition.modelSelection) {
+    const evidence = validateC04CheckpointModelV1(input.modelEvidence);
+    if (
+      !exact(input.context.model, ["revision", "value"]) ||
+      !exact(input.context.model?.value, ["selectionId", "state"]) ||
+      input.context.model?.value.state !== null ||
+      input.context.model.value.selectionId !== evidence.selectedChildId
+    )
+      throw new TypeError("Caller model injection");
+    const initial = createC04ModelState(sourceModel(1));
+    const state = applyC04ModelIntent(initial, {
+      type: "SELECT_CHILD",
+      childId: evidence.selectedChildId,
+    });
+    if (
+      projectC04CheckpointModelV1(state).selectedChildId !==
+      evidence.selectedChildId
+    )
+      throw new TypeError("Reissued selection mismatch");
+    context = {
+      ...input.context,
+      model: {
+        modelId: binding.definition.modelSelection.modelId,
+        revision: input.context.model.revision,
+        value: { selectionId: evidence.selectedChildId, state },
+      },
+    };
+  } else {
+    if (input.modelEvidence !== undefined || input.context.model !== undefined)
+      throw new TypeError("Unexpected restoration model");
+    context = input.context as ActivityContext;
+  }
+  const restoration = createActivityRestoration(
+    binding.definition,
+    binding.ports,
+    context,
+    binding.modelAdapter,
+  );
+  return createActivityActor(registry, identity.activityId, restoration);
 }
 
 const text = (id: keyof typeof c04Copy): SafeText => ({

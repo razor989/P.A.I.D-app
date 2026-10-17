@@ -701,10 +701,381 @@ export function stagedResponseReady(
   );
 }
 
+/** D014/S1: validate semantic construction, never a serialized machine snapshot.
+ * The resolved binding supplies source membership and genuine model issuance.
+ */
+function validateActivityRestoration(
+  definition: ActivityDefinition,
+  ports: ActivityPorts,
+  value: ActivityContext,
+): ActivityContext {
+  const reject = (): never => {
+    throw new TypeError("Invalid semantic restoration");
+  };
+  const stagingKeys = [
+    "responseStage",
+    "firstPrimaryCommitment",
+    "currentPrimaryCommitment",
+    "commitmentSequence",
+    "reasoningExposed",
+    "explanationCommitmentSequence",
+    "checkedCommitmentSequence",
+  ];
+  const keys = [
+    "activityId",
+    "position",
+    "origin",
+    "infoOrigin",
+    "response",
+    "checkedResponse",
+    "responseRevision",
+    "hasChecked",
+    "checkedRevision",
+    "feedbackRevision",
+    "evaluation",
+    ...(definition.modelSelection ? ["model", "c04A02StageEngagement"] : []),
+    ...(definition.responseStages ? stagingKeys : []),
+    ...(definition.terminalTeaching
+      ? ["terminalEntryRevision", "terminalTeachingRevision"]
+      : []),
+  ];
+  if (
+    !fields(value, keys) ||
+    value.activityId !== definition.activityId ||
+    !/^C04-A0[1-4]$/.test(value.activityId) ||
+    value.origin !== null ||
+    value.infoOrigin !== null
+  )
+    reject();
+  const rev = (n: unknown): n is number =>
+    Number.isSafeInteger(n) && (n as number) >= 0;
+  const data = (item: unknown, seen = new Set<object>()): void => {
+    if (
+      item === null ||
+      ["string", "boolean"].includes(typeof item) ||
+      (typeof item === "number" && Number.isFinite(item))
+    )
+      return;
+    if (item instanceof ExactDecimal) {
+      ExactDecimal.prototype.toString.call(item);
+      return;
+    }
+    if (
+      typeof item !== "object" ||
+      item === undefined ||
+      seen.has(item) ||
+      Object.getPrototypeOf(item) !==
+        (Array.isArray(item) ? Array.prototype : Object.prototype)
+    )
+      return reject();
+    seen.add(item);
+    for (const key of Reflect.ownKeys(item)) {
+      if (Array.isArray(item) && key === "length") continue;
+      const d = Object.getOwnPropertyDescriptor(item, key);
+      if (typeof key !== "string" || !d || !d.enumerable || !("value" in d))
+        reject();
+      data(d!.value, seen);
+    }
+    seen.delete(item);
+  };
+  // Opaque issued model state is checked by the source binding, not cloned.
+  for (const [key, item] of Object.entries(value))
+    if (key !== "model") data(item);
+  const positions = new Set<string>([
+    "ENTRY",
+    "ACTIVE",
+    "REVISION",
+    "CONFIRMATION",
+    "RECONSIDERATION",
+    ...Object.keys(definition.edges),
+    ...Object.values(definition.edges).flatMap((edge) =>
+      Object.values(edge ?? {}),
+    ),
+  ]);
+  if (
+    !positions.has(value.position) ||
+    ["COMPLETE", "INFO_NEEDED"].includes(value.position) ||
+    !rev(value.responseRevision) ||
+    typeof value.hasChecked !== "boolean"
+  )
+    reject();
+  if (
+    (value.position.startsWith("EXP-") && value.activityId !== "C04-A02") ||
+    (value.position === "POST_CONFIRMATION_EXPLANATION" &&
+      value.activityId !== "C04-A04")
+  )
+    reject();
+  for (const response of [value.response, value.checkedResponse])
+    if (response !== null && !isLearnerResponse(response)) reject();
+  if ((value.responseRevision === 0) !== (value.response === null)) reject();
+  const instruction =
+    value.position === "ENTRY" || value.position.startsWith("EXP-");
+  const feedback = [
+    "CONFIRMATION",
+    "RECONSIDERATION",
+    "POST_CONFIRMATION_EXPLANATION",
+  ].includes(value.position);
+  if (instruction && (value.response !== null || value.hasChecked)) reject();
+  if (
+    value.hasChecked &&
+    (value.response === null || (!feedback && value.position !== "REVISION"))
+  )
+    reject();
+  if (value.position === "REVISION" && !value.hasChecked) reject();
+  if (
+    !value.hasChecked &&
+    [
+      value.checkedResponse,
+      value.checkedRevision,
+      value.feedbackRevision,
+      value.evaluation,
+    ].some((item) => item !== null)
+  )
+    reject();
+  if (value.evaluation !== null) {
+    if (
+      !fields(value.evaluation, ["outcome", "diagnostic"]) ||
+      !value.hasChecked ||
+      value.checkedResponse === null ||
+      value.response === null ||
+      (!feedback &&
+        !(value.position === "REVISION" && !definition.responseStages)) ||
+      value.checkedRevision !== value.responseRevision ||
+      (value.feedbackRevision !== null &&
+        value.feedbackRevision !== value.responseRevision) ||
+      !samePrimary(value.response, value.checkedResponse) ||
+      !ports.ready(value.checkedResponse)
+    )
+      reject();
+    const expected = ports.evaluate(value.checkedResponse!);
+    if (
+      expected.outcome !== value.evaluation.outcome ||
+      expected.diagnostic !== value.evaluation.diagnostic ||
+      (value.position === "CONFIRMATION" && expected.outcome !== "CONFIRMED") ||
+      (value.position === "RECONSIDERATION" &&
+        expected.outcome !== "RECONSIDERATION")
+    )
+      reject();
+  } else if (
+    feedback ||
+    value.checkedResponse !== null ||
+    value.checkedRevision !== null ||
+    value.feedbackRevision !== null
+  )
+    reject();
+  if (definition.modelSelection) {
+    const m = value.model;
+    if (
+      !fields(m, ["modelId", "revision", "value"]) ||
+      !m ||
+      m.modelId !== definition.modelSelection.modelId ||
+      !rev(m.revision) ||
+      !fields(m.value, ["selectionId", "state"]) ||
+      !definition.modelSelection.selectionIds.includes(m.value.selectionId)
+    )
+      reject();
+    validateC04A02StageEngagementV1(value.c04A02StageEngagement);
+    const e = value.c04A02StageEngagement!;
+    if (
+      m!.revision <
+        Number(e["EXP-02"]["C04-S02-A"]) + Number(e["EXP-03"]["C04-S02-B"]) ||
+      (m!.revision === 0 &&
+        m!.value.selectionId !==
+          definition.modelSelection.initialSelectionId) ||
+      (value.position === "ENTRY" && m!.revision !== 0)
+    )
+      reject();
+  }
+  const policy = definition.responseStages;
+  if (policy) {
+    const first = value.firstPrimaryCommitment,
+      current = value.currentPrimaryCommitment;
+    for (const c of [first, current]) {
+      if (c === null) continue;
+      if (
+        !fields(c, [
+          "sequence",
+          "activityId",
+          "contractId",
+          "version",
+          "scenarioId",
+          "responseRevision",
+          "response",
+          "reasoningPreviouslyExposed",
+        ]) ||
+        !c ||
+        c.activityId !== value.activityId ||
+        c.contractId !== policy.contractId ||
+        c.version !== policy.version ||
+        c.scenarioId !== policy.scenarioId ||
+        !rev(c.sequence) ||
+        c.sequence === 0 ||
+        !rev(c.responseRevision) ||
+        c.responseRevision === 0 ||
+        c.responseRevision > value.responseRevision ||
+        typeof c.reasoningPreviouslyExposed !== "boolean" ||
+        !primaryResponseReady(c.response, policy)
+      )
+        reject();
+    }
+    if (
+      !rev(value.commitmentSequence) ||
+      value.commitmentSequence > value.responseRevision ||
+      (value.commitmentSequence === 0) !== (first === null) ||
+      value.reasoningExposed !== (first !== null) ||
+      (first && (first.sequence !== 1 || first.reasoningPreviouslyExposed)) ||
+      (current &&
+        (current.sequence !== value.commitmentSequence ||
+          current.reasoningPreviouslyExposed !== current.sequence > 1)) ||
+      (first &&
+        current &&
+        (first.responseRevision > current.responseRevision ||
+          (current.sequence > 1 &&
+            first.responseRevision >= current.responseRevision) ||
+          (current.sequence === 1 &&
+            JSON.stringify(first) !== JSON.stringify(current))))
+    )
+      reject();
+    if (value.responseStage === "PRIMARY") {
+      if (
+        current !== null ||
+        value.explanationCommitmentSequence !== null ||
+        value.checkedCommitmentSequence !== null ||
+        value.evaluation !== null ||
+        (value.response !== null &&
+          parts(value.response)?.some((p) => p.key === policy.reasoningField))
+      )
+        reject();
+    } else if (value.responseStage === "REASONING") {
+      if (!currentPrimaryCommitmentValid(value, policy)) reject();
+      const explanation = parts(value.response)?.some(
+        (p) => p.key === policy.reasoningField,
+      );
+      if (
+        explanation
+          ? !stagedResponseReady(value, policy)
+          : value.explanationCommitmentSequence !== null
+      )
+        reject();
+      if (
+        value.checkedCommitmentSequence !==
+        (value.evaluation ? current?.sequence : null)
+      )
+        reject();
+    } else reject();
+    if (
+      instruction &&
+      (value.commitmentSequence !== 0 || value.responseStage !== "PRIMARY")
+    )
+      reject();
+  }
+  if (definition.terminalTeaching) {
+    if (value.position === "POST_CONFIRMATION_EXPLANATION") {
+      if (
+        value.feedbackRevision !== value.responseRevision ||
+        value.terminalEntryRevision !== value.responseRevision ||
+        (value.terminalTeachingRevision !== null &&
+          value.terminalTeachingRevision !== value.responseRevision)
+      )
+        reject();
+    } else if (
+      value.terminalEntryRevision !== null ||
+      value.terminalTeachingRevision !== null
+    )
+      reject();
+  }
+  const copyCommitment = (c: PrimaryCommitment | null | undefined) =>
+    c == null
+      ? null
+      : Object.freeze({ ...c, response: immutableResponse(c.response) });
+  return Object.freeze({
+    ...value,
+    response:
+      value.response === null ? null : immutableResponse(value.response),
+    checkedResponse:
+      value.checkedResponse === null
+        ? null
+        : immutableResponse(value.checkedResponse),
+    evaluation:
+      value.evaluation === null ? null : Object.freeze({ ...value.evaluation }),
+    ...(value.model
+      ? {
+          model: Object.freeze({
+            ...value.model,
+            value: Object.freeze({ ...value.model.value }),
+          }),
+          c04A02StageEngagement: stageEngagement(
+            value.c04A02StageEngagement!["EXP-02"]["C04-S02-A"],
+            value.c04A02StageEngagement!["EXP-03"]["C04-S02-B"],
+          ),
+        }
+      : {}),
+    ...(policy
+      ? {
+          firstPrimaryCommitment: copyCommitment(value.firstPrimaryCommitment),
+          currentPrimaryCommitment: copyCommitment(
+            value.currentPrimaryCommitment,
+          ),
+        }
+      : {}),
+  });
+}
+
+const restorationIssuers = new WeakMap<
+  object,
+  Readonly<{
+    context: ActivityContext;
+    evaluate: ActivityPorts["evaluate"];
+    definition: ActivityDefinition;
+    adapter: ActivityModelAdapter | undefined;
+  }>
+>();
+export type ActivityRestoration = Readonly<{ activityId: ActivityId }>;
+
+/** Trusted source composition must validate response membership and model issuance.
+ * Like ordinary ports, this is a composition capability, never a JSON boundary.
+ */
+export function createActivityRestoration(
+  definition: ActivityDefinition,
+  ports: ActivityPorts,
+  context: ActivityContext,
+  modelAdapter?: ActivityModelAdapter,
+): ActivityRestoration {
+  validateActivityDefinition(definition);
+  if (!!definition.modelSelection !== (modelAdapter !== undefined))
+    throw new TypeError("Missing restoration model authority");
+  if (modelAdapter && context.model) {
+    validateActivityModelAdapter(modelAdapter);
+    // Exercise the existing opaque adapter's source validation, not a learner
+    // event. Discard its independently issued result; no revision/engagement is
+    // changed. The binding's adapter rejects detached/plain domain state.
+    if (
+      !modelValue(
+        modelAdapter.select(
+          context.model.value,
+          context.model.value.selectionId,
+        ),
+        context.model.value.selectionId,
+      )
+    )
+      throw new TypeError("Unauthenticated restoration model");
+  }
+  const validated = validateActivityRestoration(definition, ports, context);
+  const token = Object.freeze({ activityId: definition.activityId });
+  restorationIssuers.set(token, {
+    context: validated,
+    evaluate: ports.evaluate,
+    definition,
+    adapter: modelAdapter,
+  });
+  return token;
+}
+
 export function createActivityMachine(
   definition: ActivityDefinition,
   ports: ActivityPorts,
   modelAdapter?: ActivityModelAdapter,
+  restoration?: ActivityRestoration,
 ) {
   validateActivityDefinition(definition);
   if (!!definition.modelSelection !== (modelAdapter !== undefined))
@@ -762,6 +1133,20 @@ export function createActivityMachine(
     ? structuredClone(definition.terminalTeaching)
     : undefined;
   const activityId = definition.activityId;
+  const issued =
+    restoration === undefined ? undefined : restorationIssuers.get(restoration);
+  if (
+    restoration !== undefined &&
+    (!issued ||
+      issued.evaluate !== ports.evaluate ||
+      issued.definition !== definition ||
+      issued.adapter !== modelAdapter ||
+      restoration.activityId !== activityId)
+  )
+    throw new TypeError("Unissued semantic restoration");
+  const restored = issued
+    ? validateActivityRestoration(definition, ports, issued.context)
+    : undefined;
   const machineSetup = setup({
     types: { context: {} as ActivityContext, events: {} as ActivityEvent },
   });
@@ -1119,7 +1504,20 @@ export function createActivityMachine(
     ],
   });
   const instruction = {
-    initial: "entry",
+    initial: restored
+      ? restored.position.startsWith("EXP-")
+        ? "exp"
+        : (
+            {
+              ENTRY: "entry",
+              ACTIVE: "active",
+              REVISION: "revision",
+              CONFIRMATION: "confirmation",
+              RECONSIDERATION: "reconsideration",
+              POST_CONFIRMATION_EXPLANATION: "postConfirmationExplanation",
+            } as Record<string, string>
+          )[restored.position]!
+      : "entry",
     states: {
       entry: {
         on: {
@@ -1435,6 +1833,7 @@ export function createActivityMachine(
     id: "activity",
     type: "parallel",
     context: () =>
+      restored ??
       Object.freeze({
         activityId,
         ...(modelPolicy ? { model: initializeModel() } : {}),

@@ -2,17 +2,92 @@ import { createActor } from "xstate";
 import { describe, expect, it, vi } from "vitest";
 import {
   createActivityMachine,
+  createActivityRestoration,
   isActivityEvent,
   validateActivityDefinition,
   availableModelSelections,
   validateC04A02StageEngagementV1,
 } from "./public";
 import type {
+  ActivityContext,
   ActivityDefinition,
   ActivityPorts,
   ActivityModelAdapter,
   ActivityEvent,
 } from "./public";
+
+describe("D014/S1 semantic initialization validation", () => {
+  const definition: ActivityDefinition = {
+    activityId: "C04-A01",
+    edges: { ENTRY: { CONTINUE: "ACTIVE" } },
+    support: {},
+  };
+  const ports: ActivityPorts = {
+    ready: () => true,
+    evaluate: () => ({ outcome: "CONFIRMED", diagnostic: null }),
+    completionEligible: () => true,
+    sourceReviewAvailable: () => false,
+    informationNeeded: () => false,
+    informationReturn: () => false,
+  };
+  const initial = (): ActivityContext => ({
+    activityId: "C04-A01",
+    position: "ACTIVE",
+    origin: null,
+    infoOrigin: null,
+    response: null,
+    checkedResponse: null,
+    responseRevision: 0,
+    checkedRevision: null,
+    feedbackRevision: null,
+    hasChecked: false,
+    evaluation: null,
+  });
+  it.each([
+    "COMPLETE",
+    "INFO_NEEDED",
+    "EXP-01",
+    "POST_CONFIRMATION_EXPLANATION",
+  ] as const)("refuses inapplicable position %s", (position) => {
+    expect(() =>
+      createActivityRestoration(definition, ports, { ...initial(), position }),
+    ).toThrow();
+  });
+  it("refuses unknown/accessor/prototyped evidence without invoking accessors", () => {
+    const context = initial();
+    const get = vi.fn(() => "ACTIVE");
+    for (const bad of [
+      { ...context, attempts: 1 },
+      Object.create(context) as ActivityContext,
+      Object.defineProperty({ ...context }, "position", { get }),
+    ])
+      expect(() => createActivityRestoration(definition, ports, bad)).toThrow();
+    expect(get).not.toHaveBeenCalled();
+  });
+  it("rejects forged token and mismatched checked diagnostics", () => {
+    expect(() =>
+      createActivityMachine(definition, ports, undefined, {
+        activityId: "C04-A01",
+      }),
+    ).toThrow("Unissued");
+    const response = {
+      kind: "SINGLE_SELECTION" as const,
+      selectionId: "synthetic",
+    };
+    expect(() =>
+      createActivityRestoration(definition, ports, {
+        ...initial(),
+        position: "CONFIRMATION",
+        response,
+        checkedResponse: response,
+        responseRevision: 1,
+        checkedRevision: 1,
+        hasChecked: true,
+        evaluation: { outcome: "CONFIRMED", diagnostic: "forged" },
+      }),
+    ).toThrow();
+  });
+});
 import { ExactDecimal, quantity } from "../../core/public";
 import type { LearnerResponse } from "../../core/public";
 import {
