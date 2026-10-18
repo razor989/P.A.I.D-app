@@ -14,7 +14,844 @@ import type {
   ActivityPorts,
   ActivityModelAdapter,
   ActivityEvent,
+  ModelIntent,
+  ActivityIntentAdapter,
+  Position,
 } from "./public";
+import { ActivityRegistry } from "../registry/public";
+import { createActivityActor } from "../activity-runtime/public";
+import type { ExecutableActivityBinding } from "../registry/public";
+
+// D1 compatibility fixtures only, NOT Study-authenticated production bindings.
+// Context @ 3c524857: D050/S1 §§1–4; final Amendment C C3 C01 §§23–27,
+// C02 §§26–33, C05 §§30–35, C03 §§30–36, C06 §§38–42.
+// Final storyboard blobs: C01 8b141c2d, C02 a63b485a, C05 6c4b45d1,
+// C03 619ca232, C06 1867a428. Family callbacks alone own all exact math.
+describe("D1 source-bounded public actor intent compatibility", () => {
+  const decimal = (value: string) => ExactDecimal.from(value);
+  const ports: ActivityPorts = {
+    ready: () => false,
+    evaluate: () => ({ outcome: "RECONSIDERATION", diagnostic: null }),
+    completionEligible: () => false,
+    sourceReviewAvailable: () => false,
+    informationNeeded: () => false,
+    informationReturn: () => false,
+  };
+  const graph = (family: "C01" | "C02" | "C05"): ActivityDefinition => ({
+    activityId: `${family}-A02`,
+    edges: {
+      ENTRY: { CONTINUE: "EXP-01" },
+      "EXP-01": { CONTINUE: "EXP-02" },
+      "EXP-02": { CONTINUE: "EXP-03", PREVIOUS: "EXP-01" },
+      "EXP-03": { CONTINUE: "EXP-04", PREVIOUS: "EXP-02" },
+      "EXP-04": { CONTINUE: "EXP-05", PREVIOUS: "EXP-03" },
+      "EXP-05": { CONTINUE: "EXP-06", PREVIOUS: "EXP-04" },
+      "EXP-06": { CONTINUE: "ACTIVE", PREVIOUS: "EXP-05" },
+    },
+    support: { "EXP-02": ["REVIEW", "REINFORCEMENT"], ACTIVE: ["REVIEW"] },
+  });
+  const binding = (
+    family: "C01" | "C02" | "C05",
+    permissions: readonly { position: Position; intent: ModelIntent }[],
+    intentAdapter: ActivityIntentAdapter,
+  ): ExecutableActivityBinding => ({
+    activityId: `${family}-A02`,
+    definition: {
+      ...graph(family),
+      modelIntents: {
+        family,
+        modelId: `${family}-D1-FIXTURE`,
+        scenarioId: `${family}-S02`,
+        permissions,
+      },
+    },
+    ports,
+    intentAdapter,
+  });
+  const earning = (
+    operation: "INCLUDE_EARNING" | "REMOVE_EARNING",
+    target: "REGULAR_PAY" | "TRANSPORTATION_ALLOWANCE",
+  ): ModelIntent => ({
+    family: "C01",
+    operation,
+    earning: target,
+    period: "MAY",
+  });
+  const year: ModelIntent = {
+    family: "C05",
+    operation: "PARTITION_YEAR_INTO_MONTHS",
+  };
+  const month: ModelIntent = {
+    family: "C05",
+    operation: "PARTITION_MONTH_INTO_SEMIMONTHLY",
+  };
+  type Actor = ReturnType<typeof createActivityActor>;
+  const advance = (actor: Actor, target: Position) => {
+    for (
+      let steps = 0;
+      actor.getSnapshot().context.position !== target && steps < 8;
+      steps++
+    )
+      actor.send({ type: "CONTINUE" });
+    expect(actor.getSnapshot().context.position).toBe(target);
+  };
+  const event = (actor: Actor, intent: ModelIntent): ActivityEvent => {
+    const context = actor.getSnapshot().context;
+    return {
+      type: "MODEL_INTENT",
+      activityId: context.activityId,
+      scenarioId: context.intentModel!.scenarioId,
+      modelId: context.intentModel!.modelId,
+      position: context.position,
+      revision: context.intentModel!.revision,
+      intent,
+    };
+  };
+  const send = (actor: Actor, intent: ModelIntent) =>
+    actor.send(event(actor, intent));
+  const unchanged = (actor: Actor, input: unknown) => {
+    const before = actor.getSnapshot().context;
+    actor.send(input as ActivityEvent);
+    expect(actor.getSnapshot().context).toEqual(before);
+    expect(actor.getSnapshot().context.intentModel).toBe(before.intentModel);
+    expect(actor.getSnapshot().context.intentModel?.revision).toBe(
+      before.intentModel?.revision,
+    );
+  };
+  type Earnings = Readonly<{
+    record: readonly Readonly<{
+      id: string;
+      amount: ExactDecimal;
+      period: "MAY";
+      applicable: true;
+    }>[];
+    membership: readonly string[];
+    composition: ExactDecimal;
+    meaning: "EXPLORATORY_PARTIAL" | "COMPLETE_MAY_COMPOSITION";
+  }>;
+  const c01 = (): ExecutableActivityBinding => {
+    const issue = (membership: readonly string[]): Earnings => {
+      const record = Object.freeze([
+        Object.freeze({
+          id: "REGULAR_PAY",
+          amount: decimal("17250"),
+          period: "MAY" as const,
+          applicable: true as const,
+        }),
+        Object.freeze({
+          id: "TRANSPORTATION_ALLOWANCE",
+          amount: decimal("1750"),
+          period: "MAY" as const,
+          applicable: true as const,
+        }),
+      ]);
+      return Object.freeze({
+        record,
+        membership: Object.freeze([...membership]),
+        composition: record
+          .filter((row) => membership.includes(row.id))
+          .reduce((total, row) => total.add(row.amount), decimal("0")),
+        meaning:
+          membership.length === 2
+            ? "COMPLETE_MAY_COMPOSITION"
+            : "EXPLORATORY_PARTIAL",
+      });
+    };
+    const regular = [
+      earning("INCLUDE_EARNING", "REGULAR_PAY"),
+      earning("REMOVE_EARNING", "REGULAR_PAY"),
+    ];
+    const all = [
+      ...regular,
+      earning("INCLUDE_EARNING", "TRANSPORTATION_ALLOWANCE"),
+      earning("REMOVE_EARNING", "TRANSPORTATION_ALLOWANCE"),
+    ];
+    // Final C01 has FOUR explanation steps, not the generic six-step fixture graph.
+    const base = binding(
+      "C01",
+      [
+        ...regular.map((intent) => ({ position: "EXP-02" as const, intent })),
+        ...["EXP-03", "ACTIVE", "REVISION"].flatMap((position) =>
+          all.map((intent) => ({ position: position as Position, intent })),
+        ),
+      ],
+      {
+        initialize: () => issue([]),
+        transition: (current, intent) => {
+          if (intent.family !== "C01") return null;
+          const state = current as Earnings;
+          const included = state.membership.includes(intent.earning);
+          if (included === (intent.operation === "INCLUDE_EARNING"))
+            return null;
+          return issue(
+            intent.operation === "INCLUDE_EARNING"
+              ? [...state.membership, intent.earning]
+              : state.membership.filter((id) => id !== intent.earning),
+          );
+        },
+      },
+    );
+    return {
+      ...base,
+      definition: {
+        ...base.definition,
+        edges: {
+          ENTRY: { CONTINUE: "EXP-01" },
+          "EXP-01": { CONTINUE: "EXP-02" },
+          "EXP-02": { CONTINUE: "EXP-03", PREVIOUS: "EXP-01" },
+          "EXP-03": { CONTINUE: "EXP-04", PREVIOUS: "EXP-02" },
+          "EXP-04": { CONTINUE: "ACTIVE", PREVIOUS: "EXP-03" },
+        },
+      },
+    };
+  };
+  it("C01 preserves independent May earnings through inclusion/removal/reinstatement and actor isolation", () => {
+    const registry = new ActivityRegistry([c01()]);
+    const a = createActivityActor(registry, "C01-A02").start();
+    const b = createActivityActor(registry, "C01-A02").start();
+    const state = () => a.getSnapshot().context.intentModel!.state as Earnings;
+    expect(state().membership).toEqual([]);
+    expect(state().composition.toString()).toBe("0");
+    advance(a, "EXP-02");
+    unchanged(
+      a,
+      event(a, earning("INCLUDE_EARNING", "TRANSPORTATION_ALLOWANCE")),
+    );
+    send(a, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+    expect(state().composition.toString()).toBe("17250");
+    expect(state().meaning).toBe("EXPLORATORY_PARTIAL");
+    unchanged(a, event(a, earning("INCLUDE_EARNING", "REGULAR_PAY")));
+    advance(a, "EXP-03");
+    const old = state();
+    send(a, earning("INCLUDE_EARNING", "TRANSPORTATION_ALLOWANCE"));
+    expect(state().membership).toEqual([
+      "REGULAR_PAY",
+      "TRANSPORTATION_ALLOWANCE",
+    ]);
+    expect(state().composition.toString()).toBe("19000");
+    send(a, earning("REMOVE_EARNING", "REGULAR_PAY"));
+    expect(state().membership).toEqual(["TRANSPORTATION_ALLOWANCE"]);
+    expect(state().composition.toString()).toBe("1750");
+    send(a, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+    expect(state().composition.toString()).toBe("19000");
+    expect(state().meaning).toBe("COMPLETE_MAY_COMPOSITION");
+    expect(
+      state().record.map((row) => [row.id, row.amount.toString(), row.period]),
+    ).toEqual([
+      ["REGULAR_PAY", "17250", "MAY"],
+      ["TRANSPORTATION_ALLOWANCE", "1750", "MAY"],
+    ]);
+    expect(old.composition.toString()).toBe("17250");
+    expect(Object.isFrozen(state().membership)).toBe(true);
+    expect(a.getSnapshot().context.intentModel!.revision).toBe(4);
+    expect(
+      (b.getSnapshot().context.intentModel!.state as Earnings).membership,
+    ).toEqual([]);
+    expect(b.getSnapshot().context.intentModel!.revision).toBe(0);
+    a.stop();
+    b.stop();
+  });
+
+  type Deduction = "SSS" | "PHILHEALTH" | "PAG_IBIG" | "BIR";
+  type Ledger = Readonly<{
+    gross: ExactDecimal;
+    rows: Readonly<
+      Record<
+        Deduction,
+        Readonly<{
+          inspected: boolean;
+          basis: string | null;
+          amount: ExactDecimal | null;
+        }>
+      >
+    >;
+    taxable: ExactDecimal | null;
+  }>;
+  const inspect = (deduction: Deduction): ModelIntent => ({
+    family: "C02",
+    operation: "INSPECT_BASIS",
+    deduction,
+  });
+  const selections = [
+    {
+      family: "C02",
+      operation: "SELECT_BASIS",
+      deduction: "SSS",
+      basis: "STATUTORY_MSC",
+    },
+    {
+      family: "C02",
+      operation: "SELECT_BASIS",
+      deduction: "PHILHEALTH",
+      basis: "MONTHLY_BASIC_SALARY",
+    },
+    {
+      family: "C02",
+      operation: "SELECT_BASIS",
+      deduction: "PAG_IBIG",
+      basis: "CAPPED_FUND_SALARY",
+    },
+    {
+      family: "C02",
+      operation: "SELECT_BASIS",
+      deduction: "BIR",
+      basis: "TAXABLE_COMPENSATION",
+    },
+  ] as const satisfies readonly ModelIntent[];
+  const c02 = () => {
+    const deductions: readonly Deduction[] = [
+      "SSS",
+      "PHILHEALTH",
+      "PAG_IBIG",
+      "BIR",
+    ];
+    const row = () =>
+      Object.freeze({ inspected: false, basis: null, amount: null });
+    return binding(
+      "C02",
+      [
+        ...deductions.map((deduction) => ({
+          position: "EXP-02" as const,
+          intent: inspect(deduction),
+        })),
+        { position: "EXP-03", intent: selections[0] },
+        { position: "EXP-04", intent: selections[1] },
+        { position: "EXP-04", intent: selections[2] },
+        { position: "EXP-05", intent: selections[3] },
+        ...[...deductions.map(inspect), ...selections].map((intent) => ({
+          position: "ACTIVE" as const,
+          intent,
+        })),
+      ],
+      {
+        initialize: () =>
+          Object.freeze({
+            gross: decimal("12937.50"),
+            rows: Object.freeze({
+              SSS: row(),
+              PHILHEALTH: row(),
+              PAG_IBIG: row(),
+              BIR: row(),
+            }),
+            taxable: null,
+          }),
+        transition: (current, intent) => {
+          if (intent.family !== "C02") return null;
+          const state = current as Ledger;
+          const previous = state.rows[intent.deduction];
+          if (intent.operation === "INSPECT_BASIS") {
+            if (previous.inspected) return null;
+            return Object.freeze({
+              ...state,
+              rows: Object.freeze({
+                ...state.rows,
+                [intent.deduction]: Object.freeze({
+                  ...previous,
+                  inspected: true,
+                }),
+              }),
+            });
+          }
+          if (previous.basis === intent.basis) return null;
+          const fixed = {
+            SSS: decimal("13000").multiply(decimal("0.05")),
+            PHILHEALTH: decimal("12000").multiply(decimal("0.025")),
+            PAG_IBIG: decimal("10000").multiply(decimal("0.02")),
+            BIR: decimal("0"),
+          };
+          let taxable = state.taxable;
+          if (intent.deduction === "BIR") {
+            if (
+              !state.rows.SSS.amount ||
+              !state.rows.PHILHEALTH.amount ||
+              !state.rows.PAG_IBIG.amount
+            )
+              return null;
+            taxable = state.gross
+              .subtract(state.rows.SSS.amount)
+              .subtract(state.rows.PHILHEALTH.amount)
+              .subtract(state.rows.PAG_IBIG.amount);
+            if (taxable.compare(decimal("20833")) > 0) return null;
+          }
+          return Object.freeze({
+            ...state,
+            taxable,
+            rows: Object.freeze({
+              ...state.rows,
+              [intent.deduction]: Object.freeze({
+                inspected: true,
+                basis: intent.basis,
+                amount: fixed[intent.deduction],
+              }),
+            }),
+          });
+        },
+      },
+    );
+  };
+  it("C02 retains four deduction identities, withholds early amounts, derives in order, and never fills ACTIVE answers", () => {
+    const actor = createActivityActor(
+      new ActivityRegistry([c02()]),
+      "C02-A02",
+    ).start();
+    const state = () =>
+      actor.getSnapshot().context.intentModel!.state as Ledger;
+    advance(actor, "EXP-02");
+    for (const deduction of ["SSS", "PHILHEALTH", "PAG_IBIG", "BIR"] as const)
+      send(actor, inspect(deduction));
+    expect(Object.values(state().rows).map((row) => row.inspected)).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
+    expect(Object.values(state().rows).map((row) => row.amount)).toEqual([
+      null,
+      null,
+      null,
+      null,
+    ]);
+    unchanged(actor, event(actor, selections[0]));
+    advance(actor, "EXP-03");
+    send(actor, selections[0]);
+    const sss = state().rows.SSS;
+    advance(actor, "EXP-04");
+    send(actor, selections[1]);
+    send(actor, selections[2]);
+    expect(state().rows.SSS).toBe(sss);
+    expect(state().rows.BIR.amount).toBeNull();
+    advance(actor, "EXP-05");
+    send(actor, selections[3]);
+    expect(
+      Object.values(state().rows).map((row) => row.amount?.toString()),
+    ).toEqual(["650", "300", "200", "0"]);
+    expect(state().taxable?.toString()).toBe("11787.5");
+    const total = Object.values(state().rows).reduce(
+      (sum, row) => sum.add(row.amount!),
+      decimal("0"),
+    );
+    expect(total.toString()).toBe("1150");
+    expect(state().gross.subtract(total).toString()).toBe("11787.5");
+    // Taxable compensation and net are distinct meanings; no net/total response injected.
+    expect("net" in state()).toBe(false);
+    advance(actor, "ACTIVE");
+    for (const selection of selections)
+      unchanged(actor, event(actor, selection));
+    expect(actor.getSnapshot().context.response).toBeNull();
+    expect(actor.getSnapshot().context.responseRevision).toBe(0);
+    expect(actor.getSnapshot().context.intentModel!.revision).toBe(8);
+    actor.stop();
+  });
+  it("C02 cannot establish BIR before the mandatory contribution rows", () => {
+    const actor = createActivityActor(
+      new ActivityRegistry([c02()]),
+      "C02-A02",
+    ).start();
+    advance(actor, "EXP-05");
+    unchanged(actor, event(actor, selections[3]));
+    actor.stop();
+  });
+
+  type Partitions = Readonly<{
+    annual: ExactDecimal;
+    months: Readonly<{ count: 12; monthlyGiven: ExactDecimal }> | null;
+    semimonthly: Readonly<{ count: 2; amount: ExactDecimal }> | null;
+  }>;
+  const c05 = () =>
+    binding(
+      "C05",
+      [
+        { position: "EXP-02", intent: year },
+        { position: "EXP-04", intent: month },
+      ],
+      {
+        initialize: () =>
+          Object.freeze({
+            annual: decimal("480000"),
+            months: null,
+            semimonthly: null,
+          }),
+        transition: (current, intent) => {
+          if (intent.family !== "C05") return null;
+          const state = current as Partitions;
+          if (intent.operation === "PARTITION_YEAR_INTO_MONTHS") {
+            if (state.months) return null;
+            return Object.freeze({
+              ...state,
+              months: Object.freeze({
+                count: 12 as const,
+                monthlyGiven: state.annual.divide(decimal("12")),
+              }),
+            });
+          }
+          if (!state.months || state.semimonthly) return null;
+          return Object.freeze({
+            ...state,
+            semimonthly: Object.freeze({
+              count: 2 as const,
+              amount: state.months.monthlyGiven.divide(decimal("2")),
+            }),
+          });
+        },
+      },
+    );
+  it("C05 retains both ordered partitions and the established monthly Given without an additive total", () => {
+    const actor = createActivityActor(
+      new ActivityRegistry([c05()]),
+      "C05-A02",
+    ).start();
+    advance(actor, "EXP-02");
+    unchanged(actor, event(actor, month));
+    send(actor, year);
+    const first = actor.getSnapshot().context.intentModel!;
+    expect((first.state as Partitions).months!.monthlyGiven.toString()).toBe(
+      "40000",
+    );
+    unchanged(actor, event(actor, year));
+    advance(actor, "EXP-04");
+    send(actor, month);
+    const final = actor.getSnapshot().context.intentModel!;
+    expect((final.state as Partitions).months).toBe(
+      (first.state as Partitions).months,
+    );
+    expect((final.state as Partitions).semimonthly!.amount.toString()).toBe(
+      "20000",
+    );
+    expect((final.state as Partitions).annual.toString()).toBe("480000");
+    expect((first.state as Partitions).semimonthly).toBeNull();
+    expect(final.revision).toBe(2);
+    unchanged(actor, event(actor, month));
+    actor.stop();
+  });
+  it("discloses the D2 raw Continue gap but still refuses second-first partition after navigation", () => {
+    const actor = createActivityActor(
+      new ActivityRegistry([c05()]),
+      "C05-A02",
+    ).start();
+    advance(actor, "EXP-04");
+    expect(actor.getSnapshot().context.intentModel!.revision).toBe(0);
+    unchanged(actor, event(actor, month));
+    actor.stop();
+  });
+
+  it.each([
+    "family",
+    "activity",
+    "scenario",
+    "model",
+    "stage",
+    "stale",
+    "future",
+    "earning",
+    "period",
+    "extra",
+    "prototype",
+    "accessor",
+    "target",
+    "rate",
+    "factor",
+    "operation",
+    "delivery",
+  ])("rejects %s without changing model state or revision", (kind) => {
+    const actor = createActivityActor(
+      new ActivityRegistry([c01()]),
+      "C01-A02",
+    ).start();
+    advance(actor, "EXP-02");
+    send(actor, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+    const good = event(actor, earning("REMOVE_EARNING", "REGULAR_PAY"));
+    const get = vi.fn(() => "MAY");
+    let bad: unknown = good;
+    const intent = (good as Extract<ActivityEvent, { type: "MODEL_INTENT" }>)
+      .intent;
+    if (kind === "family") bad = { ...good, intent: year };
+    if (kind === "activity") bad = { ...good, activityId: "C01-A01" };
+    if (kind === "scenario") bad = { ...good, scenarioId: "C01-S01" };
+    if (kind === "model") bad = { ...good, modelId: "other" };
+    if (kind === "stage") bad = { ...good, position: "EXP-03" };
+    if (kind === "stale") bad = { ...good, revision: 0 };
+    if (kind === "future") bad = { ...good, revision: 2 };
+    if (kind === "earning")
+      bad = { ...good, intent: { ...intent, earning: "OVERTIME" } };
+    if (kind === "period")
+      bad = { ...good, intent: { ...intent, period: "MARCH" } };
+    if (kind === "extra") bad = { ...good, arbitrary: true };
+    if (kind === "prototype")
+      bad = {
+        ...good,
+        intent: Object.assign(Object.create({}) as object, intent),
+      };
+    if (kind === "accessor")
+      bad = {
+        ...good,
+        intent: Object.defineProperty({ ...intent }, "period", { get }),
+      };
+    if (kind === "target")
+      bad = {
+        ...good,
+        intent: {
+          family: "C02",
+          operation: "INSPECT_BASIS",
+          deduction: "UNKNOWN",
+        },
+      };
+    if (kind === "rate")
+      bad = { ...good, intent: { ...selections[0], rate: "0.01" } };
+    if (kind === "factor") bad = { ...good, intent: { ...year, factor: 13 } };
+    if (kind === "operation")
+      bad = { ...good, intent: { ...intent, operation: "SET_FIELD" } };
+    if (kind === "delivery")
+      bad = { ...good, intent: { ...intent, engaged: true, delivered: true } };
+    unchanged(actor, bad);
+    expect(get).not.toHaveBeenCalled();
+    actor.stop();
+  });
+  it("validates accessor event discriminants without executing them at the public validator boundary", () => {
+    // XState itself reads event.type before dispatch; that framework routing is
+    // not the public validator. Never claim dispatch is a JSON sandbox.
+    const get = vi.fn(() => "MODEL_INTENT");
+    expect(isActivityEvent(Object.defineProperty({}, "type", { get }))).toBe(
+      false,
+    );
+    expect(get).not.toHaveBeenCalled();
+  });
+  it("refuses support-phase misuse, global/unbound intent, and unauthorized current stage", () => {
+    const registry = new ActivityRegistry([
+      c01(),
+      {
+        activityId: "C01-A01",
+        definition: {
+          activityId: "C01-A01",
+          edges: { ENTRY: { CONTINUE: "ACTIVE" } },
+          support: {},
+        },
+        ports,
+      },
+    ]);
+    const actor = createActivityActor(registry, "C01-A02").start();
+    unchanged(actor, event(actor, earning("INCLUDE_EARNING", "REGULAR_PAY")));
+    advance(actor, "EXP-02");
+    for (const mode of ["REVIEW", "REINFORCEMENT"] as const) {
+      actor.send({ type: "OPEN_SUPPORT", mode });
+      unchanged(actor, event(actor, earning("INCLUDE_EARNING", "REGULAR_PAY")));
+      actor.send({ type: "CLOSE_SUPPORT" });
+    }
+    const other = createActivityActor(registry, "C01-A01").start();
+    unchanged(other, event(actor, earning("INCLUDE_EARNING", "REGULAR_PAY")));
+    expect(other.getSnapshot().context.intentModel).toBeUndefined();
+    actor.stop();
+    other.stop();
+  });
+  it.each([
+    "wrong-row",
+    "wrong-basis",
+    "forged-rate",
+    "stale-stage",
+    "non-C02",
+  ])("C02 rejects %s and preserves every row/revision", (kind) => {
+    const actor = createActivityActor(
+      new ActivityRegistry([c02()]),
+      "C02-A02",
+    ).start();
+    advance(actor, "EXP-03");
+    const good = event(actor, selections[0]);
+    const bad =
+      kind === "wrong-row"
+        ? { ...good, intent: { ...selections[0], deduction: "OTHER" } }
+        : kind === "wrong-basis"
+          ? { ...good, intent: { ...selections[0], basis: "GROSS_INCOME" } }
+          : kind === "forged-rate"
+            ? { ...good, intent: { ...selections[0], rate: "0.1" } }
+            : kind === "stale-stage"
+              ? { ...good, position: "EXP-02" }
+              : { ...good, intent: year };
+    unchanged(actor, bad);
+    actor.stop();
+  });
+  it.each(["factor", "conversion", "stage", "revision"])(
+    "C05 rejects arbitrary %s",
+    (kind) => {
+      const actor = createActivityActor(
+        new ActivityRegistry([c05()]),
+        "C05-A02",
+      ).start();
+      advance(actor, "EXP-02");
+      const good = event(actor, year);
+      unchanged(
+        actor,
+        kind === "factor"
+          ? { ...good, intent: { ...year, factor: 11 } }
+          : kind === "conversion"
+            ? {
+                ...good,
+                intent: { family: "C05", operation: "CONVERT_TO_WEEKLY" },
+              }
+            : kind === "stage"
+              ? { ...good, position: "EXP-04" }
+              : { ...good, revision: 1 },
+      );
+      actor.stop();
+    },
+  );
+});
+
+describe("D1 complete selection compatibility (test-only C03/C06 adapters)", () => {
+  // Context final C3 blobs 619ca232 (C03 §§30–36), 1867a428 (C06 §§29–42),
+  // fixed banks PP10-A-0202-C03-001 / C06-001; D050/S1 §2.
+  const d = (value: string) => ExactDecimal.from(value);
+  const ports: ActivityPorts = {
+    ready: () => false,
+    evaluate: () => ({ outcome: "RECONSIDERATION", diagnostic: null }),
+    completionEligible: () => false,
+    sourceReviewAvailable: () => false,
+    informationNeeded: () => false,
+    informationReturn: () => false,
+  };
+  const comparison = (activityId: "C03-A02" | "C06-A01" | "C06-A02") => {
+    const scenarioId = activityId.replace("A", "S");
+    const ids = [`${scenarioId}-A`, `${scenarioId}-B`];
+    const issue = (selectionId: string) => {
+      const second = selectionId === ids[1];
+      if (activityId === "C03-A02") {
+        const multiplier = d(second ? "1.69" : "1.25");
+        return {
+          selectionId,
+          state: Object.freeze({
+            condition: second ? "REST_DAY" : "ORDINARY_DAY",
+            hourly: d("100"),
+            hours: d("2"),
+            multiplier,
+            overtime: d("100").multiply(d("2")).multiply(multiplier),
+          }),
+        };
+      }
+      const straight = activityId === "C06-A01" && !second;
+      const sales = d(
+        activityId === "C06-A01" ? "80000" : second ? "500000" : "300000",
+      );
+      const rate = d(activityId === "C06-A01" ? "0.05" : "0.03");
+      const commission = sales.multiply(rate);
+      const base = straight
+        ? null
+        : d(activityId === "C06-A01" ? "10000" : "15000");
+      return {
+        selectionId,
+        state: Object.freeze({
+          arrangement: straight
+            ? "STRAIGHT_COMMISSION"
+            : "BASE_PLUS_COMMISSION",
+          sales,
+          rate,
+          base: straight
+            ? Object.freeze({ kind: "NOT_APPLICABLE" })
+            : Object.freeze({ kind: "KNOWN", amount: base }),
+          commission,
+          total: base
+            ? Object.freeze({ kind: "KNOWN", amount: base.add(commission) })
+            : Object.freeze({ kind: "NOT_APPLICABLE" }),
+        }),
+      };
+    };
+    const binding: ExecutableActivityBinding = {
+      activityId,
+      definition: {
+        activityId,
+        edges: { ENTRY: { CONTINUE: "ACTIVE" } },
+        support: {},
+        modelSelection: {
+          modelId: `${activityId}-FIXTURE`,
+          scenarioId,
+          initialSelectionId: ids[0]!,
+          selectionIds: ids,
+          allowedSelections: { ACTIVE: ids },
+        },
+      },
+      ports,
+      modelAdapter: {
+        initialize: () => issue(ids[0]!),
+        select: (_current, selectionId) =>
+          ids.includes(selectionId) ? issue(selectionId) : null,
+      },
+    };
+    return { binding, ids };
+  };
+  it.each(["C03-A02", "C06-A01", "C06-A02"] as const)(
+    "transports complete approved %s selections and rejects edited/hybrid consequences",
+    (activityId) => {
+      const { binding, ids } = comparison(activityId);
+      const actor = createActivityActor(
+        new ActivityRegistry([binding]),
+        activityId,
+      ).start();
+      actor.send({ type: "CONTINUE" });
+      const select = (selectionId: string) => ({
+        type: "SELECT_MODEL_CHILD" as const,
+        modelId: `${activityId}-FIXTURE`,
+        selectionId,
+        position: "ACTIVE" as const,
+        revision: actor.getSnapshot().context.model!.revision,
+      });
+      const first = actor.getSnapshot().context.model!.value.state;
+      if (activityId === "C03-A02") {
+        expect(
+          (first as { multiplier: ExactDecimal }).multiplier.toString(),
+        ).toBe("1.25");
+        expect((first as { overtime: ExactDecimal }).overtime.toString()).toBe(
+          "250",
+        );
+      } else {
+        expect(
+          (first as { commission: ExactDecimal }).commission.toString(),
+        ).toBe(activityId === "C06-A01" ? "4000" : "9000");
+        expect((first as { base: unknown }).base).toEqual(
+          activityId === "C06-A01"
+            ? { kind: "NOT_APPLICABLE" }
+            : { kind: "KNOWN", amount: d("15000") },
+        );
+        if (activityId === "C06-A02")
+          expect(
+            (
+              first as { total: { amount: ExactDecimal } }
+            ).total.amount.toString(),
+          ).toBe("24000");
+      }
+      actor.send(select(ids[1]!));
+      const final = actor.getSnapshot().context.model!.value.state;
+      if (activityId === "C03-A02") {
+        expect(
+          (final as { multiplier: ExactDecimal }).multiplier.toString(),
+        ).toBe("1.69");
+        expect((final as { overtime: ExactDecimal }).overtime.toString()).toBe(
+          "338",
+        );
+      } else {
+        expect(
+          (final as { commission: ExactDecimal }).commission.toString(),
+        ).toBe(activityId === "C06-A01" ? "4000" : "15000");
+        expect(
+          (
+            final as { total: { amount: ExactDecimal } }
+          ).total.amount.toString(),
+        ).toBe(activityId === "C06-A01" ? "14000" : "30000");
+      }
+      for (const bad of [
+        { ...select(ids[0]!), multiplier: "1.69" },
+        { ...select(ids[0]!), base: "0" },
+        { ...select(ids[0]!), sales: "500000", commission: "9000" },
+        select("HYBRID"),
+      ]) {
+        const before = actor.getSnapshot().context.model;
+        actor.send(bad);
+        expect(actor.getSnapshot().context.model).toBe(before);
+        expect(actor.getSnapshot().context.model!.revision).toBe(1);
+      }
+      actor.send(select(ids[0]!));
+      expect(actor.getSnapshot().context.model!.value.state).toEqual(first);
+      expect(actor.getSnapshot().context.model!.revision).toBe(2);
+      actor.stop();
+    },
+  );
+});
 
 describe("D014/S1 semantic initialization validation", () => {
   const definition: ActivityDefinition = {

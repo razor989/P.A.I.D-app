@@ -3,11 +3,13 @@ import type { ActivityId } from "../../core/public";
 import {
   validateActivityDefinition,
   validateActivityModelAdapter,
+  validateActivityIntentAdapter,
 } from "../activity-machine/public";
 import type {
   ActivityDefinition,
   ActivityPorts,
   ActivityModelAdapter,
+  ActivityIntentAdapter,
 } from "../activity-machine/public";
 
 /** Structural executable binding, NOT authentication of a canonical Study manifest. */
@@ -16,6 +18,7 @@ export type ExecutableActivityBinding = Readonly<{
   definition: ActivityDefinition;
   ports: ActivityPorts;
   modelAdapter?: ActivityModelAdapter;
+  intentAdapter?: ActivityIntentAdapter;
 }>;
 
 const portNames = [
@@ -36,7 +39,14 @@ const plain = (value: unknown): value is Record<string, unknown> =>
 function retain(value: unknown): ExecutableActivityBinding {
   if (
     !plain(value) ||
-    Reflect.ownKeys(value).length !== ("modelAdapter" in value ? 4 : 3) ||
+    Reflect.ownKeys(value).length !==
+      3 +
+        ("modelAdapter" in value ? 1 : 0) +
+        ("intentAdapter" in value ? 1 : 0) ||
+    !Reflect.ownKeys(value).every((key) => {
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      return descriptor !== undefined && "value" in descriptor;
+    }) ||
     !["activityId", "definition", "ports"].every((key) =>
       Object.prototype.hasOwnProperty.call(value, key),
     ) ||
@@ -49,6 +59,12 @@ function retain(value: unknown): ExecutableActivityBinding {
   if (!!value.definition.modelSelection !== "modelAdapter" in value)
     throw new TypeError("Model metadata and adapter must be supplied together");
   if ("modelAdapter" in value) validateActivityModelAdapter(value.modelAdapter);
+  if (!!value.definition.modelIntents !== "intentAdapter" in value)
+    throw new TypeError(
+      "Model intent policy and adapter must be supplied together",
+    );
+  if ("intentAdapter" in value)
+    validateActivityIntentAdapter(value.intentAdapter);
   if (
     !plain(value.ports) ||
     Reflect.ownKeys(value.ports).length !== portNames.length ||
@@ -72,6 +88,7 @@ function retain(value: unknown): ExecutableActivityBinding {
   if (definition.responseStages) freezeMetadata(definition.responseStages);
   if (definition.terminalTeaching) freezeMetadata(definition.terminalTeaching);
   if (definition.modelSelection) freezeMetadata(definition.modelSelection);
+  if (definition.modelIntents) freezeMetadata(definition.modelIntents);
   for (const edges of Object.values(definition.edges)) Object.freeze(edges);
   for (const modes of Object.values(definition.support)) Object.freeze(modes);
   Object.freeze(definition.edges);
@@ -89,10 +106,20 @@ function retain(value: unknown): ExecutableActivityBinding {
     informationReturn: supplied.informationReturn,
   });
   const adapter = value.modelAdapter as ActivityModelAdapter | undefined;
+  const intentAdapter = value.intentAdapter as
+    ActivityIntentAdapter | undefined;
   return Object.freeze({
     activityId: value.activityId,
     definition,
     ports,
+    ...(intentAdapter
+      ? {
+          intentAdapter: Object.freeze({
+            initialize: intentAdapter.initialize,
+            transition: intentAdapter.transition,
+          }),
+        }
+      : {}),
     ...(adapter
       ? {
           modelAdapter: Object.freeze({

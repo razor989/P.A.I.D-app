@@ -18,6 +18,7 @@ export function createActivityActor(
       binding.ports,
       binding.modelAdapter,
       restoration,
+      binding.intentAdapter,
     ),
   );
 }

@@ -84,6 +84,60 @@ export type ActivityModelContext = Readonly<{
   revision: number;
   value: ActivityModelValue;
 }>;
+/** D050/S1: semantic operations, never caller-supplied numeric parameters. */
+export type ModelIntent =
+  | Readonly<{
+      family: "C01";
+      operation: "INCLUDE_EARNING" | "REMOVE_EARNING";
+      earning: "REGULAR_PAY" | "TRANSPORTATION_ALLOWANCE";
+      period: "MAY";
+    }>
+  | Readonly<{
+      family: "C02";
+      operation: "INSPECT_BASIS";
+      deduction: "SSS" | "PHILHEALTH" | "PAG_IBIG" | "BIR";
+    }>
+  | Readonly<
+      {
+        family: "C02";
+        operation: "SELECT_BASIS";
+      } & (
+        | { deduction: "SSS"; basis: "STATUTORY_MSC" }
+        | { deduction: "PHILHEALTH"; basis: "MONTHLY_BASIC_SALARY" }
+        | { deduction: "PAG_IBIG"; basis: "CAPPED_FUND_SALARY" }
+        | { deduction: "BIR"; basis: "TAXABLE_COMPENSATION" }
+      )
+    >
+  | Readonly<{
+      family: "C05";
+      operation:
+        "PARTITION_YEAR_INTO_MONTHS" | "PARTITION_MONTH_INTO_SEMIMONTHLY";
+    }>;
+export type ModelIntentDefinition = Readonly<{
+  family: ModelIntent["family"];
+  modelId: string;
+  scenarioId: string;
+  permissions: readonly Readonly<{ position: Position; intent: ModelIntent }>[];
+}>;
+/** Trusted family issuance is not JSON validation or a restoration capability.
+ * Callbacks are pure: progress lives exclusively in the supplied actor state.
+ * Return null/the current state for rejected or no-op operations.
+ */
+export type ActivityIntentAdapter = Readonly<{
+  initialize: () => Readonly<object>;
+  transition: (
+    current: Readonly<object>,
+    intent: ModelIntent,
+    position: Position,
+  ) => Readonly<object> | null;
+}>;
+export type ActivityIntentContext = Readonly<{
+  family: ModelIntent["family"];
+  modelId: string;
+  scenarioId: string;
+  revision: number;
+  state: Readonly<object>;
+}>;
 export type PrimaryCommitment = Readonly<{
   sequence: number;
   activityId: ActivityId;
@@ -113,6 +167,7 @@ export type ActivityDefinition = Readonly<{
   responseStages?: StagedResponseDefinition;
   terminalTeaching?: TerminalTeachingDefinition;
   modelSelection?: ModelSelectionDefinition;
+  modelIntents?: ModelIntentDefinition;
 }>;
 export type ActivityPorts = Readonly<{
   ready: (response: LearnerResponse) => boolean;
@@ -126,6 +181,15 @@ export type ActivityPorts = Readonly<{
   informationReturn: (activityId: ActivityId, origin: Position) => boolean;
 }>;
 export type ActivityEvent =
+  | {
+      type: "MODEL_INTENT";
+      activityId: ActivityId;
+      scenarioId: string;
+      modelId: string;
+      position: Position;
+      revision: number;
+      intent: ModelIntent;
+    }
   | {
       type: "SELECT_MODEL_CHILD";
       modelId: string;
@@ -165,6 +229,7 @@ export type ActivityContext = Readonly<{
   activityId: ActivityId;
   position: Position;
   model?: ActivityModelContext;
+  intentModel?: ActivityIntentContext;
   c04A02StageEngagement?: C04A02StageEngagementV1;
   origin: Position | null;
   infoOrigin: Position | null;
@@ -236,6 +301,167 @@ const strings = (value: unknown): value is readonly string[] =>
   Reflect.ownKeys(value).length === value.length + 1 &&
   value.every(identity) &&
   new Set(value).size === value.length;
+
+export function isModelIntent(value: unknown): value is ModelIntent {
+  if (!own(value)) return false;
+  const family = Object.getOwnPropertyDescriptor(value, "family");
+  const operation = Object.getOwnPropertyDescriptor(value, "operation");
+  if (!family || !("value" in family) || !operation || !("value" in operation))
+    return false;
+  if (family.value === "C01")
+    return (
+      fields(value, ["family", "operation", "earning", "period"]) &&
+      ["INCLUDE_EARNING", "REMOVE_EARNING"].includes(
+        value.operation as string,
+      ) &&
+      ["REGULAR_PAY", "TRANSPORTATION_ALLOWANCE"].includes(
+        value.earning as string,
+      ) &&
+      value.period === "MAY"
+    );
+  if (family.value === "C05")
+    return (
+      fields(value, ["family", "operation"]) &&
+      [
+        "PARTITION_YEAR_INTO_MONTHS",
+        "PARTITION_MONTH_INTO_SEMIMONTHLY",
+      ].includes(value.operation as string)
+    );
+  if (family.value !== "C02") return false;
+  if (operation.value === "INSPECT_BASIS")
+    return (
+      fields(value, ["family", "operation", "deduction"]) &&
+      ["SSS", "PHILHEALTH", "PAG_IBIG", "BIR"].includes(
+        value.deduction as string,
+      )
+    );
+  return (
+    operation.value === "SELECT_BASIS" &&
+    fields(value, ["family", "operation", "deduction", "basis"]) &&
+    ((value.deduction === "SSS" && value.basis === "STATUTORY_MSC") ||
+      (value.deduction === "PHILHEALTH" &&
+        value.basis === "MONTHLY_BASIC_SALARY") ||
+      (value.deduction === "PAG_IBIG" &&
+        value.basis === "CAPPED_FUND_SALARY") ||
+      (value.deduction === "BIR" && value.basis === "TAXABLE_COMPENSATION"))
+  );
+}
+
+function sameIntent(left: ModelIntent, right: ModelIntent): boolean {
+  return (
+    Reflect.ownKeys(left).every(
+      (key) => Reflect.get(left, key) === Reflect.get(right, key),
+    ) && Reflect.ownKeys(left).length === Reflect.ownKeys(right).length
+  );
+}
+
+export function validateActivityIntentAdapter(
+  value: unknown,
+): asserts value is ActivityIntentAdapter {
+  if (
+    !fields(value, ["initialize", "transition"]) ||
+    typeof value.initialize !== "function" ||
+    typeof value.transition !== "function"
+  )
+    throw new TypeError("Invalid activity intent adapter");
+}
+
+function validateModelIntents(
+  value: unknown,
+  activityId: ActivityId,
+): asserts value is ModelIntentDefinition {
+  if (
+    !fields(value, ["family", "modelId", "scenarioId", "permissions"]) ||
+    !["C01", "C02", "C05"].includes(value.family as string) ||
+    typeof value.family !== "string" ||
+    activityId !== `${value.family}-A02` ||
+    value.scenarioId !== `${value.family}-S02` ||
+    !identity(value.modelId) ||
+    !Array.isArray(value.permissions) ||
+    value.permissions.length === 0 ||
+    Object.getPrototypeOf(value.permissions) !== Array.prototype ||
+    Reflect.ownKeys(value.permissions).length !== value.permissions.length + 1
+  )
+    throw new TypeError("Invalid model intent policy");
+  for (let index = 0; index < value.permissions.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      value.permissions,
+      index,
+    );
+    if (!descriptor || !("value" in descriptor))
+      throw new TypeError("Invalid model intent permission");
+    const permission: unknown = descriptor.value;
+    if (
+      !fields(permission, ["position", "intent"]) ||
+      typeof permission.position !== "string" ||
+      !(
+        permission.position === "ACTIVE" ||
+        permission.position === "REVISION" ||
+        /^EXP-(?!00)[0-9]{2,}$/.test(permission.position)
+      ) ||
+      !isModelIntent(permission.intent) ||
+      permission.intent.family !== value.family
+    )
+      throw new TypeError("Invalid model intent permission");
+  }
+}
+
+/** Preserve family-issued identity, but refuse mutable/accessor/prototype state.
+ * ExactDecimal is the existing immutable Core quantity primitive.
+ */
+function immutableIntentState(
+  value: unknown,
+  seen = new Set<object>(),
+): boolean {
+  if (value === null || typeof value === "string" || typeof value === "boolean")
+    return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value !== "object" || !Object.isFrozen(value) || seen.has(value))
+    return false;
+  if (value instanceof ExactDecimal) {
+    try {
+      ExactDecimal.prototype.toString.call(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  if (!(
+    own(value) ||
+    (Array.isArray(value) && Object.getPrototypeOf(value) === Array.prototype)
+  ))
+    return false;
+  seen.add(value);
+  for (const key of Reflect.ownKeys(value)) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      typeof key !== "string" ||
+      !descriptor ||
+      !("value" in descriptor) ||
+      !immutableIntentState(descriptor.value, seen)
+    )
+      return false;
+  }
+  seen.delete(value);
+  return true;
+}
+
+function sameIntentState(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (left instanceof ExactDecimal && right instanceof ExactDecimal)
+    return left.toString() === right.toString();
+  if (!left || !right || typeof left !== "object" || typeof right !== "object")
+    return false;
+  const keys = Reflect.ownKeys(left);
+  return (
+    keys.length === Reflect.ownKeys(right).length &&
+    keys.every(
+      (key) =>
+        Object.prototype.hasOwnProperty.call(right, key) &&
+        sameIntentState(Reflect.get(left, key), Reflect.get(right, key)),
+    )
+  );
+}
 
 function validateModelSelection(
   value: unknown,
@@ -396,6 +622,7 @@ export function validateActivityDefinition(
       ...("responseStages" in value ? ["responseStages"] : []),
       ...("terminalTeaching" in value ? ["terminalTeaching"] : []),
       ...("modelSelection" in value ? ["modelSelection"] : []),
+      ...("modelIntents" in value ? ["modelIntents"] : []),
     ]) ||
     !isActivityId(value.activityId) ||
     !own(value.edges) ||
@@ -404,6 +631,11 @@ export function validateActivityDefinition(
     throw new TypeError("Invalid activity definition");
   if ("responseStages" in value) validateStages(value.responseStages);
   if ("modelSelection" in value) validateModelSelection(value.modelSelection);
+  if ("modelIntents" in value) {
+    if ("modelSelection" in value)
+      throw new TypeError("Conflicting model capabilities");
+    validateModelIntents(value.modelIntents, value.activityId);
+  }
   const both = "terminalTeaching" in value;
   if (
     both &&
@@ -482,6 +714,12 @@ export function validateActivityDefinition(
     )
       throw new TypeError("Unspecified explanation step");
   const entry = value.edges.ENTRY;
+  if (value.modelIntents) {
+    for (const permission of (value.modelIntents as ModelIntentDefinition)
+      .permissions)
+      if (!nodes.has(permission.position))
+        throw new TypeError("Unknown model intent position");
+  }
   if (value.modelSelection) {
     for (const phase of Object.keys(
       (value.modelSelection as ModelSelectionDefinition).allowedSelections,
@@ -500,7 +738,29 @@ export function validateActivityDefinition(
 /** The public event boundary also rejects excess fields; invalid events are ignored without mutation. */
 export function isActivityEvent(value: unknown): value is ActivityEvent {
   if (!own(value)) return false;
+  const type = Object.getOwnPropertyDescriptor(value, "type");
+  if (!type || !("value" in type)) return false;
   switch (value.type) {
+    case "MODEL_INTENT":
+      return (
+        fields(value, [
+          "type",
+          "activityId",
+          "scenarioId",
+          "modelId",
+          "position",
+          "revision",
+          "intent",
+        ]) &&
+        isActivityId(value.activityId) &&
+        isScenarioId(value.scenarioId) &&
+        identity(value.modelId) &&
+        typeof value.position === "string" &&
+        (position(value.position) || value.position === "REVISION") &&
+        Number.isSafeInteger(value.revision) &&
+        (value.revision as number) >= 0 &&
+        isModelIntent(value.intent)
+      );
     case "SELECT_MODEL_CHILD":
       return (
         fields(value, [
@@ -1076,8 +1336,47 @@ export function createActivityMachine(
   ports: ActivityPorts,
   modelAdapter?: ActivityModelAdapter,
   restoration?: ActivityRestoration,
+  intentAdapter?: ActivityIntentAdapter,
 ) {
   validateActivityDefinition(definition);
+  if (!!definition.modelIntents !== (intentAdapter !== undefined))
+    throw new TypeError(
+      "Model intent policy and adapter must be supplied together",
+    );
+  if (intentAdapter !== undefined) validateActivityIntentAdapter(intentAdapter);
+  const intentAuthority = intentAdapter
+    ? Object.freeze({
+        initialize: intentAdapter.initialize,
+        transition: intentAdapter.transition,
+      })
+    : undefined;
+  const intentPolicy = definition.modelIntents
+    ? structuredClone(definition.modelIntents)
+    : undefined;
+  if (intentPolicy) {
+    for (const permission of intentPolicy.permissions) {
+      Object.freeze(permission.intent);
+      Object.freeze(permission);
+    }
+    Object.freeze(intentPolicy.permissions);
+    Object.freeze(intentPolicy);
+  }
+  const initializeIntentModel = (): ActivityIntentContext => {
+    try {
+      const state = intentAuthority!.initialize();
+      if (!state || typeof state !== "object" || !immutableIntentState(state))
+        throw new TypeError("Invalid intent state");
+      return Object.freeze({
+        family: intentPolicy!.family,
+        modelId: intentPolicy!.modelId,
+        scenarioId: intentPolicy!.scenarioId,
+        revision: 0,
+        state,
+      });
+    } catch {
+      throw new TypeError("Invalid activity intent initialization");
+    }
+  };
   if (!!definition.modelSelection !== (modelAdapter !== undefined))
     throw new TypeError("Model metadata and adapter must be supplied together");
   if (modelAdapter !== undefined) validateActivityModelAdapter(modelAdapter);
@@ -1837,6 +2136,7 @@ export function createActivityMachine(
       Object.freeze({
         activityId,
         ...(modelPolicy ? { model: initializeModel() } : {}),
+        ...(intentPolicy ? { intentModel: initializeIntentModel() } : {}),
         ...(activityId === "C04-A02"
           ? { c04A02StageEngagement: stageEngagement(false, false) }
           : {}),
@@ -1867,6 +2167,56 @@ export function createActivityMachine(
       }),
     on: {
       "*": { guard: ({ event }) => !valid(event) },
+      MODEL_INTENT: {
+        guard: ({ context, event }) =>
+          !!intentAuthority &&
+          !!intentPolicy &&
+          isActivityEvent(event) &&
+          event.activityId === activityId &&
+          event.scenarioId === intentPolicy.scenarioId &&
+          event.modelId === intentPolicy.modelId &&
+          event.intent.family === intentPolicy.family &&
+          event.position === context.position &&
+          event.revision === context.intentModel?.revision &&
+          context.intentModel.revision < Number.MAX_SAFE_INTEGER &&
+          context.origin === null &&
+          context.infoOrigin === null &&
+          intentPolicy.permissions.some(
+            (permission) =>
+              permission.position === context.position &&
+              sameIntent(permission.intent, event.intent),
+          ),
+        actions: [
+          assign(({ context, event }) => {
+            if (event.type !== "MODEL_INTENT") return {};
+            try {
+              const previous = context.intentModel!;
+              const state = intentAuthority!.transition(
+                previous.state,
+                Object.freeze({ ...event.intent }),
+                context.position,
+              );
+              if (
+                !state ||
+                typeof state !== "object" ||
+                !immutableIntentState(state) ||
+                sameIntentState(previous.state, state)
+              )
+                return {};
+              return {
+                intentModel: Object.freeze({
+                  ...previous,
+                  revision: previous.revision + 1,
+                  state,
+                }),
+              };
+            } catch {
+              return {};
+            }
+          }),
+          seal,
+        ],
+      },
       SELECT_MODEL_CHILD: {
         guard: ({ context, event }) =>
           !!adapter &&

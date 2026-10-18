@@ -3,6 +3,299 @@ import type { ActivityModelAdapter } from "../activity-machine/public";
 import type { ExecutableActivityBinding } from "./public";
 import { ActivityRegistry } from "./public";
 import { createActivityActor } from "../activity-runtime/public";
+import type {
+  ActivityIntentAdapter,
+  ModelIntent,
+} from "../activity-machine/public";
+
+describe("D1 optional intent registration trust boundary", () => {
+  // D050/S1 §2 C05; final C05 C3 §§30–35 (6c4b45d1), compatibility only.
+  const intent: ModelIntent = {
+    family: "C05",
+    operation: "PARTITION_YEAR_INTO_MONTHS",
+  };
+  const intentFixture = () => ({
+    activityId: "C05-A02" as const,
+    definition: {
+      activityId: "C05-A02" as const,
+      edges: {
+        ENTRY: { CONTINUE: "EXP-02" as const },
+        "EXP-02": { CONTINUE: "ACTIVE" as const },
+      },
+      support: {},
+      modelIntents: {
+        family: "C05" as const,
+        modelId: "C05-FIXTURE",
+        scenarioId: "C05-S02",
+        permissions: [{ position: "EXP-02" as const, intent: { ...intent } }],
+      },
+    },
+    ports: fixture().ports,
+    intentAdapter: {
+      initialize: () => Object.freeze({ partitioned: false }),
+      transition: () => Object.freeze({ partitioned: true }),
+    } as ActivityIntentAdapter,
+  });
+  it("detaches/freezes policy and callback table without freezing caller-owned input", () => {
+    const input = intentFixture();
+    const registry = new ActivityRegistry([input]);
+    const saved = registry.resolve(input.activityId);
+    const transition = input.intentAdapter.transition;
+    input.definition.modelIntents.permissions.pop();
+    input.definition.modelIntents.modelId = "changed";
+    input.intentAdapter = {
+      initialize: () => {
+        throw new Error("replaced");
+      },
+      transition: () => null,
+    };
+    expect(saved.intentAdapter!.transition).toBe(transition);
+    expect(saved.definition.modelIntents!.permissions).toHaveLength(1);
+    expect(saved.definition.modelIntents!.modelId).toBe("C05-FIXTURE");
+    expect(
+      Object.isFrozen(saved.definition.modelIntents!.permissions[0]!.intent),
+    ).toBe(true);
+    expect(Object.isFrozen(saved.intentAdapter)).toBe(true);
+    expect(Object.isFrozen(input.definition)).toBe(false);
+    const actor = createActivityActor(registry, input.activityId).start();
+    actor.send({ type: "CONTINUE" });
+    actor.send({
+      type: "MODEL_INTENT",
+      activityId: input.activityId,
+      scenarioId: "C05-S02",
+      modelId: "C05-FIXTURE",
+      position: "EXP-02",
+      revision: 0,
+      intent,
+    });
+    expect(actor.getSnapshot().context.intentModel!.state).toEqual({
+      partitioned: true,
+    });
+    expect(actor.getSnapshot().context.intentModel!.revision).toBe(1);
+    actor.stop();
+  });
+  it.each([
+    "missing",
+    "orphan",
+    "undefined",
+    "callback",
+    "extra-adapter",
+    "prototype-adapter",
+    "accessor-adapter",
+    "extra-policy",
+    "prototype-policy",
+    "accessor-policy",
+    "activity",
+    "scenario",
+    "family",
+    "permission-family",
+    "unknown-stage",
+    "extra-intent",
+    "prototype-intent",
+    "accessor-intent",
+    "accessor-binding",
+    "selection-conflict",
+    "unregistered-operation",
+    "accessor-permission-array",
+  ])("fails closed at registration: %s", (kind) => {
+    const input = intentFixture();
+    const policy = input.definition.modelIntents;
+    const get = () => {
+      throw new Error("Accessor executed");
+    };
+    let bad: unknown = input;
+    if (kind === "missing") bad = { ...input, intentAdapter: undefined };
+    if (kind === "orphan")
+      bad = { ...fixture(), intentAdapter: input.intentAdapter };
+    if (kind === "undefined")
+      bad = {
+        ...input,
+        definition: { ...input.definition, modelIntents: undefined },
+      };
+    if (kind === "callback")
+      bad = {
+        ...input,
+        intentAdapter: { ...input.intentAdapter, transition: null },
+      };
+    if (kind === "extra-adapter")
+      bad = {
+        ...input,
+        intentAdapter: { ...input.intentAdapter, extra: true },
+      };
+    if (kind === "prototype-adapter")
+      bad = {
+        ...input,
+        intentAdapter: Object.assign(
+          Object.create({}) as object,
+          input.intentAdapter,
+        ),
+      };
+    if (kind === "accessor-adapter")
+      bad = {
+        ...input,
+        intentAdapter: Object.defineProperty(
+          { ...input.intentAdapter },
+          "transition",
+          { get },
+        ),
+      };
+    if (kind === "extra-policy")
+      bad = {
+        ...input,
+        definition: {
+          ...input.definition,
+          modelIntents: { ...policy, extra: true },
+        },
+      };
+    if (kind === "prototype-policy")
+      bad = {
+        ...input,
+        definition: {
+          ...input.definition,
+          modelIntents: Object.assign(Object.create({}) as object, policy),
+        },
+      };
+    if (kind === "accessor-policy")
+      bad = {
+        ...input,
+        definition: {
+          ...input.definition,
+          modelIntents: Object.defineProperty({ ...policy }, "family", { get }),
+        },
+      };
+    if (kind === "activity")
+      bad = {
+        ...input,
+        activityId: "C05-A01",
+        definition: { ...input.definition, activityId: "C05-A01" },
+      };
+    if (kind === "scenario") policy.scenarioId = "C05-S01";
+    if (kind === "family")
+      bad = {
+        ...input,
+        definition: {
+          ...input.definition,
+          modelIntents: { ...policy, family: "C03" },
+        },
+      };
+    if (kind === "permission-family")
+      bad = {
+        ...input,
+        definition: {
+          ...input.definition,
+          modelIntents: {
+            ...policy,
+            permissions: [
+              {
+                position: "EXP-02",
+                intent: {
+                  family: "C01",
+                  operation: "INCLUDE_EARNING",
+                  earning: "REGULAR_PAY",
+                  period: "MAY",
+                },
+              },
+            ],
+          },
+        },
+      };
+    if (kind === "unknown-stage")
+      bad = {
+        ...input,
+        definition: {
+          ...input.definition,
+          modelIntents: {
+            ...policy,
+            permissions: [{ position: "EXP-99", intent }],
+          },
+        },
+      };
+    if (kind === "extra-intent")
+      bad = {
+        ...input,
+        definition: {
+          ...input.definition,
+          modelIntents: {
+            ...policy,
+            permissions: [
+              { position: "EXP-02", intent: { ...intent, factor: 13 } },
+            ],
+          },
+        },
+      };
+    if (kind === "prototype-intent")
+      policy.permissions[0]!.intent = Object.assign(
+        Object.create({}),
+        intent,
+      ) as (typeof policy.permissions)[number]["intent"];
+    if (kind === "accessor-intent")
+      policy.permissions[0]!.intent = Object.defineProperty(
+        { ...intent },
+        "operation",
+        { get },
+      );
+    if (kind === "accessor-binding")
+      bad = Object.defineProperty({ ...input }, "definition", { get });
+    if (kind === "selection-conflict")
+      bad = {
+        ...input,
+        definition: {
+          ...input.definition,
+          modelSelection: {
+            modelId: "selection",
+            scenarioId: "C05-S02",
+            initialSelectionId: "a",
+            selectionIds: ["a"],
+            allowedSelections: {},
+          },
+        },
+      };
+    if (kind === "unregistered-operation")
+      bad = {
+        ...input,
+        definition: {
+          ...input.definition,
+          modelIntents: {
+            ...policy,
+            permissions: [
+              {
+                position: "EXP-02",
+                intent: { family: "C05", operation: "SET_FIELD" },
+              },
+            ],
+          },
+        },
+      };
+    if (kind === "accessor-permission-array")
+      Object.defineProperty(policy.permissions, "0", { get });
+    expect(
+      () => new ActivityRegistry([bad as ExecutableActivityBinding]),
+    ).toThrow(TypeError);
+  });
+  it("leaves opted-out binding legal events and construction unchanged", () => {
+    const registry = new ActivityRegistry([fixture()]);
+    expect(Object.keys(registry.resolve("C04-A01")).sort()).toEqual([
+      "activityId",
+      "definition",
+      "ports",
+    ]);
+    const actor = createActivityActor(registry, "C04-A01").start();
+    const before = actor.getSnapshot();
+    actor.send({
+      type: "MODEL_INTENT",
+      activityId: "C05-A02",
+      scenarioId: "C05-S02",
+      modelId: "C05-FIXTURE",
+      position: "EXP-02",
+      revision: 0,
+      intent,
+    });
+    expect(actor.getSnapshot()).toBe(before);
+    actor.send({ type: "CONTINUE" });
+    expect(actor.getSnapshot().context.position).toBe("ACTIVE");
+    actor.stop();
+  });
+});
 
 // Test-only structural binding; NOT a canonical C04 Study manifest or answer bank.
 const fixture = (): ExecutableActivityBinding => ({
