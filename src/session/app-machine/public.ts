@@ -9,7 +9,11 @@ import {
 } from "xstate";
 import { isActivityId, isCompetencyId, isScenarioId } from "@/core/public";
 import type { ActivityId, CompetencyId } from "@/core/public";
-import { createC04ActivityActor } from "@/engine/c04-activity-binding/public";
+import {
+  createC04ActivityActor,
+  isCanonicalC04Runtime,
+} from "@/engine/c04-activity-binding/public";
+import type { CanonicalC04Runtime } from "@/engine/c04-activity-binding/public";
 import type { RecoveryClassification } from "@/recovery/rehydration/public";
 import type { StudyCatalog } from "@/study/catalog/public";
 import type {
@@ -34,6 +38,7 @@ export type SessionInput = Readonly<{
   recovery?: RecoveryClassification;
   completion?: CompletionKnowledge;
   queue?: RecoveryCheckpointQueue;
+  c04Runtime?: CanonicalC04Runtime;
 }>;
 export type SessionEvent =
   | Readonly<{
@@ -111,6 +116,7 @@ type Context = Readonly<{
   completion: CompletionKnowledge;
   technicalError: unknown;
   queue: RecoveryCheckpointQueue | null;
+  createFreshActivity: (id: unknown) => ActivityActor;
   generation: number;
   writable: boolean;
   pendingTargetActivityId: ActivityId | null;
@@ -185,7 +191,7 @@ function successor(context: Context): ActivityId | null {
 }
 function replaceActivity(context: Context, id: ActivityId) {
   context.currentActivity?.stop();
-  const currentActivity = createC04ActivityActor(id);
+  const currentActivity = context.createFreshActivity(id);
   currentActivity.start();
   return {
     currentActivity,
@@ -221,6 +227,11 @@ function activityKnown(catalog: StudyCatalog, id: unknown): id is ActivityId {
 
 /** Capture completion knowledge, never infer historical zero from a checkpoint. */
 function initialContext(input: SessionInput): Context {
+  if (
+    input.c04Runtime !== undefined &&
+    !isCanonicalC04Runtime(input.c04Runtime)
+  )
+    throw new TypeError("Invalid canonical C04 runtime");
   const { catalog, recovery, completion = { kind: "unknown" } } = input;
   if (
     input.queue &&
@@ -305,6 +316,8 @@ function initialContext(input: SessionInput): Context {
     technicalError:
       recovery?.status === "technical-failure" ? recovery.error : null,
     queue: input.queue ?? null,
+    createFreshActivity:
+      input.c04Runtime?.createActivityActor ?? createC04ActivityActor,
     generation: 0,
     writable: true,
     pendingTargetActivityId: null,
@@ -467,7 +480,8 @@ const machine = setup({
         throw new TypeError("Invalid activity intent");
       if (complete(context)) return replaceActivity(context, event.activityId);
       const currentActivity =
-        context.currentActivity ?? createC04ActivityActor(event.activityId);
+        context.currentActivity ??
+        context.createFreshActivity(event.activityId);
       currentActivity.start();
       return {
         currentActivity,

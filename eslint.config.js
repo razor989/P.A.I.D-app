@@ -171,8 +171,29 @@ function restriction(directory, publicTargets = [], extraPatterns = []) {
     });
   }
 
-  // Cross-owner imports must use their public.ts contract. The root app
-  // bootstrap is deliberately exempt from this policy.
+  // S7/S8: App composition has exact used canonical public pairs, not an
+  // exemption for private paths. This branch leaves S1-S6 owners unchanged.
+  if (owner === "app") {
+    const allowed = ["core/public", ...publicTargets].map(escape).join("|");
+    patterns.push(
+      {
+        regex: `^@/(?!app(?:/|$)|(?:${allowed})$)`,
+        message:
+          "App cross-owner imports require an exact authorized public pair.",
+      },
+      {
+        regex: `^(?:\\./)?(?:\\.\\./)+(?:src/)?(?:${owners.filter((o) => o !== "app").join("|")})(?:/|$)`,
+        message:
+          "App cross-owner imports must use the exact canonical @/ target.",
+      },
+      {
+        regex:
+          "^(?:@capacitor/|(?:paid-app/)?src/|(?:study|engine|session|recovery)/)",
+        message:
+          "No native or deep package escape from the T035 web composition.",
+      },
+    );
+  }
   if (owner !== "app") {
     for (const target of owners.filter(
       (item) => item !== owner && !disallowed.includes(item),
@@ -348,4 +369,35 @@ export default tseslint.config(
     ),
     files: ["src/session/navigation/public.test.ts"],
   },
+  // Include new nested App paths even before directory discovery.
+  { ...restriction("app"), files: ["src/app/**/*.{ts,tsx}"] },
+  { ...restriction("app"), files: ["src/main.tsx"] },
+  ...[
+    [
+      "composition-root.tsx",
+      [
+        "study/validation/public",
+        "study/catalog/public",
+        "engine/c04-activity-binding/public",
+        "recovery/store/public",
+        "session/app-machine/public",
+      ],
+    ],
+    [
+      "composition-root.test.tsx",
+      [
+        "engine/c04-activity-binding/public",
+        "recovery/store/public",
+        "session/app-machine/public",
+        "recovery/rehydration/public",
+      ],
+    ],
+    ["session-provider.tsx", ["session/app-machine/public"]],
+    ["session-provider.test.tsx", ["session/app-machine/public"]],
+    ["bootstrap.test.tsx", ["session/app-machine/public"]],
+    ["web-test-store.ts", ["recovery/store/public"]],
+  ].map(([file, targets]) => ({
+    ...restriction("app", targets),
+    files: [`src/app/${file}`],
+  })),
 );

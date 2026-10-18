@@ -441,6 +441,31 @@ export function createC04ActivityActor(id: unknown): ActivityActor {
   return createActivityActor(createC04ActivityRegistry(), id);
 }
 
+export type CanonicalC04Runtime = Readonly<{
+  registry: ActivityRegistry;
+  createActivityActor: (activityId: unknown) => ActivityActor;
+}>;
+const issuedRuntimes = new WeakSet<object>();
+
+export function isCanonicalC04Runtime(
+  value: unknown,
+): value is CanonicalC04Runtime {
+  return (
+    typeof value === "object" && value !== null && issuedRuntimes.has(value)
+  );
+}
+
+/** One authenticated registry per capability; every actor remains caller-owned. */
+export function createCanonicalC04Runtime(): CanonicalC04Runtime {
+  const registry = createC04ActivityRegistry();
+  const runtime = Object.freeze({
+    registry,
+    createActivityActor: (id: unknown) => createActivityActor(registry, id),
+  });
+  issuedRuntimes.add(runtime);
+  return runtime;
+}
+
 export type C04Restoration = Readonly<{
   scenarioId: string;
   context: Omit<ActivityContext, "model"> &

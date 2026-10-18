@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ExactDecimal, quantity } from "../../core/public";
 import type { LearnerResponse } from "../../core/public";
 import {
@@ -16,6 +16,8 @@ import type { ActivityActor } from "../activity-runtime/public";
 import type { ActivityEvent, Position } from "../activity-machine/public";
 import {
   authenticateC04BindingSource,
+  createCanonicalC04Runtime,
+  isCanonicalC04Runtime,
   composeC04ActivityFrame,
   createC04ActivityActor,
   createC04RestoredActivityActor,
@@ -27,6 +29,64 @@ import {
   validateC04PartialResponseV1,
 } from "./public";
 import type { C04Restoration } from "./public";
+
+describe("T035 canonical runtime issuance", () => {
+  it("authenticates exact issuance, not copies, prototypes, proxies or factories", () => {
+    const runtime = createCanonicalC04Runtime();
+    expect(isCanonicalC04Runtime(runtime)).toBe(true);
+    expect(Object.isFrozen(runtime)).toBe(true);
+    expect(Object.isFrozen(runtime.registry)).toBe(true);
+    for (const value of [
+      null,
+      undefined,
+      {},
+      { ...runtime },
+      Object.create(runtime) as unknown,
+      new Proxy(runtime, {}),
+      () => runtime,
+    ])
+      expect(isCanonicalC04Runtime(value)).toBe(false);
+  });
+  it("retains the exact public binding identities and issues independent unstarted actors", () => {
+    const runtime = createCanonicalC04Runtime();
+    const other = createCanonicalC04Runtime();
+    expect(other.registry).not.toBe(runtime.registry);
+    const registry = runtime.registry;
+    const resolve = vi.spyOn(
+      Object.getPrototypeOf(registry) as typeof registry,
+      "resolve",
+    );
+    for (const id of ["C04-A01", "C04-A02", "C04-A03", "C04-A04"]) {
+      const binding = registry.resolve(id);
+      const a = runtime.createActivityActor(id);
+      const b = runtime.createActivityActor(id);
+      expect(a).not.toBe(b);
+      expect(a.getSnapshot().context.activityId).toBe(id);
+      expect(resolve.mock.contexts).toContain(registry);
+      expect(Object.keys(a.getSnapshot().children)).toEqual([]);
+      const notifications: unknown[] = [];
+      const sub = a.subscribe((snapshot) => notifications.push(snapshot));
+      expect(notifications).toEqual([]);
+      a.start();
+      expect(notifications.length).toBeGreaterThan(0);
+      a.send({ type: "CONTINUE" });
+      expect(b.getSnapshot().context.position).toBe("ENTRY");
+      expect(runtime.registry).toBe(registry);
+      expect(registry.resolve(id)).toBe(binding);
+      sub.unsubscribe();
+      a.stop();
+      b.stop();
+    }
+  });
+  it.each(["C01-A01", "C04-A05", "C04-S01", "c04-a01", null, {}, 1])(
+    "rejects unsupported id %s",
+    (id) => {
+      expect(() =>
+        createCanonicalC04Runtime().createActivityActor(id),
+      ).toThrow();
+    },
+  );
+});
 
 describe("D061/S3 source-authenticated reissuance", () => {
   it.each(["C04-S02-A", "C04-S02-B"] as const)(

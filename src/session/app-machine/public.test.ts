@@ -4,11 +4,37 @@ import type { ActivityId, CompetencyId, LearnerResponse } from "@/core/public";
 import {
   composeC04ActivityFrame,
   createC04ActivityActor,
+  createCanonicalC04Runtime,
 } from "@/engine/c04-activity-binding/public";
 import { recoverCheckpoint } from "@/recovery/rehydration/public";
 import { composeStudyCatalog } from "@/study/catalog/public";
 import { createAppSessionActor, isSessionEvent, selectSession } from "./public";
 import type { AppSessionActor, CompletionKnowledge } from "./public";
+
+describe("T035 optional trusted runtime input", () => {
+  it("rejects nonissued capability before constructing Session", () => {
+    const runtime = createCanonicalC04Runtime();
+    for (const fake of [
+      { ...runtime },
+      new Proxy(runtime, {}),
+      Object.create(runtime) as typeof runtime,
+    ])
+      expect(() =>
+        createAppSessionActor({ catalog: catalog(), c04Runtime: fake }),
+      ).toThrow("Invalid canonical C04 runtime");
+  });
+  it("accepts an authentic capability without resolving startup or constructing an activity", () => {
+    const c04Runtime = createCanonicalC04Runtime();
+    const actor = createAppSessionActor({ catalog: catalog(), c04Runtime });
+    sessions.push(actor);
+    actor.start();
+    expect(selectSession(actor).destination).toBeNull();
+    expect(selectSession(actor).currentActivity).toBeNull();
+    expect(actor.getSnapshot().context.createFreshActivity).toBe(
+      c04Runtime.createActivityActor,
+    );
+  });
+});
 
 // Synthetic catalog composition, NOT replacement fixed bank content. Real C04
 // actors still authenticate their own canonical Study source inside the facade.
