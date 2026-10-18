@@ -7,6 +7,7 @@ import {
   validateActivityDefinition,
   availableModelSelections,
   validateC04A02StageEngagementV1,
+  instructionalContinueEligible,
 } from "./public";
 import type {
   ActivityContext,
@@ -21,6 +22,7 @@ import type {
 import { ActivityRegistry } from "../registry/public";
 import { createActivityActor } from "../activity-runtime/public";
 import type { ExecutableActivityBinding } from "../registry/public";
+import { projectSemanticActivityFrame } from "../semantic-frame/public";
 
 // D1 compatibility fixtures only, NOT Study-authenticated production bindings.
 // Context @ 3c524857: D050/S1 §§1–4; final Amendment C C3 C01 §§23–27,
@@ -177,6 +179,15 @@ describe("D1 source-bounded public actor intent compatibility", () => {
       ],
       {
         initialize: () => issue([]),
+        continuationState: (current, requirement) => {
+          const state = current as Earnings;
+          return (
+            state.membership.includes("REGULAR_PAY") &&
+            (requirement === "C01_MAY_REGULAR" ||
+              (requirement === "C01_MAY_BOTH" &&
+                state.membership.includes("TRANSPORTATION_ALLOWANCE")))
+          );
+        },
         transition: (current, intent) => {
           if (intent.family !== "C01") return null;
           const state = current as Earnings;
@@ -195,6 +206,22 @@ describe("D1 source-bounded public actor intent compatibility", () => {
       ...base,
       definition: {
         ...base.definition,
+        instructionalContinuation: {
+          activityId: "C01-A02",
+          family: "C01",
+          stages: [
+            {
+              position: "EXP-02",
+              requirement: "C01_MAY_REGULAR",
+              action: earning("INCLUDE_EARNING", "REGULAR_PAY"),
+            },
+            {
+              position: "EXP-03",
+              requirement: "C01_MAY_BOTH",
+              action: earning("INCLUDE_EARNING", "TRANSPORTATION_ALLOWANCE"),
+            },
+          ],
+        },
         edges: {
           ENTRY: { CONTINUE: "EXP-01" },
           "EXP-01": { CONTINUE: "EXP-02" },
@@ -457,14 +484,25 @@ describe("D1 source-bounded public actor intent compatibility", () => {
     months: Readonly<{ count: 12; monthlyGiven: ExactDecimal }> | null;
     semimonthly: Readonly<{ count: 2; amount: ExactDecimal }> | null;
   }>;
-  const c05 = () =>
-    binding(
+  const c05 = (): ExecutableActivityBinding => {
+    const base = binding(
       "C05",
       [
         { position: "EXP-02", intent: year },
         { position: "EXP-04", intent: month },
       ],
       {
+        continuationState: (current, requirement) => {
+          const state = current as Partitions;
+          return (
+            state.months?.count === 12 &&
+            state.months.monthlyGiven.toString() === "40000" &&
+            (requirement === "C05_YEAR_MONTHS" ||
+              (requirement === "C05_MONTH_SEMIMONTHLY" &&
+                state.semimonthly?.count === 2 &&
+                state.semimonthly.amount.toString() === "20000"))
+          );
+        },
         initialize: () =>
           Object.freeze({
             annual: decimal("480000"),
@@ -495,6 +533,454 @@ describe("D1 source-bounded public actor intent compatibility", () => {
         },
       },
     );
+    return {
+      ...base,
+      definition: {
+        ...base.definition,
+        instructionalContinuation: {
+          activityId: "C05-A02",
+          family: "C05",
+          stages: [
+            {
+              position: "EXP-02",
+              requirement: "C05_YEAR_MONTHS",
+              action: year,
+            },
+            {
+              position: "EXP-04",
+              requirement: "C05_MONTH_SEMIMONTHLY",
+              action: month,
+            },
+          ],
+        },
+      },
+    };
+  };
+  // D018/S1 §§2–5; final C01 §§24–25 and C05 §§28–34. These
+  // projections consume the same live registry actor, never a patched snapshot.
+  const parity = (
+    actor: Actor,
+    registry: ActivityRegistry,
+    expected: boolean,
+  ) => {
+    const context = actor.getSnapshot().context;
+    const source = registry.resolve(context.activityId);
+    const support = actor.getSnapshot().value.support;
+    const frame = projectSemanticActivityFrame({
+      context,
+      phase: context.position,
+      support:
+        support === "none"
+          ? "NONE"
+          : support === "review"
+            ? "REVIEW"
+            : support === "sourceReview"
+              ? "SOURCE_REVIEW"
+              : "REINFORCEMENT",
+      definition: source.definition,
+      ports: source.ports,
+      content: {
+        references: [],
+        modelFacts: [],
+        derivedFacts: [],
+        responseContract: {
+          id: "D2-fixture",
+          text: "Source-bound headless fixture",
+        },
+      },
+    });
+    expect(frame.allowedLearnerIntents.includes("CONTINUE")).toBe(expected);
+    expect(instructionalContinueEligible(context, source.definition)).toBe(
+      expected,
+    );
+    const destination = source.definition.edges[context.position]?.CONTINUE;
+    actor.send({ type: "CONTINUE" });
+    expect(actor.getSnapshot().context.position).toBe(
+      expected ? destination : context.position,
+    );
+    if (!expected) expect(actor.getSnapshot().context).toBe(context);
+  };
+  it("D2 C01 gates each independent action and current composition, removal/reinclusion and Previous/re-entry with machine/frame parity", () => {
+    const registry = new ActivityRegistry([c01()]);
+    const a = createActivityActor(registry, "C01-A02").start();
+    const fresh = createActivityActor(registry, "C01-A02").start();
+    parity(a, registry, true); // Entry -> EXP-01
+    parity(a, registry, true); // EXP-01 -> EXP-02
+    parity(a, registry, false);
+    send(a, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+    const first = a.getSnapshot().context.instructionalContinuation!;
+    expect(first.accepted).toEqual(["C01_MAY_REGULAR"]);
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(first.accepted)).toBe(true);
+    parity(a, registry, true);
+    parity(a, registry, false); // regular engagement cannot stand for allowance
+    send(a, earning("REMOVE_EARNING", "REGULAR_PAY"));
+    send(a, earning("INCLUDE_EARNING", "TRANSPORTATION_ALLOWANCE"));
+    expect(a.getSnapshot().context.instructionalContinuation!.accepted).toEqual(
+      ["C01_MAY_REGULAR", "C01_MAY_BOTH"],
+    );
+    parity(a, registry, false); // independent action recorded, current regular absent
+    send(a, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+    const both = a.getSnapshot().context.instructionalContinuation;
+    send(a, earning("REMOVE_EARNING", "REGULAR_PAY"));
+    parity(a, registry, false);
+    send(a, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+    expect(a.getSnapshot().context.instructionalContinuation).toBe(both);
+    a.send({ type: "PREVIOUS" });
+    parity(a, registry, true); // authentic EXP-02 evidence retained
+    parity(a, registry, true);
+    a.send({ type: "PREVIOUS" });
+    expect(a.getSnapshot().context.instructionalContinuation).toBe(both);
+    parity(a, registry, true);
+    parity(a, registry, true); // final explanation -> ACTIVE uses same helper
+    advance(fresh, "EXP-02");
+    expect(
+      fresh.getSnapshot().context.instructionalContinuation!.accepted,
+    ).toEqual([]);
+    parity(fresh, registry, false);
+    a.stop();
+    fresh.stop();
+  });
+  it("D2 C05 blocks both source stages and retains ordered Given/evidence on Previous and re-entry", () => {
+    const registry = new ActivityRegistry([c05()]);
+    const a = createActivityActor(registry, "C05-A02").start();
+    advance(a, "EXP-02");
+    parity(a, registry, false);
+    unchanged(a, event(a, month));
+    send(a, year);
+    parity(a, registry, true);
+    parity(a, registry, true);
+    parity(a, registry, false);
+    const monthly = a.getSnapshot().context.intentModel!;
+    unchanged(a, event(a, year));
+    expect(a.getSnapshot().context.instructionalContinuation!.accepted).toEqual(
+      ["C05_YEAR_MONTHS"],
+    );
+    a.send({ type: "PREVIOUS" });
+    parity(a, registry, true);
+    parity(a, registry, false);
+    send(a, month);
+    expect(
+      (a.getSnapshot().context.intentModel!.state as Partitions).months,
+    ).toBe((monthly.state as Partitions).months);
+    parity(a, registry, true);
+    a.send({ type: "PREVIOUS" });
+    parity(a, registry, true);
+    a.stop();
+  });
+  it.each(["REVIEW", "SOURCE_REVIEW", "REINFORCEMENT"] as const)(
+    "D2 support %s suppresses Continue without manufacturing engagement",
+    (mode) => {
+      const base = c01();
+      const registry = new ActivityRegistry([
+        {
+          ...base,
+          definition: { ...base.definition, support: { "EXP-02": [mode] } },
+          ports: { ...base.ports, sourceReviewAvailable: () => true },
+        },
+      ]);
+      const a = createActivityActor(registry, "C01-A02").start();
+      advance(a, "EXP-02");
+      a.send({ type: "OPEN_SUPPORT", mode });
+      unchanged(a, event(a, earning("INCLUDE_EARNING", "REGULAR_PAY")));
+      parity(a, registry, false);
+      a.send({ type: "CLOSE_SUPPORT" });
+      parity(a, registry, false);
+      send(a, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+      a.send({ type: "OPEN_SUPPORT", mode });
+      parity(a, registry, false);
+      a.send({ type: "CLOSE_SUPPORT" });
+      parity(a, registry, true);
+      a.stop();
+    },
+  );
+  it.each(["null", "same", "clone", "throw", "mutable", "primitive"])(
+    "D2 rejected adapter result %s writes neither revision nor stage evidence",
+    (kind) => {
+      const base = c01();
+      const registry = new ActivityRegistry([
+        {
+          ...base,
+          intentAdapter: {
+            ...base.intentAdapter!,
+            transition: (current) => {
+              if (kind === "throw") throw new Error("family refusal");
+              if (kind === "null") return null;
+              if (kind === "same") return current;
+              if (kind === "clone") return Object.freeze({ ...current });
+              if (kind === "mutable") return {};
+              return 1 as never;
+            },
+          },
+        },
+      ]);
+      const a = createActivityActor(registry, "C01-A02").start();
+      advance(a, "EXP-02");
+      const before = a.getSnapshot().context;
+      send(a, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+      expect(a.getSnapshot().context.intentModel).toBe(before.intentModel);
+      expect(a.getSnapshot().context.instructionalContinuation).toBe(
+        before.instructionalContinuation,
+      );
+      parity(a, registry, false);
+      a.stop();
+    },
+  );
+  it("D2 wrong-stage accepted action/revision cannot substitute for required stage engagement", () => {
+    const base = c01();
+    const registry = new ActivityRegistry([
+      {
+        ...base,
+        definition: {
+          ...base.definition,
+          modelIntents: {
+            ...base.definition.modelIntents!,
+            permissions: [
+              ...base.definition.modelIntents!.permissions,
+              {
+                position: "EXP-01",
+                intent: earning("INCLUDE_EARNING", "REGULAR_PAY"),
+              },
+            ],
+          },
+        },
+      },
+    ]);
+    const a = createActivityActor(registry, "C01-A02").start();
+    advance(a, "EXP-01");
+    send(a, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+    expect(a.getSnapshot().context.intentModel!.revision).toBe(1);
+    expect(a.getSnapshot().context.instructionalContinuation!.accepted).toEqual(
+      [],
+    );
+    advance(a, "EXP-02");
+    unchanged(a, event(a, earning("INCLUDE_EARNING", "REGULAR_PAY")));
+    parity(a, registry, false);
+    send(a, earning("REMOVE_EARNING", "REGULAR_PAY"));
+    send(a, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+    parity(a, registry, true);
+    a.stop();
+  });
+  it.each([
+    "activity",
+    "family",
+    "stage",
+    "action",
+    "duplicate",
+    "non-edge",
+    "missing-capability",
+    "extra",
+  ])("D2 rejects malformed policy %s before actor launch", (kind) => {
+    const base = c01();
+    const policy = structuredClone(base.definition.instructionalContinuation!);
+    const first = policy.stages[0];
+    const bad =
+      kind === "activity"
+        ? { ...policy, activityId: "C05-A02" }
+        : kind === "family"
+          ? { ...policy, family: "C05" }
+          : kind === "stage"
+            ? {
+                ...policy,
+                stages: [{ ...first, position: "EXP-01" }, policy.stages[1]],
+              }
+            : kind === "action"
+              ? {
+                  ...policy,
+                  stages: [
+                    {
+                      ...first,
+                      action: earning("REMOVE_EARNING", "REGULAR_PAY"),
+                    },
+                    policy.stages[1],
+                  ],
+                }
+              : kind === "duplicate"
+                ? { ...policy, stages: [first, first] }
+                : kind === "extra"
+                  ? { ...policy, requiresEngagement: true }
+                  : policy;
+    expect(
+      () =>
+        new ActivityRegistry([
+          {
+            ...base,
+            definition: {
+              ...base.definition,
+              instructionalContinuation: bad as never,
+              ...(kind === "non-edge"
+                ? { edges: { ...base.definition.edges, "EXP-02": {} } }
+                : {}),
+            },
+            ...(kind === "missing-capability"
+              ? {
+                  intentAdapter: {
+                    initialize: base.intentAdapter!.initialize,
+                    transition: base.intentAdapter!.transition,
+                  },
+                }
+              : {}),
+          },
+        ]),
+    ).toThrow(TypeError);
+  });
+  it("D2 pure evaluation fails closed on absent/unissued evidence and legacy no-policy actors retain Continue", () => {
+    const base = c01();
+    const registry = new ActivityRegistry([base]);
+    const a = createActivityActor(registry, "C01-A02").start();
+    advance(a, "EXP-02");
+    send(a, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+    const context = a.getSnapshot().context;
+    // Pure-helper malformed-input probes only: never assigned to an actor.
+    expect(
+      instructionalContinueEligible(
+        {
+          ...context,
+          instructionalContinuation: undefined,
+        } as unknown as ActivityContext,
+        base.definition,
+      ),
+    ).toBe(false);
+    expect(
+      instructionalContinueEligible(
+        {
+          ...context,
+          instructionalContinuation: structuredClone(
+            context.instructionalContinuation!,
+          ),
+        },
+        base.definition,
+      ),
+    ).toBe(false);
+    expect(
+      instructionalContinueEligible(
+        { ...context, intentModel: undefined } as unknown as ActivityContext,
+        base.definition,
+      ),
+    ).toBe(false);
+    expect(
+      instructionalContinueEligible(context, {
+        ...base.definition,
+        instructionalContinuation: {} as never,
+      }),
+    ).toBe(false);
+    a.stop();
+    const { instructionalContinuation: omitted, ...legacy } = base.definition;
+    expect(omitted).toBeDefined();
+    const old = new ActivityRegistry([{ ...base, definition: legacy }]);
+    const b = createActivityActor(old, "C01-A02").start();
+    advance(b, "EXP-02");
+    parity(b, old, true);
+    parity(b, old, true);
+    expect(b.getSnapshot().context.instructionalContinuation).toBeUndefined();
+    b.stop();
+  });
+  it.each(["C01", "C05"] as const)(
+    "D2 %s precomputed initial state creates no engagement or Continue permission",
+    (family) => {
+      const base = family === "C01" ? c01() : c05();
+      const adapter = base.intentAdapter!;
+      const initial = adapter.initialize();
+      const first = adapter.transition(
+        initial,
+        family === "C01" ? earning("INCLUDE_EARNING", "REGULAR_PAY") : year,
+        "EXP-02",
+      )!;
+      const complete = adapter.transition(
+        first,
+        family === "C01"
+          ? earning("INCLUDE_EARNING", "TRANSPORTATION_ALLOWANCE")
+          : month,
+        family === "C01" ? "EXP-03" : "EXP-04",
+      )!;
+      const registry = new ActivityRegistry([
+        { ...base, intentAdapter: { ...adapter, initialize: () => complete } },
+      ]);
+      const a = createActivityActor(registry, base.activityId).start();
+      advance(a, "EXP-02");
+      expect(a.getSnapshot().context.intentModel!.revision).toBe(0);
+      expect(
+        a.getSnapshot().context.instructionalContinuation!.accepted,
+      ).toEqual([]);
+      parity(a, registry, false);
+      unchanged(
+        a,
+        event(
+          a,
+          family === "C01" ? earning("INCLUDE_EARNING", "REGULAR_PAY") : year,
+        ),
+      );
+      parity(a, registry, false);
+      a.stop();
+    },
+  );
+  it("D2 C01 allowance-only current state cannot satisfy regular-stage evidence", () => {
+    const base = c01();
+    const adapter = base.intentAdapter!;
+    const allowance = adapter.transition(
+      adapter.initialize(),
+      earning("INCLUDE_EARNING", "TRANSPORTATION_ALLOWANCE"),
+      "EXP-03",
+    )!;
+    const registry = new ActivityRegistry([
+      { ...base, intentAdapter: { ...adapter, initialize: () => allowance } },
+    ]);
+    const a = createActivityActor(registry, base.activityId).start();
+    advance(a, "EXP-02");
+    parity(a, registry, false);
+    expect(a.getSnapshot().context.instructionalContinuation!.accepted).toEqual(
+      [],
+    );
+    a.stop();
+  });
+  it("D2 C05 missing monthly Given refuses second-first even when the operation is an allowed current intent", () => {
+    const base = c05();
+    const registry = new ActivityRegistry([
+      {
+        ...base,
+        definition: {
+          ...base.definition,
+          modelIntents: {
+            ...base.definition.modelIntents!,
+            permissions: [
+              ...base.definition.modelIntents!.permissions,
+              { position: "EXP-02", intent: month },
+            ],
+          },
+        },
+      },
+    ]);
+    const a = createActivityActor(registry, base.activityId).start();
+    advance(a, "EXP-02");
+    unchanged(a, event(a, month));
+    expect(a.getSnapshot().context.instructionalContinuation!.accepted).toEqual(
+      [],
+    );
+    parity(a, registry, false);
+    a.stop();
+  });
+  it("D2 current-state capability failure fails closed without mutating genuine evidence", () => {
+    const base = c01();
+    const registry = new ActivityRegistry([
+      {
+        ...base,
+        intentAdapter: {
+          ...base.intentAdapter!,
+          continuationState: () => {
+            throw new Error("unissued family state");
+          },
+        },
+      },
+    ]);
+    const a = createActivityActor(registry, base.activityId).start();
+    advance(a, "EXP-02");
+    send(a, earning("INCLUDE_EARNING", "REGULAR_PAY"));
+    expect(a.getSnapshot().context.instructionalContinuation!.accepted).toEqual(
+      ["C01_MAY_REGULAR"],
+    );
+    parity(a, registry, false);
+    a.stop();
+  });
   it("C05 retains both ordered partitions and the established monthly Given without an additive total", () => {
     const actor = createActivityActor(
       new ActivityRegistry([c05()]),
@@ -523,13 +1009,14 @@ describe("D1 source-bounded public actor intent compatibility", () => {
     unchanged(actor, event(actor, month));
     actor.stop();
   });
-  it("discloses the D2 raw Continue gap but still refuses second-first partition after navigation", () => {
+  it("D2 prevents the D1 zero-revision raw Continue bypass and second-first partition", () => {
     const actor = createActivityActor(
       new ActivityRegistry([c05()]),
       "C05-A02",
     ).start();
-    advance(actor, "EXP-04");
+    advance(actor, "EXP-02");
     expect(actor.getSnapshot().context.intentModel!.revision).toBe(0);
+    unchanged(actor, { type: "CONTINUE" });
     unchanged(actor, event(actor, month));
     actor.stop();
   });

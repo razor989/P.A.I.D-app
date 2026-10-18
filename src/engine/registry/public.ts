@@ -66,6 +66,14 @@ function retain(value: unknown): ExecutableActivityBinding {
   if ("intentAdapter" in value)
     validateActivityIntentAdapter(value.intentAdapter);
   if (
+    value.definition.instructionalContinuation &&
+    !(value.intentAdapter as ActivityIntentAdapter | undefined)
+      ?.continuationState
+  )
+    throw new TypeError(
+      "Continuation requires trusted family state capability",
+    );
+  if (
     !plain(value.ports) ||
     Reflect.ownKeys(value.ports).length !== portNames.length ||
     !portNames.every(
@@ -89,6 +97,8 @@ function retain(value: unknown): ExecutableActivityBinding {
   if (definition.terminalTeaching) freezeMetadata(definition.terminalTeaching);
   if (definition.modelSelection) freezeMetadata(definition.modelSelection);
   if (definition.modelIntents) freezeMetadata(definition.modelIntents);
+  if (definition.instructionalContinuation)
+    freezeMetadata(definition.instructionalContinuation);
   for (const edges of Object.values(definition.edges)) Object.freeze(edges);
   for (const modes of Object.values(definition.support)) Object.freeze(modes);
   Object.freeze(definition.edges);
@@ -117,6 +127,9 @@ function retain(value: unknown): ExecutableActivityBinding {
           intentAdapter: Object.freeze({
             initialize: intentAdapter.initialize,
             transition: intentAdapter.transition,
+            ...(intentAdapter.continuationState
+              ? { continuationState: intentAdapter.continuationState }
+              : {}),
           }),
         }
       : {}),

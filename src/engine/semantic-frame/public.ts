@@ -3,6 +3,7 @@ import type { ActivityId } from "../../core/public";
 import {
   currentPrimaryCommitmentValid,
   availableModelSelections,
+  instructionalContinueEligible,
   primaryResponseReady,
   stagedResponseReady,
 } from "../activity-machine/public";
@@ -333,10 +334,8 @@ export function projectSemanticActivityFrame(
     )
       intents.push("CONTINUE");
     if (
-      (phase === "ENTRY" || phase.startsWith("EXP-")) &&
-      edge?.CONTINUE &&
-      (edge.CONTINUE === "ACTIVE" || edge.CONTINUE.startsWith("EXP-")) &&
-      (edge.CONTINUE === "ACTIVE" || definition.edges[edge.CONTINUE])
+      phase === c.position &&
+      instructionalContinueEligible(c, definition, support)
     )
       intents.push("CONTINUE");
     if (

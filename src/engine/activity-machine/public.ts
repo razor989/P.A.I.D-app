@@ -130,7 +130,37 @@ export type ActivityIntentAdapter = Readonly<{
     intent: ModelIntent,
     position: Position,
   ) => Readonly<object> | null;
+  /** Trusted family issuance/current-state proof, never an event predicate. */
+  continuationState?: (
+    state: Readonly<object>,
+    requirement: InstructionalContinuationRequirement,
+  ) => boolean;
 }>;
+/** D018/S1: the four closed source requirements; no expression language. */
+export type InstructionalContinuationRequirement =
+  | "C01_MAY_REGULAR"
+  | "C01_MAY_BOTH"
+  | "C05_YEAR_MONTHS"
+  | "C05_MONTH_SEMIMONTHLY";
+export type InstructionalContinuationPolicy = Readonly<{
+  activityId: "C01-A02" | "C05-A02";
+  family: "C01" | "C05";
+  stages: readonly Readonly<{
+    position: "EXP-02" | "EXP-03" | "EXP-04";
+    requirement: InstructionalContinuationRequirement;
+    action: ModelIntent;
+  }>[];
+}>;
+type InstructionalContinuationEvidence = Readonly<{
+  policy: InstructionalContinuationPolicy;
+  accepted: readonly InstructionalContinuationRequirement[];
+}>;
+// Live actor issuance only. D5 must authenticate any future restoration; these
+// capabilities and presence values are deliberately not checkpoint content.
+const continuationIssuers = new WeakMap<
+  InstructionalContinuationEvidence,
+  NonNullable<ActivityIntentAdapter["continuationState"]>
+>();
 export type ActivityIntentContext = Readonly<{
   family: ModelIntent["family"];
   modelId: string;
@@ -168,6 +198,7 @@ export type ActivityDefinition = Readonly<{
   terminalTeaching?: TerminalTeachingDefinition;
   modelSelection?: ModelSelectionDefinition;
   modelIntents?: ModelIntentDefinition;
+  instructionalContinuation?: InstructionalContinuationPolicy;
 }>;
 export type ActivityPorts = Readonly<{
   ready: (response: LearnerResponse) => boolean;
@@ -230,6 +261,7 @@ export type ActivityContext = Readonly<{
   position: Position;
   model?: ActivityModelContext;
   intentModel?: ActivityIntentContext;
+  instructionalContinuation?: InstructionalContinuationEvidence;
   c04A02StageEngagement?: C04A02StageEngagementV1;
   origin: Position | null;
   infoOrigin: Position | null;
@@ -359,11 +391,165 @@ export function validateActivityIntentAdapter(
   value: unknown,
 ): asserts value is ActivityIntentAdapter {
   if (
-    !fields(value, ["initialize", "transition"]) ||
+    !own(value) ||
+    !fields(value, [
+      "initialize",
+      "transition",
+      ...("continuationState" in value ? ["continuationState"] : []),
+    ]) ||
     typeof value.initialize !== "function" ||
-    typeof value.transition !== "function"
+    typeof value.transition !== "function" ||
+    ("continuationState" in value &&
+      typeof value.continuationState !== "function")
   )
     throw new TypeError("Invalid activity intent adapter");
+}
+
+const continuationSources = {
+  C01_MAY_REGULAR: {
+    activityId: "C01-A02",
+    family: "C01",
+    position: "EXP-02",
+    action: {
+      family: "C01",
+      operation: "INCLUDE_EARNING",
+      earning: "REGULAR_PAY",
+      period: "MAY",
+    },
+  },
+  C01_MAY_BOTH: {
+    activityId: "C01-A02",
+    family: "C01",
+    position: "EXP-03",
+    action: {
+      family: "C01",
+      operation: "INCLUDE_EARNING",
+      earning: "TRANSPORTATION_ALLOWANCE",
+      period: "MAY",
+    },
+  },
+  C05_YEAR_MONTHS: {
+    activityId: "C05-A02",
+    family: "C05",
+    position: "EXP-02",
+    action: { family: "C05", operation: "PARTITION_YEAR_INTO_MONTHS" },
+  },
+  C05_MONTH_SEMIMONTHLY: {
+    activityId: "C05-A02",
+    family: "C05",
+    position: "EXP-04",
+    action: { family: "C05", operation: "PARTITION_MONTH_INTO_SEMIMONTHLY" },
+  },
+} as const;
+
+function validateInstructionalContinuation(
+  definition: ActivityDefinition,
+): void {
+  const policy = definition.instructionalContinuation;
+  if (!policy) return;
+  if (
+    !fields(policy, ["activityId", "family", "stages"]) ||
+    policy.activityId !== definition.activityId ||
+    !["C01-A02", "C05-A02"].includes(policy.activityId) ||
+    policy.family !== definition.modelIntents?.family ||
+    !Array.isArray(policy.stages) ||
+    policy.stages.length !== 2 ||
+    Object.getPrototypeOf(policy.stages) !== Array.prototype ||
+    Reflect.ownKeys(policy.stages).length !== 3
+  )
+    throw new TypeError("Invalid instructional continuation policy");
+  const seen = new Set<string>();
+  for (let index = 0; index < policy.stages.length; index++) {
+    const descriptor = Object.getOwnPropertyDescriptor(policy.stages, index);
+    const stage: unknown =
+      descriptor && "value" in descriptor ? descriptor.value : null;
+    if (
+      !fields(stage, ["position", "requirement", "action"]) ||
+      typeof stage.requirement !== "string" ||
+      !Object.prototype.hasOwnProperty.call(
+        continuationSources,
+        stage.requirement,
+      ) ||
+      !isModelIntent(stage.action)
+    )
+      throw new TypeError("Invalid continuation stage");
+    const source =
+      continuationSources[
+        stage.requirement as InstructionalContinuationRequirement
+      ];
+    const destination = definition.edges[source.position]?.CONTINUE;
+    if (
+      source.activityId !== policy.activityId ||
+      source.family !== policy.family ||
+      stage.position !== source.position ||
+      !sameIntent(stage.action, source.action) ||
+      seen.has(stage.requirement) ||
+      !destination ||
+      !(
+        destination === "ACTIVE" ||
+        (destination.startsWith("EXP-") && definition.edges[destination])
+      ) ||
+      !definition.modelIntents.permissions.some(
+        (permission) =>
+          permission.position === source.position &&
+          sameIntent(permission.intent, source.action),
+      )
+    )
+      throw new TypeError("Incoherent instructional continuation policy");
+    seen.add(stage.requirement);
+  }
+}
+
+/** One read-only Entry/EXP decision for the actor and public frame. No delivery
+ * claim, revision threshold, family arithmetic or C04 presence reinterpretation. */
+export function instructionalContinueEligible(
+  context: ActivityContext,
+  definition: ActivityDefinition,
+  support: SupportPhase = context.origin === null ? "NONE" : "REVIEW",
+): boolean {
+  try {
+    if (
+      context.activityId !== definition.activityId ||
+      context.origin !== null ||
+      support !== "NONE" ||
+      !(context.position === "ENTRY" || context.position.startsWith("EXP-"))
+    )
+      return false;
+    const destination = definition.edges[context.position]?.CONTINUE;
+    if (
+      !destination ||
+      !(
+        destination === "ACTIVE" ||
+        (destination.startsWith("EXP-") && definition.edges[destination])
+      )
+    )
+      return false;
+    const policy = definition.instructionalContinuation;
+    if (!("instructionalContinuation" in definition)) return true;
+    if (!policy) return false;
+    validateInstructionalContinuation(definition);
+    const stage = policy.stages.find(
+      (item) => item.position === context.position,
+    );
+    if (!stage) return true;
+    const evidence = context.instructionalContinuation;
+    const model = context.intentModel;
+    const evaluator = evidence && continuationIssuers.get(evidence);
+    return (
+      !!evidence &&
+      !!evaluator &&
+      sameIntentState(evidence.policy, policy) &&
+      evidence.accepted.includes(stage.requirement) &&
+      !!model &&
+      model.family === policy.family &&
+      model.modelId === definition.modelIntents?.modelId &&
+      model.scenarioId === definition.modelIntents?.scenarioId &&
+      immutableIntentState(model.state) &&
+      evaluator(model.state, stage.requirement) === true
+    );
+  } catch {
+    return false;
+  }
 }
 
 function validateModelIntents(
@@ -623,6 +809,9 @@ export function validateActivityDefinition(
       ...("terminalTeaching" in value ? ["terminalTeaching"] : []),
       ...("modelSelection" in value ? ["modelSelection"] : []),
       ...("modelIntents" in value ? ["modelIntents"] : []),
+      ...("instructionalContinuation" in value
+        ? ["instructionalContinuation"]
+        : []),
     ]) ||
     !isActivityId(value.activityId) ||
     !own(value.edges) ||
@@ -733,6 +922,11 @@ export function validateActivityDefinition(
     !nodes.has(entry.CONTINUE as Position)
   )
     throw new TypeError("Missing entry route");
+  if ("instructionalContinuation" in value) {
+    if (!value.instructionalContinuation)
+      throw new TypeError("Missing continuation policy");
+    validateInstructionalContinuation(value as ActivityDefinition);
+  }
 }
 
 /** The public event boundary also rejects excess fields; invalid events are ignored without mutation. */
@@ -1344,10 +1538,15 @@ export function createActivityMachine(
       "Model intent policy and adapter must be supplied together",
     );
   if (intentAdapter !== undefined) validateActivityIntentAdapter(intentAdapter);
+  if (definition.instructionalContinuation && !intentAdapter?.continuationState)
+    throw new TypeError(
+      "Continuation requires trusted family state capability",
+    );
   const intentAuthority = intentAdapter
     ? Object.freeze({
         initialize: intentAdapter.initialize,
         transition: intentAdapter.transition,
+        continuationState: intentAdapter.continuationState,
       })
     : undefined;
   const intentPolicy = definition.modelIntents
@@ -1432,6 +1631,35 @@ export function createActivityMachine(
     ? structuredClone(definition.terminalTeaching)
     : undefined;
   const activityId = definition.activityId;
+  const continuationPolicy = definition.instructionalContinuation
+    ? structuredClone(definition.instructionalContinuation)
+    : undefined;
+  if (continuationPolicy) {
+    for (const stage of continuationPolicy.stages) {
+      Object.freeze(stage.action);
+      Object.freeze(stage);
+    }
+    Object.freeze(continuationPolicy.stages);
+    Object.freeze(continuationPolicy);
+  }
+  const continueDefinition: ActivityDefinition = Object.freeze({
+    ...definition,
+    edges,
+    ...(intentPolicy ? { modelIntents: intentPolicy } : {}),
+    ...(continuationPolicy
+      ? { instructionalContinuation: continuationPolicy }
+      : {}),
+  });
+  const issueContinuation = (
+    accepted: readonly InstructionalContinuationRequirement[],
+  ): InstructionalContinuationEvidence => {
+    const evidence = Object.freeze({
+      policy: continuationPolicy!,
+      accepted: Object.freeze([...accepted]),
+    });
+    continuationIssuers.set(evidence, intentAuthority!.continuationState!);
+    return evidence;
+  };
   const issued =
     restoration === undefined ? undefined : restorationIssuers.get(restoration);
   if (
@@ -1832,6 +2060,7 @@ export function createActivityMachine(
                 event: ActivityEvent;
               }) =>
                 valid(event) &&
+                instructionalContinueEligible(context, continueDefinition) &&
                 idle({ context }) &&
                 next(context, "CONTINUE") === "ACTIVE",
             },
@@ -1846,6 +2075,7 @@ export function createActivityMachine(
                 event: ActivityEvent;
               }) =>
                 valid(event) &&
+                instructionalContinueEligible(context, continueDefinition) &&
                 idle({ context }) &&
                 next(context, "CONTINUE")?.startsWith("EXP-") === true,
             },
@@ -1867,6 +2097,7 @@ export function createActivityMachine(
                 event: ActivityEvent;
               }) =>
                 valid(event) &&
+                instructionalContinueEligible(context, continueDefinition) &&
                 idle({ context }) &&
                 next(context, "CONTINUE") === "ACTIVE",
             },
@@ -1881,6 +2112,7 @@ export function createActivityMachine(
                 event: ActivityEvent;
               }) =>
                 valid(event) &&
+                instructionalContinueEligible(context, continueDefinition) &&
                 idle({ context }) &&
                 next(context, "CONTINUE")?.startsWith("EXP-") === true,
             },
@@ -2137,6 +2369,9 @@ export function createActivityMachine(
         activityId,
         ...(modelPolicy ? { model: initializeModel() } : {}),
         ...(intentPolicy ? { intentModel: initializeIntentModel() } : {}),
+        ...(continuationPolicy
+          ? { instructionalContinuation: issueContinuation([]) }
+          : {}),
         ...(activityId === "C04-A02"
           ? { c04A02StageEngagement: stageEngagement(false, false) }
           : {}),
@@ -2203,12 +2438,28 @@ export function createActivityMachine(
                 sameIntentState(previous.state, state)
               )
                 return {};
+              const stage = continuationPolicy?.stages.find(
+                (item) =>
+                  item.position === context.position &&
+                  sameIntent(item.action, event.intent),
+              );
+              const accepted =
+                context.instructionalContinuation?.accepted ?? [];
+              const engaged = stage !== undefined;
               return {
                 intentModel: Object.freeze({
                   ...previous,
                   revision: previous.revision + 1,
                   state,
                 }),
+                ...(engaged && !accepted.includes(stage.requirement)
+                  ? {
+                      instructionalContinuation: issueContinuation([
+                        ...accepted,
+                        stage.requirement,
+                      ]),
+                    }
+                  : {}),
               };
             } catch {
               return {};
