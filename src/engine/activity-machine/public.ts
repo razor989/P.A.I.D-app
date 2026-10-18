@@ -387,6 +387,36 @@ function sameIntent(left: ModelIntent, right: ModelIntent): boolean {
   );
 }
 
+/** D3 shares the accepted D1 event guard with frame control publication.
+ * This validates permission, not whether a pure family reducer changes state.
+ * Family composition must omit no-op/unavailable operations from its controls.
+ */
+export function modelIntentPermitted(
+  context: ActivityContext,
+  policy: ModelIntentDefinition | undefined,
+  event: unknown,
+): event is Extract<ActivityEvent, { type: "MODEL_INTENT" }> {
+  return (
+    !!policy &&
+    isActivityEvent(event) &&
+    event.type === "MODEL_INTENT" &&
+    event.activityId === context.activityId &&
+    event.scenarioId === policy.scenarioId &&
+    event.modelId === policy.modelId &&
+    event.intent.family === policy.family &&
+    event.position === context.position &&
+    event.revision === context.intentModel?.revision &&
+    context.intentModel.revision < Number.MAX_SAFE_INTEGER &&
+    context.origin === null &&
+    context.infoOrigin === null &&
+    policy.permissions.some(
+      (permission) =>
+        permission.position === context.position &&
+        sameIntent(permission.intent, event.intent),
+    )
+  );
+}
+
 export function validateActivityIntentAdapter(
   value: unknown,
 ): asserts value is ActivityIntentAdapter {
@@ -2405,22 +2435,8 @@ export function createActivityMachine(
       MODEL_INTENT: {
         guard: ({ context, event }) =>
           !!intentAuthority &&
-          !!intentPolicy &&
-          isActivityEvent(event) &&
-          event.activityId === activityId &&
-          event.scenarioId === intentPolicy.scenarioId &&
-          event.modelId === intentPolicy.modelId &&
-          event.intent.family === intentPolicy.family &&
-          event.position === context.position &&
-          event.revision === context.intentModel?.revision &&
-          context.intentModel.revision < Number.MAX_SAFE_INTEGER &&
-          context.origin === null &&
-          context.infoOrigin === null &&
-          intentPolicy.permissions.some(
-            (permission) =>
-              permission.position === context.position &&
-              sameIntent(permission.intent, event.intent),
-          ),
+          context.activityId === activityId &&
+          modelIntentPermitted(context, intentPolicy, event),
         actions: [
           assign(({ context, event }) => {
             if (event.type !== "MODEL_INTENT") return {};
