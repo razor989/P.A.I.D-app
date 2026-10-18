@@ -8,10 +8,60 @@ import {
 } from "@/engine/c04-activity-binding/public";
 import { recoverCheckpoint } from "@/recovery/rehydration/public";
 import { composeStudyCatalog } from "@/study/catalog/public";
-import { createAppSessionActor, isSessionEvent, selectSession } from "./public";
+import {
+  applySessionStartupClassification,
+  beginSessionStartupReadRetry,
+  createAppSessionActor,
+  isSessionEvent,
+  selectSession,
+} from "./public";
 import type { AppSessionActor, CompletionKnowledge } from "./public";
 
 describe("T035 optional trusted runtime input", () => {
+  it("T036 public intents strictly reject payload and classification smuggling", () => {
+    for (const type of [
+      "CONTINUE_RECOVERED_ACTIVITY",
+      "ABANDON_RECOVERED_ACTIVITY",
+      "DISCARD_UNUSABLE_CHECKPOINT",
+      "RETRY_RECOVERY_CLEAR",
+      "CONFIRM_RECOVERY_CLEAR",
+    ]) {
+      expect(isSessionEvent({ type })).toBe(true);
+      expect(isSessionEvent({ type, status: "durable" })).toBe(false);
+      expect(isSessionEvent(Object.assign(Object.create({}), { type }))).toBe(
+        false,
+      );
+      expect(
+        isSessionEvent({
+          get type() {
+            throw Error("must not read");
+          },
+        }),
+      ).toBe(false);
+    }
+    expect(
+      isSessionEvent({
+        type: "startup.classified",
+        recovery: { status: "NO_CHECKPOINT" },
+      }),
+    ).toBe(false);
+    expect(isSessionEvent({ type: "startup.readRetry" })).toBe(false);
+    const actor = createAppSessionActor({ catalog: catalog() });
+    sessions.push(actor);
+    expect(
+      applySessionStartupClassification(actor, { status: "NO_CHECKPOINT" }),
+    ).toBe("ignored");
+    expect(beginSessionStartupReadRetry(actor)).toBe(false);
+    actor.start();
+    actor.send({
+      type: "startup.classified",
+      recovery: { status: "NO_CHECKPOINT" },
+    });
+    expect(selectSession(actor).destination).toBeNull();
+    expect(
+      applySessionStartupClassification(actor, { status: "NO_CHECKPOINT" }),
+    ).toBe("ignored");
+  });
   it("rejects nonissued capability before constructing Session", () => {
     const runtime = createCanonicalC04Runtime();
     for (const fake of [
@@ -645,6 +695,7 @@ describe("T032 externally composed T031 outcomes (no startup read orchestration)
     actor.send(event);
     expect(selectSession(actor)).toEqual({
       ...before,
+      startup: "library-ready",
       destination: { kind: "library" },
     });
     expect(selectSession(actor).currentActivity).toBe(a);

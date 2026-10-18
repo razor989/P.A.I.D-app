@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { recoverCheckpoint } from "./public";
+import { claimRecoveryClassification, recoverCheckpoint } from "./public";
 import {
   createRecoveryCheckpointV1,
   serializeRecoveryCheckpointV1,
@@ -17,6 +17,61 @@ import type { C04Restoration } from "@/engine/c04-activity-binding/public";
 import { ExactDecimal, quantity } from "@/core/public";
 
 type Actor = ReturnType<typeof createC04ActivityActor>;
+
+describe("T036 queue-bound one-use classifier proof", () => {
+  it.each([null, "{", "valid", "throw", "reject"])(
+    "authenticates genuine %s only for its queue and once",
+    async (mode) => {
+      const original = createC04ActivityActor("C04-A01");
+      const raw =
+        mode === "valid"
+          ? serializeRecoveryCheckpointV1(
+              createRecoveryCheckpointV1(projectC04CheckpointV1(original)),
+            )
+          : mode;
+      original.stop();
+      const error = new Error("actual read failure");
+      const queue = createRecoveryCheckpointQueue({
+        load: () => {
+          if (mode === "throw") throw error;
+          return mode === "reject"
+            ? Promise.reject(error)
+            : Promise.resolve(raw);
+        },
+        replace: () => Promise.resolve(),
+        clear: () => Promise.resolve(),
+      });
+      const result = await recoverCheckpoint(queue);
+      const other = { load: () => queue.load() };
+      expect(claimRecoveryClassification(other, result)).toBe(false);
+      for (const fake of [{ ...result }, new Proxy(result, {}), {}, null])
+        expect(claimRecoveryClassification(queue, fake)).toBe(false);
+      expect(claimRecoveryClassification(queue, result)).toBe(true);
+      expect(claimRecoveryClassification(queue, result)).toBe(false);
+      if (result.status === "VALID_CHECKPOINT") result.actor.stop();
+      if (mode === "throw" || mode === "reject")
+        expect(result).toMatchObject({ status: "technical-failure", error });
+    },
+  );
+  it("refuses an issued result whose restored actor was started before handoff", async () => {
+    const actor = createC04ActivityActor("C04-A01");
+    const raw = serializeRecoveryCheckpointV1(
+      createRecoveryCheckpointV1(projectC04CheckpointV1(actor)),
+    );
+    actor.stop();
+    const queue = createRecoveryCheckpointQueue({
+      load: () => Promise.resolve(raw),
+      replace: () => Promise.resolve(),
+      clear: () => Promise.resolve(),
+    });
+    const result = await recoverCheckpoint(queue);
+    if (result.status !== "VALID_CHECKPOINT")
+      throw Error("Expected real restoration");
+    result.actor.start();
+    expect(claimRecoveryClassification(queue, result)).toBe(false);
+    result.actor.stop();
+  });
+});
 type Response = NonNullable<C04Restoration["context"]["response"]>;
 const ids = ["C04-A01", "C04-A02", "C04-A03", "C04-A04"];
 const money = (n: string) => ({

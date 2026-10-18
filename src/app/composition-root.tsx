@@ -4,9 +4,17 @@ import { actualContentBank, validateContent } from "@/study/validation/public";
 import { composeStudyCatalog } from "@/study/catalog/public";
 import { createCanonicalC04Runtime } from "@/engine/c04-activity-binding/public";
 import { createRecoveryCheckpointQueue } from "@/recovery/store/public";
-import { createAppSessionActor } from "@/session/app-machine/public";
+import type { RecoveryCheckpointStore } from "@/recovery/store/public";
+import { recoverCheckpoint } from "@/recovery/rehydration/public";
+import {
+  applySessionStartupClassification,
+  beginSessionStartupReadRetry,
+  createAppSessionActor,
+  selectSession,
+} from "@/session/app-machine/public";
 import { createWebTestStore } from "./web-test-store";
 import { SessionProvider, useSessionSnapshot } from "./session-provider";
+import { StartupRecoveryGateway } from "./startup-recovery-gateway";
 
 /** Source bank metadata is not executable availability. */
 export function createApplicationCatalog() {
@@ -53,13 +61,32 @@ export function createApplicationCatalog() {
   });
 }
 
-export function createApplicationRoot() {
+export function createApplicationRoot(injectedStore?: RecoveryCheckpointStore) {
   const catalog = createApplicationCatalog();
   const c04Runtime = createCanonicalC04Runtime();
-  const store = createWebTestStore();
+  const store = injectedStore ?? createWebTestStore();
   const queue = createRecoveryCheckpointQueue(store);
   const session = createAppSessionActor({ catalog, c04Runtime, queue });
   let phase: "created" | "started" | "stopped" = "created";
+  let attempt = 0;
+  let pending = false;
+  function classify() {
+    if (pending || phase !== "started") return;
+    pending = true;
+    const token = ++attempt;
+    void recoverCheckpoint(queue).then((result) => {
+      if (token !== attempt || phase !== "started") {
+        if (result.status === "VALID_CHECKPOINT") result.actor.stop();
+        return;
+      }
+      pending = false;
+      if (
+        applySessionStartupClassification(session, result) !== "accepted" &&
+        result.status === "VALID_CHECKPOINT"
+      )
+        result.actor.stop();
+    });
+  }
   return Object.freeze({
     catalog,
     c04Runtime,
@@ -72,6 +99,7 @@ export function createApplicationRoot() {
       try {
         session.start();
         phase = "started";
+        classify();
       } catch (error) {
         phase = "stopped";
         session.stop();
@@ -81,22 +109,51 @@ export function createApplicationRoot() {
     stop() {
       if (phase === "stopped") return;
       phase = "stopped";
+      attempt++;
       session.stop();
+    },
+    retryStartupRead() {
+      if (
+        phase !== "started" ||
+        pending ||
+        !beginSessionStartupReadRetry(session)
+      )
+        return false;
+      classify();
+      return true;
     },
   });
 }
 export type ApplicationRoot = ReturnType<typeof createApplicationRoot>;
 
-function StartupShell() {
-  const snapshot = useSessionSnapshot();
+export function StartupShell({ root }: { root: ApplicationRoot }) {
+  useSessionSnapshot();
+  const view = selectSession(root.session);
   return (
     <main>
       <h1>P.A.I.D.</h1>
-      <p role="status">
-        {snapshot.matches({ startup: "evaluate" })
-          ? "Startup is unresolved. Recovery has not been evaluated."
-          : "Session state is available."}
-      </p>
+      <StartupRecoveryGateway
+        state={view.startup}
+        active={root.session.getSnapshot().status === "active"}
+        canRetryClear={view.canRetryRecoveryClear}
+        canConfirmClear={view.canConfirmRecoveryClear}
+        onContinue={() =>
+          root.session.send({ type: "CONTINUE_RECOVERED_ACTIVITY" })
+        }
+        onAbandon={() =>
+          root.session.send({ type: "ABANDON_RECOVERED_ACTIVITY" })
+        }
+        onDiscard={() =>
+          root.session.send({ type: "DISCARD_UNUSABLE_CHECKPOINT" })
+        }
+        onRetryRead={() => {
+          root.retryStartupRead();
+        }}
+        onRetryClear={() => root.session.send({ type: "RETRY_RECOVERY_CLEAR" })}
+        onConfirmClear={() =>
+          root.session.send({ type: "CONFIRM_RECOVERY_CLEAR" })
+        }
+      />
     </main>
   );
 }
@@ -117,7 +174,7 @@ export function CompositionRoot() {
   }, []);
   return root ? (
     <SessionProvider session={root.session}>
-      <StartupShell />
+      <StartupShell root={root} />
     </SessionProvider>
   ) : (
     <main>

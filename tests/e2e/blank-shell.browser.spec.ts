@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("real T035 bootstrap renders honest unresolved startup", async ({
+test("real T036 bootstrap resolves the genuine empty memory read", async ({
   page,
 }) => {
   await page.goto("/");
@@ -10,13 +10,11 @@ test("real T035 bootstrap renders honest unresolved startup", async ({
   await expect(page).toHaveTitle("P.A.I.D. — Startup");
   await expect(page.getByRole("main")).toHaveCount(1);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("P.A.I.D.");
-  await expect(page.getByRole("status")).toHaveText(
-    "Startup is unresolved. Recovery has not been evaluated.",
-  );
+  await expect(page.getByRole("status")).toHaveText("Library is ready.");
   await expect(page.getByRole("button")).toHaveCount(0);
   await expect(
-    page.getByText(/Library|Recovery Choice|C04-A0|lesson complete/i),
+    page.getByText(/Recovery Choice|C04-A0|lesson complete/i),
   ).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("status")).toContainText("Startup is unresolved");
+  await expect(page.getByRole("status")).toHaveText("Library is ready.");
 });

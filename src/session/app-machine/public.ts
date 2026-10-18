@@ -15,6 +15,7 @@ import {
 } from "@/engine/c04-activity-binding/public";
 import type { CanonicalC04Runtime } from "@/engine/c04-activity-binding/public";
 import type { RecoveryClassification } from "@/recovery/rehydration/public";
+import { claimRecoveryClassification } from "@/recovery/rehydration/public";
 import type { StudyCatalog } from "@/study/catalog/public";
 import type {
   RecoveryCheckpointQueue,
@@ -52,6 +53,14 @@ export type SessionEvent =
         | "RECOVER_PENDING_CLEAR";
     }>
   | Readonly<{ type: "RETURN_TO_LIBRARY" }>
+  | Readonly<{
+      type:
+        | "CONTINUE_RECOVERED_ACTIVITY"
+        | "ABANDON_RECOVERED_ACTIVITY"
+        | "DISCARD_UNUSABLE_CHECKPOINT"
+        | "RETRY_RECOVERY_CLEAR"
+        | "CONFIRM_RECOVERY_CLEAR";
+    }>
   | Readonly<{ type: "SELECT_COMPETENCY"; competencyId: CompetencyId }>
   | Readonly<{ type: "SELECT_ACTIVITY"; activityId: ActivityId }>
   | Readonly<{ type: "TECHNICAL_STARTED" }>
@@ -88,6 +97,11 @@ export function isSessionEvent(value: unknown): value is SessionEvent {
     case "SELECT_ACTIVITY":
       return exact(["type", "activityId"]) && isActivityId(event.activityId);
     case "RETURN_TO_LIBRARY":
+    case "CONTINUE_RECOVERED_ACTIVITY":
+    case "ABANDON_RECOVERED_ACTIVITY":
+    case "DISCARD_UNUSABLE_CHECKPOINT":
+    case "RETRY_RECOVERY_CLEAR":
+    case "CONFIRM_RECOVERY_CLEAR":
     case "OBSERVE_ACTIVITY_COMPLETE":
     case "CONTINUE_COMPLETED_ACTIVITY":
     case "RETURN_TO_UNFINISHED_ACTIVITY":
@@ -125,7 +139,35 @@ type Context = Readonly<{
   finalizedActor: ActivityActor | null;
   lastResult: RecoveryMutationResult | null;
   barrierError: unknown;
+  startupTransaction: StartupTransaction | null;
+  asynchronousStartup: boolean;
 }>;
+type StartupTransaction = Readonly<{
+  token: object;
+  actor: ActivityActor | null;
+  generation: number;
+  method: "clear" | "retry" | "recoveryClear";
+}>;
+type StartupSettlement = Readonly<{
+  transaction: StartupTransaction;
+  result: RecoveryMutationResult | null;
+  error: unknown;
+}>;
+type StartupCommand = Readonly<{
+  type: "startup.classified" | "startup.readRetry";
+  recovery: RecoveryClassification | null;
+}>;
+const startupCommands = new WeakSet<object>();
+const startupSettlements = new WeakSet<object>();
+function startupAuthenticated(context: Context, output: StartupSettlement) {
+  return (
+    !!output &&
+    startupSettlements.has(output) &&
+    output.transaction === context.startupTransaction &&
+    output.transaction.actor === context.currentActivity &&
+    output.transaction.generation === context.generation
+  );
+}
 type Transaction = Readonly<{
   token: object;
   actor: ActivityActor;
@@ -326,6 +368,8 @@ function initialContext(input: SessionInput): Context {
     finalizedActor: null,
     lastResult: null,
     barrierError: null,
+    startupTransaction: null,
+    asynchronousStartup: false,
   };
 }
 
@@ -354,9 +398,31 @@ const machine = setup({
   types: {
     context: {} as Context,
     input: {} as Context,
-    events: {} as SessionEvent,
+    events: {} as SessionEvent | StartupCommand,
   },
   actors: {
+    startupClearOperation: fromPromise<
+      StartupSettlement,
+      {
+        transaction: StartupTransaction;
+        queue: RecoveryCheckpointQueue;
+      }
+    >(async ({ input }) => {
+      let result: RecoveryMutationResult | null = null;
+      let error: unknown = null;
+      try {
+        result = await input.queue[input.transaction.method]();
+      } catch (caught) {
+        error = caught;
+      }
+      const output = Object.freeze({
+        transaction: input.transaction,
+        result,
+        error,
+      });
+      startupSettlements.add(output);
+      return output;
+    }),
     clearOperation: fromPromise<
       Settlement,
       { transaction: Transaction; queue: RecoveryCheckpointQueue }
@@ -384,8 +450,11 @@ const machine = setup({
         current: () => ActivityActor | null;
         observe: (callback: () => void) => { unsubscribe: () => void };
         notify: () => void;
+        activate: () => void;
+        deactivate: () => void;
       }
     >(({ input }) => {
+      input.activate();
       let current: ActivityActor | null = null;
       let subscription: { unsubscribe: () => void } | undefined;
       const watch = input.observe(() => {
@@ -396,6 +465,7 @@ const machine = setup({
         subscription = current?.subscribe(() => input.notify());
       });
       return () => {
+        input.deactivate();
         watch.unsubscribe();
         subscription?.unsubscribe();
         input.current()?.stop();
@@ -418,7 +488,8 @@ const machine = setup({
       event.type === "SELECT_COMPETENCY" &&
       free(context) &&
       competencyKnown(context.catalog, event.competencyId),
-    activitySelectable: ({ context, event }) => selectable(context, event),
+    activitySelectable: ({ context, event }) =>
+      isSessionEvent(event) && selectable(context, event),
     recoverable: ({ event }) =>
       isSessionEvent(event) &&
       event.type === "TECHNICAL_FAILED" &&
@@ -462,6 +533,47 @@ const machine = setup({
       isSessionEvent(event) && free(context) && successor(context) !== null,
   },
   actions: {
+    applyStartup: assign(({ event }) => {
+      if (event.type !== "startup.classified" || !startupCommands.delete(event))
+        return {};
+      const recovery = event.recovery!;
+      return {
+        recovery,
+        asynchronousStartup: true,
+        currentActivity:
+          recovery.status === "VALID_CHECKPOINT" ? recovery.actor : null,
+        technicalError:
+          recovery.status === "technical-failure" ? recovery.error : null,
+        writable: recovery.status === "NO_CHECKPOINT",
+      };
+    }),
+    retryStartupRead: assign(({ event }) => {
+      startupCommands.delete(event);
+      return { recovery: null, technicalError: null };
+    }),
+    resumeRecovered: assign(({ context }) => {
+      context.currentActivity!.start();
+      return {
+        destination: Object.freeze({
+          kind: "activity" as const,
+          activityId: context.currentActivity!.getSnapshot().context.activityId,
+        }),
+        generation: context.generation + 1,
+        writable: true,
+      };
+    }),
+    beginStartupClear: assign(({ context }) => ({
+      writable: false,
+      generation: context.generation + 1,
+      lastResult: null,
+      barrierError: null,
+      startupTransaction: Object.freeze({
+        token: Object.freeze({}),
+        actor: context.currentActivity,
+        generation: context.generation + 1,
+        method: "clear" as const,
+      }),
+    })),
     library: assign({
       destination: () => Object.freeze({ kind: "library" as const }),
     }),
@@ -571,6 +683,12 @@ const machine = setup({
       current: () => self.getSnapshot().context.currentActivity,
       observe: (callback) => self.subscribe(callback),
       notify: () => self.send({ type: "OBSERVE_ACTIVITY_COMPLETE" }),
+      activate: () => {
+        liveSessions.add(self);
+      },
+      deactivate: () => {
+        liveSessions.delete(self);
+      },
     }),
   },
   initial: "startup",
@@ -579,15 +697,138 @@ const machine = setup({
       initial: "evaluate",
       states: {
         evaluate: {
+          on: {
+            "startup.classified": {
+              guard: ({ event }) => startupCommands.has(event),
+              actions: "applyStartup",
+            },
+          },
           always: [
             { guard: "noCheckpoint", target: "#appSession.session" },
             { guard: "validCheckpoint", target: "recoveryChoice" },
             { guard: "unusableCheckpoint", target: "recoveryFailure" },
+            {
+              guard: ({ context }) =>
+                context.asynchronousStartup &&
+                context.recovery?.status === "technical-failure",
+              target: "readFailure",
+            },
           ],
         },
-        // Structural hooks only. T036 owns resume/discard and retry orchestration.
-        recoveryChoice: {},
-        recoveryFailure: {},
+        recoveryChoice: {
+          on: {
+            CONTINUE_RECOVERED_ACTIVITY: {
+              guard: "eventValid",
+              target: "#appSession.session",
+              actions: "resumeRecovered",
+            },
+            ABANDON_RECOVERED_ACTIVITY: {
+              guard: ({ context, event }) =>
+                isSessionEvent(event) && !!context.queue,
+              target: "clearing",
+              actions: "beginStartupClear",
+            },
+          },
+        },
+        recoveryFailure: {
+          on: {
+            DISCARD_UNUSABLE_CHECKPOINT: {
+              guard: ({ context, event }) =>
+                isSessionEvent(event) && !!context.queue,
+              target: "clearing",
+              actions: "beginStartupClear",
+            },
+          },
+        },
+        readFailure: {
+          on: {
+            "startup.readRetry": {
+              guard: ({ event }) => startupCommands.has(event),
+              target: "evaluate",
+              actions: "retryStartupRead",
+            },
+          },
+        },
+        clearing: {
+          invoke: {
+            id: "t036.clear",
+            src: "startupClearOperation",
+            input: ({ context }) => ({
+              transaction: context.startupTransaction!,
+              queue: context.queue!,
+            }),
+            onDone: [
+              {
+                guard: ({ context, event }) =>
+                  startupAuthenticated(context, event.output) &&
+                  event.output.result?.status === "durable" &&
+                  event.output.result.operation === "clear" &&
+                  Number.isSafeInteger(event.output.result.requestId) &&
+                  event.output.result.requestId > 0,
+                target: "#appSession.session",
+                actions: assign(({ context, event }) => {
+                  startupSettlements.delete(event.output);
+                  context.currentActivity?.stop();
+                  return {
+                    currentActivity: null,
+                    recovery: null,
+                    startupTransaction: null,
+                    lastResult: event.output.result,
+                    barrierError: null,
+                    technicalError: null,
+                    destination: null,
+                    writable: true,
+                  };
+                }),
+              },
+              {
+                guard: ({ context, event }) =>
+                  startupAuthenticated(context, event.output),
+                target: "clearFailed",
+                actions: assign(({ event }) => {
+                  startupSettlements.delete(event.output);
+                  return {
+                    lastResult: event.output.result,
+                    barrierError: event.output.error ?? event.output.result,
+                    technicalError: event.output.error ?? event.output.result,
+                  };
+                }),
+              },
+            ],
+          },
+        },
+        clearFailed: {
+          on: {
+            RETRY_RECOVERY_CLEAR: {
+              guard: ({ context, event }) =>
+                isSessionEvent(event) &&
+                context.lastResult?.status === "technical-failure" &&
+                context.lastResult.operation === "clear",
+              target: "clearing",
+              actions: assign(({ context }) => ({
+                startupTransaction: Object.freeze({
+                  ...context.startupTransaction!,
+                  method: "retry" as const,
+                }),
+                barrierError: null,
+              })),
+            },
+            CONFIRM_RECOVERY_CLEAR: {
+              guard: ({ context, event }) =>
+                isSessionEvent(event) &&
+                context.lastResult?.status === "blocked" &&
+                context.lastResult.reason === "paused",
+              target: "clearing",
+              actions: assign(({ context }) => ({
+                startupTransaction: Object.freeze({
+                  ...context.startupTransaction!,
+                  method: "recoveryClear" as const,
+                }),
+                barrierError: null,
+              })),
+            },
+          },
+        },
       },
     },
     session: {
@@ -626,7 +867,13 @@ const machine = setup({
           },
           states: {
             library: {
-              entry: "library",
+              entry: assign(({ context }) =>
+                context.destination?.kind === "activity"
+                  ? {}
+                  : {
+                      destination: Object.freeze({ kind: "library" as const }),
+                    },
+              ),
               always: {
                 guard: ({ context }) =>
                   context.destination?.kind === "activity",
@@ -828,9 +1075,61 @@ const machine = setup({
 
 /** Returns one unstarted Session. Creating the actor never reads storage. */
 export function createAppSessionActor(input: SessionInput) {
-  return createActor(machine, { input: initialContext(input) });
+  const actor = createActor(machine, { input: initialContext(input) });
+  issuedSessions.add(actor);
+  return actor;
 }
 export type AppSessionActor = ReturnType<typeof createAppSessionActor>;
+const issuedSessions = new WeakSet<object>();
+const liveSessions = new WeakSet<object>();
+
+/** Trusted composition command, not an ordinary learner event. The Recovery
+ * claim is consumed only after the receiving Session has passed its own gates. */
+export function applySessionStartupClassification(
+  actor: AppSessionActor,
+  value: unknown,
+): "accepted" | "ignored" {
+  if (!issuedSessions.has(actor) || !liveSessions.has(actor)) return "ignored";
+  const snapshot = actor.getSnapshot();
+  const queue = snapshot.context.queue;
+  if (
+    snapshot.status !== "active" ||
+    !snapshot.matches({ startup: "evaluate" }) ||
+    snapshot.context.recovery !== null ||
+    !queue ||
+    !claimRecoveryClassification(queue, value)
+  )
+    return "ignored";
+  const event = Object.freeze({
+    type: "startup.classified" as const,
+    recovery: value,
+  });
+  startupCommands.add(event);
+  actor.send(event);
+  return actor.getSnapshot().context.recovery === value
+    ? "accepted"
+    : "ignored";
+}
+
+/** Only the root coordinator may reset a genuine read failure before its next
+ * real read. This conveys pending, never successful storage evidence. */
+export function beginSessionStartupReadRetry(actor: AppSessionActor): boolean {
+  if (!issuedSessions.has(actor) || !liveSessions.has(actor)) return false;
+  const snapshot = actor.getSnapshot();
+  if (
+    snapshot.status !== "active" ||
+    !snapshot.context.queue ||
+    !snapshot.matches({ startup: "readFailure" })
+  )
+    return false;
+  const event = Object.freeze({
+    type: "startup.readRetry" as const,
+    recovery: null,
+  });
+  startupCommands.add(event);
+  actor.send(event);
+  return actor.getSnapshot().matches({ startup: "evaluate" });
+}
 
 /** A captured producer is authority for one live actor generation only. It never
  * projects or stores history; later bootstrap must use this fence, not the raw queue.
@@ -874,7 +1173,26 @@ export function selectSession(actor: AppSessionActor) {
     "unrecoverable",
   ] as const)
     if (snapshot.matches({ session: { technical: state } })) technical = state;
+  if (snapshot.matches({ startup: "clearFailed" })) technical = "recoverable";
+  if (snapshot.matches({ startup: "clearing" })) technical = "loading";
   return Object.freeze({
+    startup: snapshot.matches({ startup: "evaluate" })
+      ? ("pending" as const)
+      : snapshot.matches({ startup: "recoveryChoice" })
+        ? ("recovery-choice" as const)
+        : snapshot.matches({ startup: "recoveryFailure" })
+          ? ("recovery-failure" as const)
+          : snapshot.matches({ startup: "readFailure" })
+            ? ("read-failure" as const)
+            : snapshot.matches({ startup: "clearing" })
+              ? ("clear-pending" as const)
+              : snapshot.matches({ startup: "clearFailed" })
+                ? ("clear-failed" as const)
+                : context.destination?.kind === "library"
+                  ? ("library-ready" as const)
+                  : ("resumed" as const),
+    canRetryRecoveryClear: snapshot.can({ type: "RETRY_RECOVERY_CLEAR" }),
+    canConfirmRecoveryClear: snapshot.can({ type: "CONFIRM_RECOVERY_CLEAR" }),
     destination: context.destination,
     currentActivity: context.currentActivity,
     completion: context.completion,

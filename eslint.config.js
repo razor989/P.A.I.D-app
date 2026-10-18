@@ -380,6 +380,7 @@ export default tseslint.config(
         "study/catalog/public",
         "engine/c04-activity-binding/public",
         "recovery/store/public",
+        "recovery/rehydration/public",
         "session/app-machine/public",
       ],
     ],

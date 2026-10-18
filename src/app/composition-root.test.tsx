@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExactDecimal, quantity } from "@/core/public";
 import type { ActivityId, LearnerResponse } from "@/core/public";
-import { createCanonicalC04Runtime } from "@/engine/c04-activity-binding/public";
+import {
+  createCanonicalC04Runtime,
+  composeC04ActivityFrame,
+  projectC04CheckpointModelV1,
+} from "@/engine/c04-activity-binding/public";
 import { createRecoveryCheckpointQueue } from "@/recovery/store/public";
 import type {
   RecoveryCheckpointQueue,
@@ -10,6 +14,8 @@ import type {
 import { recoverCheckpoint } from "@/recovery/rehydration/public";
 import {
   acquireSessionCheckpointProducer,
+  applySessionStartupClassification,
+  beginSessionStartupReadRetry,
   createAppSessionActor,
   selectSession,
 } from "@/session/app-machine/public";
@@ -203,7 +209,7 @@ describe("T035 genuine composition and classified Session integration", () => {
     expect(stale.replace(checkpoint())).toBeNull();
     expect(await target.load()).toBeNull();
   });
-  it("assembles six source competencies but no automatic recovery or executable journey", async () => {
+  it("assembles six source competencies and classifies the actual memory target", async () => {
     const root = createApplicationRoot();
     sessions.push(root.session);
 
@@ -220,8 +226,10 @@ describe("T035 genuine composition and classified Session integration", () => {
     root.start();
     await tick();
 
-    expect(selectSession(root.session).recovery).toBeNull();
-    expect(selectSession(root.session).destination).toBeNull();
+    expect(selectSession(root.session).recovery?.status).toBe("NO_CHECKPOINT");
+    expect(selectSession(root.session).destination).toEqual({
+      kind: "library",
+    });
     expect(selectSession(root.session).currentActivity).toBeNull();
     root.stop();
     root.stop();
@@ -349,5 +357,470 @@ describe("T035 genuine composition and classified Session integration", () => {
     });
     f.session.send({ type: "SELECT_ACTIVITY", activityId: "C01-A01" });
     expect(selectSession(f.session).currentActivity).toBeNull();
+  });
+});
+
+function ioGate<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+function startupStore(raw: string | null = null) {
+  let data = raw;
+  const reads: ReturnType<typeof ioGate<string | null>>[] = [];
+  const clears: ReturnType<typeof ioGate<void>>[] = [];
+  const store: RecoveryCheckpointStore = {
+    load: () => {
+      const gate = ioGate<string | null>();
+      reads.push(gate);
+      return gate.promise;
+    },
+    replace: (value) => {
+      data = value;
+      return Promise.resolve();
+    },
+    clear: async () => {
+      const gate = ioGate<void>();
+      clears.push(gate);
+      await gate.promise;
+      data = null;
+    },
+  };
+  return { store, reads, clears, raw: () => data };
+}
+function trackedRoot(store?: RecoveryCheckpointStore) {
+  const root = createApplicationRoot(store);
+  sessions.push(root.session);
+  return root;
+}
+
+describe("T036 genuine production-root startup", () => {
+  it("late clear acknowledgment after shutdown cannot enter Library or start the held actor", async () => {
+    const target = startupStore();
+    const root = trackedRoot(target.store);
+    await root.queue.replace(checkpoint());
+    root.start();
+    target.reads[0]!.resolve(target.raw());
+    await tick();
+    const actor = selectSession(root.session).currentActivity!;
+    const start = vi.spyOn(actor, "start");
+    const stop = vi.spyOn(actor, "stop");
+    root.session.send({ type: "ABANDON_RECOVERED_ACTIVITY" });
+    await tick();
+    root.stop();
+    expect(stop).toHaveBeenCalledTimes(1);
+    target.clears[0]!.resolve();
+    await tick();
+    expect(root.session.getSnapshot().status).toBe("stopped");
+    expect(selectSession(root.session).destination).toBeNull();
+    expect(start).not.toHaveBeenCalled();
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+  it("pending write drains before durable discard and new writes stay fenced until clear", async () => {
+    const target = startupStore("{");
+    const write = ioGate<void>();
+    const replace = target.store.replace.bind(target.store);
+    target.store.replace = async (data) => {
+      await write.promise;
+      await replace(data);
+    };
+    const root = trackedRoot(target.store);
+    root.start();
+    target.reads[0]!.resolve("{");
+    await tick();
+    const pending = root.queue.replace(checkpoint());
+    root.session.send({ type: "DISCARD_UNUSABLE_CHECKPOINT" });
+    await tick();
+    expect(target.clears).toHaveLength(0);
+    expect((await root.queue.replace(checkpoint())).status).toBe("blocked");
+    write.resolve();
+    expect((await pending).status).toBe("durable");
+    await tick();
+    expect(target.clears).toHaveLength(1);
+    expect(selectSession(root.session).destination).toBeNull();
+    target.clears[0]!.resolve();
+    await tick();
+    expect(target.raw()).toBeNull();
+    expect(selectSession(root.session).startup).toBe("library-ready");
+    root.stop();
+  });
+  it("rejects invented checked response history instead of salvaging an empty checkpoint", async () => {
+    const root = trackedRoot();
+    const envelope = checkpoint();
+    Object.assign(envelope.checkpoint, {
+      position: "CONFIRMATION",
+      response: {
+        kind: "COMPOSITE",
+        parts: [
+          {
+            key: "difference",
+            response: {
+              kind: "EXACT_QUANTITY",
+              value: {
+                magnitude: "1500",
+                dimension: "MONETARY_AMOUNT",
+                unit: "PHP",
+                basis: "per month",
+              },
+            },
+          },
+          {
+            key: "percentage",
+            response: {
+              kind: "EXACT_QUANTITY",
+              value: {
+                magnitude: "10",
+                dimension: "PERCENTAGE_CHANGE",
+                unit: "%",
+                basis: null,
+              },
+            },
+          },
+          {
+            key: "roles",
+            response: {
+              kind: "SELECTED_OPTION",
+              optionId: "C04-A01-ROLES-ORIGINAL-NEW",
+            },
+          },
+        ],
+      },
+      responseRevision: 1,
+      hasChecked: true,
+      checkedRevision: 1,
+      feedbackRevision: 1,
+    });
+    // The real classifier must reject an invented checking history. This negative
+    // cannot be used as a positive fixture or silently salvaged as empty.
+    await root.store.replace(JSON.stringify(envelope));
+    root.start();
+    await tick();
+    expect(selectSession(root.session).startup).toBe("recovery-failure");
+    expect(selectSession(root.session).destination).toBeNull();
+    root.stop();
+  });
+  it("resumes a genuine unfinished ACTIVE response draft without changing its exact semantics", async () => {
+    const root = trackedRoot();
+    const envelope = checkpoint();
+    Object.assign(envelope.checkpoint, {
+      position: "ACTIVE",
+      responseRevision: 1,
+      response: {
+        kind: "COMPOSITE",
+        parts: [
+          {
+            key: "difference",
+            response: {
+              kind: "EXACT_QUANTITY",
+              value: {
+                magnitude: "1500",
+                kind: "MONETARY_AMOUNT",
+                unit: "PHP",
+                basis: "per month",
+              },
+            },
+          },
+        ],
+      },
+    });
+    await root.queue.replace(envelope);
+    root.start();
+    await tick();
+    const actor = selectSession(root.session).currentActivity!;
+    const before = actor.getSnapshot();
+    expect(before.context.position).toBe("ACTIVE");
+    root.session.send({ type: "CONTINUE_RECOVERED_ACTIVITY" });
+    expect(selectSession(root.session).currentActivity).toBe(actor);
+    expect(actor.getSnapshot().context).toEqual(before.context);
+    root.stop();
+  });
+  it("keeps the original Session unresolved until its delayed empty read succeeds, once", async () => {
+    const target = startupStore();
+    const root = trackedRoot(target.store);
+    const session = root.session;
+    root.start();
+    root.start();
+    expect(target.reads).toHaveLength(1);
+    expect(selectSession(session).startup).toBe("pending");
+    expect(selectSession(session).destination).toBeNull();
+    session.send({ type: "SELECT_ACTIVITY", activityId: "C04-A01" });
+    expect(selectSession(session).currentActivity).toBeNull();
+    target.reads[0]!.resolve(null);
+    await tick();
+    expect(root.session).toBe(session);
+    expect(selectSession(session).startup).toBe("library-ready");
+    expect(target.clears).toHaveLength(0);
+    expect(root.retryStartupRead()).toBe(false);
+    root.stop();
+  });
+
+  it.each(["C04-A01", "C04-A02", "C04-A03", "C04-A04"] as const)(
+    "retains exact authentic %s actor and semantics until one explicit Resume",
+    async (id) => {
+      const root = trackedRoot();
+      const envelope = checkpoint();
+      envelope.checkpoint.activityId = id;
+      envelope.checkpoint.scenarioId = id.replace("-A", "-S");
+      const original = root.c04Runtime.createActivityActor(id);
+      const context = original.getSnapshot().context;
+      if (id === "C04-A02")
+        Object.assign(envelope.checkpoint, {
+          model: {
+            evidence: projectC04CheckpointModelV1(context.model!.value.state),
+            revision: context.model!.revision,
+            engagement: context.c04A02StageEngagement,
+          },
+        });
+      if (id === "C04-A04")
+        Object.assign(envelope.checkpoint, {
+          staging: {
+            responseStage: context.responseStage,
+            firstPrimaryCommitment: context.firstPrimaryCommitment,
+            currentPrimaryCommitment: context.currentPrimaryCommitment,
+            commitmentSequence: context.commitmentSequence,
+            reasoningExposed: context.reasoningExposed,
+            explanationCommitmentSequence:
+              context.explanationCommitmentSequence,
+            checkedCommitmentSequence: context.checkedCommitmentSequence,
+            terminalEntryRevision: context.terminalEntryRevision,
+            terminalTeachingRevision: context.terminalTeachingRevision,
+          },
+        });
+      original.stop();
+      await root.queue.replace(envelope);
+      root.start();
+      await tick();
+      const view = selectSession(root.session);
+      expect(view.startup).toBe("recovery-choice");
+      const actor = view.currentActivity!;
+      const start = vi.spyOn(actor, "start");
+      const before = actor.getSnapshot();
+      const frame = composeC04ActivityFrame(actor);
+      expect(
+        acquireSessionCheckpointProducer(root.session).replace(envelope),
+      ).toBeNull();
+      expect(
+        applySessionStartupClassification(root.session, view.recovery),
+      ).toBe("ignored");
+      expect(actor.getSnapshot()).toBe(before);
+      root.session.send({ type: "CONTINUE_RECOVERED_ACTIVITY" });
+      root.session.send({ type: "CONTINUE_RECOVERED_ACTIVITY" });
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(selectSession(root.session).currentActivity).toBe(actor);
+      expect(composeC04ActivityFrame(actor)).toEqual(frame);
+      expect(actor.getSnapshot().context).toEqual(before.context);
+      expect(selectSession(root.session).destination).toEqual({
+        kind: "activity",
+        activityId: id,
+      });
+      root.stop();
+    },
+  );
+
+  it("explicit Abandon retains actor and blocks duplicates until real clear, then fences old producer", async () => {
+    const target = startupStore();
+    const root = trackedRoot(target.store);
+    await root.queue.replace(checkpoint());
+    root.start();
+    target.reads[0]!.resolve(target.raw());
+    await tick();
+    const actor = selectSession(root.session).currentActivity!;
+    const stop = vi.spyOn(actor, "stop");
+    const start = vi.spyOn(actor, "start");
+    const stale = acquireSessionCheckpointProducer(root.session);
+    root.session.send({ type: "ABANDON_RECOVERED_ACTIVITY" });
+    root.session.send({ type: "ABANDON_RECOVERED_ACTIVITY" });
+    root.session.send({ type: "CONTINUE_RECOVERED_ACTIVITY" });
+    await tick();
+    expect(target.clears).toHaveLength(1);
+    expect(selectSession(root.session).startup).toBe("clear-pending");
+    expect(selectSession(root.session).currentActivity).toBe(actor);
+    expect(start).not.toHaveBeenCalled();
+    expect(stop).not.toHaveBeenCalled();
+    expect(stale.replace(checkpoint())).toBeNull();
+    target.clears[0]!.resolve();
+    await tick();
+    expect(selectSession(root.session).startup).toBe("library-ready");
+    expect(target.raw()).toBeNull();
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(stale.replace(checkpoint())).toBeNull();
+    open(root.session);
+    expect(
+      (
+        await acquireSessionCheckpointProducer(root.session).replace(
+          checkpoint(),
+        )
+      )?.status,
+    ).toBe("durable");
+    root.stop();
+  });
+
+  it.each([
+    "{",
+    JSON.stringify({ schemaVersion: 99 }),
+    JSON.stringify({ ...checkpoint(), studyDefinitionRevision: "wrong" }),
+  ])(
+    "requires explicit Discard and genuine durable clear for unusable %s",
+    async (raw) => {
+      const target = startupStore(raw);
+      const root = trackedRoot(target.store);
+      root.start();
+      target.reads[0]!.resolve(raw);
+      await tick();
+      expect(selectSession(root.session).startup).toBe("recovery-failure");
+      expect(selectSession(root.session).currentActivity).toBeNull();
+      expect(target.clears).toHaveLength(0);
+      root.session.send({ type: "DISCARD_UNUSABLE_CHECKPOINT" });
+      await tick();
+      expect(selectSession(root.session).destination).toBeNull();
+      target.clears[0]!.resolve();
+      await tick();
+      expect(selectSession(root.session).startup).toBe("library-ready");
+      expect(target.raw()).toBeNull();
+      root.stop();
+    },
+  );
+
+  it("preserves genuine read error and retries only on explicit guarded same-root operation", async () => {
+    const target = startupStore();
+    const root = trackedRoot(target.store);
+    expect(root.retryStartupRead()).toBe(false);
+    root.start();
+    const error = new Error("read offline");
+    target.reads[0]!.reject(error);
+    await tick();
+    expect(selectSession(root.session)).toMatchObject({
+      startup: "read-failure",
+      technicalError: error,
+      destination: null,
+    });
+    expect(target.reads).toHaveLength(1);
+    expect(root.retryStartupRead()).toBe(true);
+    expect(root.retryStartupRead()).toBe(false);
+    expect(selectSession(root.session).startup).toBe("pending");
+    target.reads[1]!.resolve(null);
+    await tick();
+    expect(selectSession(root.session).startup).toBe("library-ready");
+    root.stop();
+    expect(root.retryStartupRead()).toBe(false);
+  });
+
+  it("failed clear cannot be bypassed; retry performs that actual failed clear", async () => {
+    const target = startupStore("{");
+    const root = trackedRoot(target.store);
+    root.start();
+    target.reads[0]!.resolve("{");
+    await tick();
+    root.session.send({ type: "DISCARD_UNUSABLE_CHECKPOINT" });
+    await tick();
+    target.clears[0]!.reject(new Error("clear offline"));
+    await tick();
+    expect(selectSession(root.session)).toMatchObject({
+      startup: "clear-failed",
+      canRetryRecoveryClear: true,
+      canConfirmRecoveryClear: false,
+      destination: null,
+    });
+    root.session.send({ type: "CONFIRM_RECOVERY_CLEAR" });
+    expect(target.clears).toHaveLength(1);
+    root.session.send({ type: "RETRY_RECOVERY_CLEAR" });
+    root.session.send({ type: "RETRY_RECOVERY_CLEAR" });
+    await tick();
+    expect(target.clears).toHaveLength(2);
+    target.clears[1]!.resolve();
+    await tick();
+    expect(selectSession(root.session).startup).toBe("library-ready");
+    root.stop();
+  });
+
+  it("orders in-flight replace before discard; paused replace requires explicit recovery-clear", async () => {
+    const target = startupStore("{");
+    const write = ioGate<void>();
+    const replace = target.store.replace.bind(target.store);
+    target.store.replace = async (data) => {
+      await write.promise;
+      await replace(data);
+    };
+    const root = trackedRoot(target.store);
+    root.start();
+    target.reads[0]!.resolve("{");
+    await tick();
+    const pending = root.queue.replace(checkpoint());
+    root.session.send({ type: "DISCARD_UNUSABLE_CHECKPOINT" });
+    await tick();
+    expect(target.clears).toHaveLength(0);
+    write.reject(new Error("replace failed"));
+    expect((await pending).status).toBe("technical-failure");
+    await tick();
+    expect(selectSession(root.session)).toMatchObject({
+      startup: "clear-failed",
+      canRetryRecoveryClear: false,
+      canConfirmRecoveryClear: true,
+    });
+    root.session.send({ type: "RETRY_RECOVERY_CLEAR" });
+    expect(target.clears).toHaveLength(0);
+    root.session.send({ type: "CONFIRM_RECOVERY_CLEAR" });
+    await tick();
+    expect(target.clears).toHaveLength(1);
+    target.clears[0]!.resolve();
+    await tick();
+    expect(selectSession(root.session).startup).toBe("library-ready");
+    root.stop();
+  });
+
+  it("rejects fake, wrong-target and prestart delivery without consuming a valid proof", async () => {
+    const root = trackedRoot();
+    const other = trackedRoot();
+    const result = await recoverCheckpoint(root.queue);
+    expect(applySessionStartupClassification(root.session, result)).toBe(
+      "ignored",
+    );
+    expect(beginSessionStartupReadRetry(root.session)).toBe(false);
+    other.session.start();
+    expect(applySessionStartupClassification(other.session, result)).toBe(
+      "ignored",
+    );
+    root.session.start();
+    expect(applySessionStartupClassification(root.session, { ...result })).toBe(
+      "ignored",
+    );
+    root.session.send({ type: "startup.classified", recovery: result });
+    expect(selectSession(root.session).startup).toBe("pending");
+    expect(applySessionStartupClassification(root.session, result)).toBe(
+      "accepted",
+    );
+    expect(applySessionStartupClassification(root.session, result)).toBe(
+      "ignored",
+    );
+    root.stop();
+    other.stop();
+  });
+
+  it("disposes an untransferred late actor once without affecting an independent live root", async () => {
+    const target = startupStore();
+    const root = trackedRoot(target.store);
+    await root.queue.replace(checkpoint());
+    const restoredStop = vi.spyOn(
+      Object.getPrototypeOf(root.session) as AppSessionActor,
+      "stop",
+    );
+    root.start();
+    root.stop();
+    const other = trackedRoot();
+    other.start();
+    await tick();
+    restoredStop.mockClear();
+    target.reads[0]!.resolve(target.raw());
+    await tick();
+    expect(restoredStop).toHaveBeenCalledTimes(1);
+    expect(root.session.getSnapshot().status).toBe("stopped");
+    expect(selectSession(root.session).recovery).toBeNull();
+    expect(selectSession(other.session).startup).toBe("library-ready");
+    expect(other.queue).not.toBe(root.queue);
+    other.stop();
   });
 });

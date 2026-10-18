@@ -117,27 +117,82 @@ export type RecoveryClassification =
   | Readonly<{ status: "UNUSABLE_CHECKPOINT" }>
   | Readonly<{ status: "technical-failure"; error: unknown }>;
 
+type ReadQueue = Pick<RecoveryCheckpointQueue, "load">;
+const classificationClaims = new WeakMap<
+  object,
+  {
+    queue: ReadQueue;
+    untouched: () => boolean;
+    release: () => void;
+  }
+>();
+
+/** Consume the exact classifier-issued result once, for its original queue.
+ * No status, actor or error is read from an unissued object. */
+export function claimRecoveryClassification(
+  queue: ReadQueue,
+  value: unknown,
+): value is RecoveryClassification {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    classificationClaims.get(value)?.queue !== queue
+  )
+    return false;
+  const proof = classificationClaims.get(value)!;
+  const untouched = proof.untouched();
+  proof.release();
+  classificationClaims.delete(value);
+  return untouched;
+}
+
+function issueClassification(
+  queue: ReadQueue,
+  value: RecoveryClassification,
+): RecoveryClassification {
+  Object.freeze(value);
+  let emitted = false;
+  const actor = value.status === "VALID_CHECKPOINT" ? value.actor : null;
+  const snapshot = actor?.getSnapshot();
+  const subscription = actor?.subscribe(() => {
+    emitted = true;
+  });
+  classificationClaims.set(value, {
+    queue,
+    untouched: () => !emitted && (!actor || actor.getSnapshot() === snapshot),
+    release: () => subscription?.unsubscribe(),
+  });
+  return value;
+}
+
 /** T030 owns ordered reads. No classification branch writes or clears storage;
  * the returned new actor remains unstarted and downstream caller-owned.
  */
 export async function recoverCheckpoint(
-  queue: Pick<RecoveryCheckpointQueue, "load">,
+  queue: ReadQueue,
 ): Promise<RecoveryClassification> {
   let result: Awaited<ReturnType<RecoveryCheckpointQueue["load"]>>;
   try {
     result = await queue.load();
   } catch (error) {
-    return Object.freeze({ status: "technical-failure", error });
+    return issueClassification(queue, { status: "technical-failure", error });
   }
   if (result.status === "technical-failure")
-    return Object.freeze({ status: "technical-failure", error: result.error });
+    return issueClassification(queue, {
+      status: "technical-failure",
+      error: result.error,
+    });
   if (result.checkpoint === null)
-    return Object.freeze({ status: "NO_CHECKPOINT" });
+    return issueClassification(queue, { status: "NO_CHECKPOINT" });
   try {
     const checkpoint = parseRecoveryCheckpointV1(result.checkpoint);
     const actor = reconstruct(checkpoint);
-    return Object.freeze({ status: "VALID_CHECKPOINT", checkpoint, actor });
+    return issueClassification(queue, {
+      status: "VALID_CHECKPOINT",
+      checkpoint,
+      actor,
+    });
   } catch {
-    return Object.freeze({ status: "UNUSABLE_CHECKPOINT" });
+    return issueClassification(queue, { status: "UNUSABLE_CHECKPOINT" });
   }
 }
