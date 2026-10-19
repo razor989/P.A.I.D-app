@@ -1,10 +1,26 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as referenceRuntime from "@/engine/activity-runtime/public";
 import { claimRecoveryClassification, recoverCheckpoint } from "./public";
+import {
+  claimRecoveryClassificationV2,
+  recoverReferenceCheckpointV2,
+} from "./public";
+import {
+  createC02ReferenceActivityActor,
+  inspectC02ReferenceActivityActor,
+  cancelC02ReferencePendingWork,
+} from "@/engine/activity-runtime/public";
 import {
   createRecoveryCheckpointV1,
   serializeRecoveryCheckpointV1,
+  createRecoveryCheckpointV2,
+  serializeRecoveryCheckpointV2,
 } from "../checkpoint/public";
 import { projectC04CheckpointV1 } from "../projection/public";
+import {
+  projectC02ReferenceCheckpointV2,
+  projectC02RecoveryObligations,
+} from "../projection/public";
 import { createRecoveryCheckpointQueue } from "../store/public";
 import {
   composeC04ActivityFrame,
@@ -17,6 +33,481 @@ import type { C04Restoration } from "@/engine/c04-activity-binding/public";
 import { ExactDecimal, quantity } from "@/core/public";
 
 type Actor = ReturnType<typeof createC04ActivityActor>;
+
+type ReferenceActor = ReturnType<typeof createC02ReferenceActivityActor>;
+function annaReferenceResponse(
+  wrong: "none" | "payroll" | "arithmetic" = "none",
+) {
+  return {
+    kind: "COMPOSITE" as const,
+    parts: [
+      ["gross", wrong === "payroll" ? "1102.5" : "12100"],
+      ["SSS", "600"],
+      ["PhilHealth", "302.5"],
+      ["Pag-IBIG", "200"],
+      ["withholding", "0"],
+      ["total deductions", wrong === "arithmetic" ? "1" : "1102.5"],
+      ["net pay", "10997.5"],
+    ].map(([key, amount]) => ({
+      key: key!,
+      response: {
+        kind: "EXACT_QUANTITY" as const,
+        value: quantity(
+          ExactDecimal.from(amount!),
+          "MONETARY_AMOUNT",
+          "PHP",
+          null,
+        ),
+      },
+    })),
+  };
+}
+
+/** Trusted headless availability handoff, not a browser delivery assertion.
+ * Access through the existing Machine-owned descriptor with the actual current
+ * canonical passages, nonvisual equivalent and consequences before acknowledgment.
+ */
+function presentReference(actor: ReferenceActor, available = true) {
+  const { context, definition } = inspectC02ReferenceActivityActor(actor);
+  // Descriptor is exposed by the unchanged Semantic Frame in Runtime tests;
+  // this harness obtains it via the fixed profile's delivery-facing inspection.
+  const descriptor = inspectC02ReferenceActivityActor(actor).delivery;
+  if (!descriptor || !available) return null;
+  expect(descriptor.passages.every((passage) => passage.text.length > 0)).toBe(
+    true,
+  );
+  expect(descriptor.nonvisual.text.length).toBeGreaterThan(0);
+  if (descriptor.purpose === "MAIN_FEEDBACK") {
+    const expected =
+      context.evaluation!.outcome === "CONFIRMED"
+        ? definition.embeddedFloor!.mainFeedback.confirmation
+        : context.evaluation!.diagnostic === "c02/S01/reconsider-arithmetic"
+          ? definition.embeddedFloor!.mainFeedback.arithmetic
+          : definition.embeddedFloor!.mainFeedback.payrollRole;
+    expect(descriptor.passages).toContainEqual(expected);
+  } else {
+    expect(descriptor.passages).toContainEqual(
+      definition.embeddedFloor!.explanation,
+    );
+    expect(descriptor.passages).toContainEqual(
+      definition.embeddedFloor!.choices.find(
+        (row) => row.basis === context.c02Floor!.basis,
+      )!.feedback,
+    );
+    expect(descriptor.nonvisual).toEqual(definition.embeddedFloor!.nonvisual);
+  }
+  actor.send({
+    type:
+      descriptor.purpose === "MAIN_FEEDBACK"
+        ? "C02_MAIN_FEEDBACK_DELIVERED"
+        : "C02_FLOOR_TEACHING_DELIVERED",
+    capability: descriptor.capability,
+  });
+  return descriptor.capability;
+}
+
+function selectReference(actor: ReferenceActor, basis: "8000.00" | "10000.00") {
+  const c = actor.getSnapshot().context;
+  actor.send({
+    type: "C02_SELECT_FLOOR_BASIS",
+    activityId: "C02-A01",
+    scenarioId: "C02-S01-F",
+    position: "C02-S01-F",
+    mainRevision: c.responseRevision,
+    revision: c.c02Floor!.revision,
+    basis,
+  });
+}
+
+function savedReference(actor: ReferenceActor) {
+  return serializeRecoveryCheckpointV2(
+    createRecoveryCheckpointV2(projectC02ReferenceCheckpointV2(actor)),
+  );
+}
+
+function referenceQueue(raw: string | null) {
+  let writes = 0;
+  const queue = createRecoveryCheckpointQueue({
+    load: () => Promise.resolve(raw),
+    replace: () => {
+      writes++;
+      return Promise.resolve();
+    },
+    clear: () => {
+      writes++;
+      return Promise.resolve();
+    },
+  });
+  return {
+    queue,
+    get writes() {
+      return writes;
+    },
+  };
+}
+
+async function restoreReference(raw: string) {
+  const disk = referenceQueue(raw);
+  const result = await recoverReferenceCheckpointV2(disk.queue);
+  expect(result.status).toBe("VALID_REFERENCE_CHECKPOINT_V2");
+  if (result.status !== "VALID_REFERENCE_CHECKPOINT_V2")
+    throw new Error("unusable reference fixture");
+  expect(claimRecoveryClassificationV2(disk.queue, result)).toBe(true);
+  expect(claimRecoveryClassificationV2(disk.queue, result)).toBe(false);
+  expect(disk.writes).toBe(0);
+  return result.actor;
+}
+
+describe("D5 eight interruption families with real source-authenticated restoration", () => {
+  it("stops a failed candidate actor without overwriting or clearing the original checkpoint", async () => {
+    const original = createC02ReferenceActivityActor();
+    original.start();
+    original.send({ type: "CONTINUE" });
+    original.send({
+      type: "RESPONSE_CHANGED",
+      response: annaReferenceResponse(),
+    });
+    original.send({ type: "CHECK_RESPONSE" });
+    const disk = referenceQueue(savedReference(original));
+    const wrongActor = createC02ReferenceActivityActor();
+    const stop = vi.spyOn(wrongActor, "stop");
+    const constructor = vi
+      .spyOn(referenceRuntime, "createC02ReferenceActivityActor")
+      .mockReturnValueOnce(wrongActor);
+    try {
+      expect((await recoverReferenceCheckpointV2(disk.queue)).status).toBe(
+        "UNUSABLE_CHECKPOINT_V2",
+      );
+      expect(stop).toHaveBeenCalledOnce();
+      expect(disk.writes).toBe(0);
+    } finally {
+      constructor.mockRestore();
+      stop.mockRestore();
+      original.stop();
+      wrongActor.stop();
+    }
+  });
+  it("classifies absent and technical-failure V2 reads non-destructively", async () => {
+    expect(
+      (await recoverReferenceCheckpointV2(referenceQueue(null).queue)).status,
+    ).toBe("NO_CHECKPOINT_V2");
+    const error = new Error("storage unavailable");
+    const queue = { load: () => Promise.reject(error) };
+    const result = await recoverReferenceCheckpointV2(queue);
+    expect(result).toEqual({ status: "technical-failure-v2", error });
+    expect(claimRecoveryClassificationV2(queue, result)).toBe(true);
+  });
+  it("preserves repeated interrupted replay, revokes pending eligibility on same-number recheck and cancellation", async () => {
+    const source = createC02ReferenceActivityActor();
+    source.start();
+    source.send({ type: "CONTINUE" });
+    source.send({
+      type: "RESPONSE_CHANGED",
+      response: annaReferenceResponse(),
+    });
+    source.send({ type: "CHECK_RESPONSE" });
+    presentReference(source);
+    source.send({ type: "CONTINUE" });
+    selectReference(source, "10000.00");
+    const raw = savedReference(source);
+    const a = await restoreReference(raw);
+    const b = await restoreReference(savedReference(a));
+    expect(projectC02RecoveryObligations(b).preservedFloorWork).toEqual({
+      basis: "10000.00",
+      revision: 1,
+      mainRevision: 1,
+    });
+    a.start();
+    b.start();
+    const old = inspectC02ReferenceActivityActor(a).delivery!.capability;
+    a.send({ type: "REVISE" });
+    expect(projectC02RecoveryObligations(a).preservedFloorWork).toBeNull();
+    a.send({ type: "CHECK_AGAIN" });
+    expect(a.getSnapshot().context.responseRevision).toBe(1);
+    expect(a.getSnapshot().context.checkedRevision).toBe(1);
+    const checked = a.getSnapshot().context;
+    a.send({ type: "C02_MAIN_FEEDBACK_DELIVERED", capability: old });
+    a.send({ type: "CONTINUE" });
+    expect(a.getSnapshot().context).toBe(checked);
+    presentReference(a);
+    a.send({ type: "CONTINUE" });
+    expect(a.getSnapshot().context.c02Floor).toMatchObject({
+      phase: "FLOOR",
+      basis: null,
+      revision: 0,
+    });
+    cancelC02ReferencePendingWork(b);
+    presentReference(b);
+    b.send({ type: "CONTINUE" });
+    expect(b.getSnapshot().context.c02Floor).toMatchObject({
+      basis: null,
+      revision: 0,
+    });
+    source.stop();
+    a.stop();
+    b.stop();
+  });
+  it("rejects cross-actor, copied, stale, duplicate and legacy delivery without mutating receiving work", async () => {
+    const source = createC02ReferenceActivityActor();
+    source.start();
+    source.send({ type: "CONTINUE" });
+    source.send({
+      type: "RESPONSE_CHANGED",
+      response: annaReferenceResponse(),
+    });
+    source.send({ type: "CHECK_RESPONSE" });
+    const raw = savedReference(source);
+    const a = await restoreReference(raw);
+    const b = await restoreReference(raw);
+    a.start();
+    b.start();
+    const token = inspectC02ReferenceActivityActor(a).delivery!.capability;
+    const before = b.getSnapshot().context;
+    b.send({ type: "C02_MAIN_FEEDBACK_DELIVERED", capability: token });
+    b.send({ type: "C02_MAIN_FEEDBACK_DELIVERED", capability: { ...token } });
+    b.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+    b.send({ type: "CONTINUE" });
+    expect(b.getSnapshot().context).toBe(before);
+    const consumed = presentReference(a)!;
+    const delivered = a.getSnapshot().context;
+    a.send({ type: "C02_MAIN_FEEDBACK_DELIVERED", capability: consumed });
+    expect(a.getSnapshot().context).toBe(delivered);
+    a.send({ type: "CONTINUE" });
+    selectReference(a, "10000.00");
+    const floor = inspectC02ReferenceActivityActor(a).delivery!.capability;
+    selectReference(a, "8000.00");
+    const diagnostic = a.getSnapshot().context;
+    a.send({ type: "C02_FLOOR_TEACHING_DELIVERED", capability: floor });
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().context).toBe(diagnostic);
+    source.stop();
+    a.stop();
+    b.stop();
+  });
+  it("keeps V2 claims queue-bound and one-use and never admits them as V1 Session classification", async () => {
+    const actor = createC02ReferenceActivityActor();
+    const disk = referenceQueue(savedReference(actor));
+    const result = await recoverReferenceCheckpointV2(disk.queue);
+    expect(claimRecoveryClassification(disk.queue, result)).toBe(false);
+    expect(claimRecoveryClassificationV2(disk.queue, { ...result })).toBe(
+      false,
+    );
+    expect(
+      claimRecoveryClassificationV2({ load: () => disk.queue.load() }, result),
+    ).toBe(false);
+    expect(claimRecoveryClassificationV2(disk.queue, result)).toBe(true);
+    expect(claimRecoveryClassificationV2(disk.queue, result)).toBe(false);
+    const canceled = await recoverReferenceCheckpointV2(disk.queue);
+    if (canceled.status !== "VALID_REFERENCE_CHECKPOINT_V2")
+      throw new Error("fixture");
+    canceled.actor.stop();
+    expect(claimRecoveryClassificationV2(disk.queue, canceled)).toBe(false);
+    const touched = await recoverReferenceCheckpointV2(disk.queue);
+    if (touched.status !== "VALID_REFERENCE_CHECKPOINT_V2")
+      throw new Error("fixture");
+    touched.actor.start();
+    expect(claimRecoveryClassificationV2(disk.queue, touched)).toBe(false);
+    touched.actor.stop();
+    if (result.status === "VALID_REFERENCE_CHECKPOINT_V2") result.actor.stop();
+    expect((await recoverCheckpoint(disk.queue)).status).toBe(
+      "UNUSABLE_CHECKPOINT",
+    );
+    expect(disk.writes).toBe(0);
+    actor.stop();
+  });
+  it("rejects malformed, contradictory, unsupported and source-inconsistent work non-destructively", async () => {
+    const actor = createC02ReferenceActivityActor();
+    actor.start();
+    actor.send({ type: "CONTINUE" });
+    actor.send({ type: "RESPONSE_CHANGED", response: annaReferenceResponse() });
+    actor.send({ type: "CHECK_RESPONSE" });
+    presentReference(actor);
+    actor.send({ type: "CONTINUE" });
+    selectReference(actor, "10000.00");
+    const envelope = createRecoveryCheckpointV2(
+      projectC02ReferenceCheckpointV2(actor),
+    );
+    const bad = [
+      { ...envelope, schemaVersion: 1 },
+      { ...envelope, studyDefinitionRevision: "R002" },
+      ...[
+        { competencyId: "C01" },
+        { scenarioId: "C02-S02" },
+        { activityId: "C02-A02" },
+        { profileId: "arbitrary-registry-binding" },
+        { position: "COMPLETE" },
+        { responseRevision: 2 },
+        { checkedRevision: 0 },
+        { feedbackRevision: 0 },
+        {
+          evaluation: {
+            outcome: "RECONSIDERATION",
+            diagnostic: "c02/S01/reconsider-arithmetic",
+          },
+        },
+        {
+          floor: {
+            kind: "FLOOR_WORK",
+            basis: "8001.00",
+            revision: 1,
+            mainRevision: 1,
+            teachingRevision: null,
+          },
+        },
+        {
+          floor: {
+            kind: "FLOOR_WORK",
+            basis: "10000.00",
+            revision: 0,
+            mainRevision: 1,
+            teachingRevision: null,
+          },
+        },
+        {
+          floor: {
+            kind: "FLOOR_WORK",
+            basis: "10000.00",
+            revision: 1,
+            mainRevision: 2,
+            teachingRevision: null,
+          },
+        },
+        {
+          floor: {
+            kind: "FLOOR_WORK",
+            basis: "10000.00",
+            revision: 1,
+            mainRevision: 1,
+            teachingRevision: 2,
+          },
+        },
+        { capability: "forged" },
+        { explanation: "caller prose" },
+        { continued: true },
+      ].map((change) => ({
+        ...envelope,
+        checkpoint: { ...envelope.checkpoint, ...change },
+      })),
+    ];
+    for (const invalid of bad) {
+      const disk = referenceQueue(JSON.stringify(invalid));
+      expect((await recoverReferenceCheckpointV2(disk.queue)).status).toBe(
+        "UNUSABLE_CHECKPOINT_V2",
+      );
+      expect(disk.writes).toBe(0);
+    }
+    actor.stop();
+  });
+  it.each(["none", "payroll", "arithmetic"] as const)(
+    "all eight families and fresh replay: Anna=%s",
+    async (wrong) => {
+      const source = createC02ReferenceActivityActor();
+      source.start();
+      source.send({ type: "CONTINUE" });
+      source.send({
+        type: "RESPONSE_CHANGED",
+        response: annaReferenceResponse(wrong),
+      });
+      const cases: {
+        name: string;
+        raw: string;
+        basis: "8000.00" | "10000.00" | null;
+        revision: number;
+        checked: boolean;
+        floor: boolean;
+      }[] = [];
+      const save = (name: string, checked: boolean, floor: boolean) => {
+        const c = source.getSnapshot().context;
+        cases.push({
+          name,
+          raw: savedReference(source),
+          basis: c.c02Floor!.basis,
+          revision: c.c02Floor!.revision,
+          checked,
+          floor,
+        });
+      };
+      save("1 unchecked Anna", false, false);
+      source.send({ type: "CHECK_RESPONSE" });
+      save("2 checked pending Anna", true, false);
+      presentReference(source);
+      save("3 delivered Anna pre-Continue", true, false);
+      source.send({ type: "CONTINUE" });
+      save("4 Floor empty", true, true);
+      selectReference(source, "8000.00");
+      save("5 diagnostic pending", true, true);
+      presentReference(source);
+      save("6 diagnostic historically delivered", true, true);
+      selectReference(source, "10000.00");
+      save("7 correct pending", true, true);
+      presentReference(source);
+      save("8 correct historically Finish-eligible", true, true);
+      expect(cases).toHaveLength(8);
+      for (const item of cases) {
+        const restored = await restoreReference(item.raw);
+        let published = 0;
+        restored.subscribe(() => published++);
+        expect(published, item.name).toBe(0);
+        const c = restored.getSnapshot().context;
+        expect(c.responseRevision, item.name).toBe(1);
+        expect(c.feedbackRevision, item.name).toBeNull();
+        expect(c.c02Floor, item.name).toMatchObject({
+          phase: "MAIN",
+          basis: null,
+          revision: 0,
+        });
+        if (item.checked) {
+          expect(c.response, item.name).toBe(c.checkedResponse);
+          expect(c.checkedRevision, item.name).toBe(1);
+        }
+        expect(
+          projectC02RecoveryObligations(restored).preservedFloorWork,
+        ).toEqual(
+          item.floor
+            ? { basis: item.basis, revision: item.revision, mainRevision: 1 }
+            : null,
+        );
+        restored.start();
+        if (!item.checked) restored.send({ type: "CHECK_RESPONSE" });
+        const checked = restored.getSnapshot().context;
+        restored.send({ type: "CONTINUE" });
+        restored.send({ type: "FINISH_ACTIVITY" });
+        expect(restored.getSnapshot().context).toBe(checked);
+        expect(presentReference(restored, false)).toBeNull();
+        expect(restored.getSnapshot().context.feedbackRevision).toBeNull();
+        const main = presentReference(restored)!;
+        expect(restored.getSnapshot().context.position).not.toBe("C02-S01-F");
+        restored.send({ type: "CONTINUE" });
+        expect(restored.getSnapshot().context.c02Floor).toMatchObject({
+          phase: "FLOOR",
+          basis: item.basis,
+          revision: item.revision,
+          teachingRevision: null,
+        });
+        expect(restored.getSnapshot().context.responseRevision).toBe(1);
+        expect(restored.getSnapshot().context.checkedRevision).toBe(1);
+        restored.send({
+          type: "C02_MAIN_FEEDBACK_DELIVERED",
+          capability: main,
+        });
+        restored.send({ type: "FINISH_ACTIVITY" });
+        expect(restored.getSnapshot().context.position).toBe("C02-S01-F");
+        if (item.basis === "8000.00") {
+          presentReference(restored);
+          restored.send({ type: "FINISH_ACTIVITY" });
+          expect(restored.getSnapshot().context.position).toBe("C02-S01-F");
+        }
+        if (item.basis !== "10000.00") selectReference(restored, "10000.00");
+        presentReference(restored);
+        restored.send({ type: "FINISH_ACTIVITY" });
+        expect(restored.getSnapshot().context.position).toBe("COMPLETE");
+        expect(() => savedReference(restored)).toThrow();
+        restored.stop();
+      }
+      source.stop();
+    },
+  );
+});
 
 describe("T036 queue-bound one-use classifier proof", () => {
   it.each([null, "{", "valid", "throw", "reject"])(

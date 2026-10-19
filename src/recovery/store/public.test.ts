@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   createRecoveryCheckpointV1,
   serializeRecoveryCheckpointV1,
+  createRecoveryCheckpointV2,
+  serializeRecoveryCheckpointV2,
 } from "../checkpoint/public";
 import { createRecoveryCheckpointQueue } from "./public";
 import type { RecoveryCheckpointStore } from "./public";
@@ -31,6 +33,144 @@ function checkpoint(position: "ENTRY" | "ACTIVE" | "OTHER" = "ENTRY") {
     evaluation: null,
   });
 }
+
+function checkpointV2() {
+  return createRecoveryCheckpointV2({
+    competencyId: "C02",
+    activityId: "C02-A01",
+    scenarioId: "C02-S01",
+    embeddedScenarioId: "C02-S01-F",
+    profileId: "D5-C02-A01-REFERENCE",
+    position: "ENTRY",
+    response: null,
+    checkedResponse: null,
+    responseRevision: 0,
+    hasChecked: false,
+    checkedRevision: null,
+    feedbackRevision: null,
+    evaluation: null,
+    floor: { kind: "MAIN" },
+  });
+}
+
+describe("D5 V2 same-lane durable route", () => {
+  it("settles mixed pending routines as superseded by clear but preserves a V2 barrier", async () => {
+    const disk = controlledStore();
+    const q = createRecoveryCheckpointQueue(disk.store);
+    const a = q.replaceV2(checkpointV2());
+    const barrier = q.replaceBarrierV2(checkpointV2());
+    const pending = q.replace(checkpoint());
+    const clear = q.clear();
+    expect(await pending).toMatchObject({
+      status: "superseded",
+      supersededBy: 4,
+    });
+    expect(await q.replaceV2(checkpointV2())).toMatchObject({
+      status: "blocked",
+      reason: "clear-pending",
+    });
+    disk.calls[0]!.gate.resolve();
+    expect(await a).toMatchObject({ status: "durable" });
+    expect(disk.calls[1]!.value).toBe(
+      serializeRecoveryCheckpointV2(checkpointV2()),
+    );
+    disk.calls[1]!.gate.resolve();
+    expect(await barrier).toMatchObject({ status: "durable" });
+    expect(disk.calls[2]!.operation).toBe("clear");
+    disk.calls[2]!.gate.resolve();
+    expect(await clear).toMatchObject({ status: "durable" });
+    expect(disk.value).toBeNull();
+    expect(disk.maxActive).toBe(1);
+  });
+  it("captures immutable V2 bytes before acceptance, preserves mixed barriers and ordered reads", async () => {
+    const disk = controlledStore();
+    const q = createRecoveryCheckpointQueue(disk.store);
+    expect(createRecoveryCheckpointQueue(disk.store)).toBe(q);
+    const draft = JSON.parse(
+      serializeRecoveryCheckpointV2(checkpointV2()),
+    ) as ReturnType<typeof checkpointV2>;
+    const expected = serializeRecoveryCheckpointV2(draft);
+    const a = q.replace(checkpoint());
+    const b = q.replaceV2(draft);
+    Object.assign(draft.checkpoint, { position: "ACTIVE" });
+    const barrier = q.replaceBarrierV2(checkpointV2());
+    const old = q.replaceV2(checkpointV2());
+    const last = q.replace(checkpoint("ACTIVE"));
+    expect(await old).toMatchObject({ status: "superseded" });
+    const read = q.load();
+    for (const [i, promise] of [a, b, barrier, last].entries()) {
+      disk.calls[i]!.gate.resolve();
+      expect(await promise).toMatchObject({ status: "durable" });
+    }
+    expect(disk.calls.slice(0, 4).map((call) => call.value)).toEqual([
+      serializeRecoveryCheckpointV1(checkpoint()),
+      expected,
+      serializeRecoveryCheckpointV2(checkpointV2()),
+      serializeRecoveryCheckpointV1(checkpoint("ACTIVE")),
+    ]);
+    disk.calls[4]!.gate.resolve();
+    expect(await read).toMatchObject({
+      status: "loaded",
+      checkpoint: serializeRecoveryCheckpointV1(checkpoint("ACTIVE")),
+    });
+    expect(disk.maxActive).toBe(1);
+    expect(disk.unrelated).toBe("untouched");
+  });
+  it("rejects V2 on legacy methods and invalid V2 before request numbering or I/O", async () => {
+    const disk = controlledStore();
+    const q = createRecoveryCheckpointQueue(disk.store);
+    expect(() => q.replace(checkpointV2() as never)).toThrow();
+    expect(() => q.replaceBarrier(checkpointV2() as never)).toThrow();
+    expect(() => q.replaceV2(checkpoint() as never)).toThrow();
+    expect(() =>
+      q.replaceBarrierV2({
+        ...checkpointV2(),
+        studyDefinitionRevision: "wrong",
+      } as never),
+    ).toThrow();
+    expect(disk.calls).toHaveLength(0);
+    const good = q.replaceV2(checkpointV2());
+    disk.calls[0]!.gate.resolve();
+    expect(await good).toMatchObject({ requestId: 1, status: "durable" });
+  });
+  it("retries exact captured V2 payload, blocks paused writes and preserves clear fences", async () => {
+    const disk = controlledStore();
+    const q = createRecoveryCheckpointQueue(disk.store);
+    const draft = JSON.parse(
+      serializeRecoveryCheckpointV2(checkpointV2()),
+    ) as ReturnType<typeof checkpointV2>;
+    const expected = serializeRecoveryCheckpointV2(draft);
+    const first = q.replaceBarrierV2(draft);
+    Object.assign(draft.checkpoint, { position: "ACTIVE" });
+    disk.calls[0]!.gate.reject("uncertain");
+    expect(await first).toMatchObject({ status: "technical-failure" });
+    expect(await q.replaceV2(checkpointV2())).toMatchObject({
+      status: "blocked",
+      reason: "paused",
+    });
+    const retry = q.retry();
+    expect(disk.calls[1]!.value).toBe(expected);
+    disk.calls[1]!.gate.resolve();
+    expect(await retry).toMatchObject({ status: "durable" });
+    const clear = q.clear();
+    expect(await q.replaceV2(checkpointV2())).toMatchObject({
+      status: "blocked",
+      reason: "clear-pending",
+    });
+    expect(await q.replaceBarrierV2(checkpointV2())).toMatchObject({
+      status: "blocked",
+      reason: "clear-pending",
+    });
+    disk.calls[2]!.gate.reject("clear failed");
+    expect(await clear).toMatchObject({ status: "technical-failure" });
+    const retryClear = q.retry();
+    expect(disk.calls[3]!.operation).toBe("clear");
+    disk.calls[3]!.gate.resolve();
+    expect(await retryClear).toMatchObject({ status: "durable" });
+    expect(disk.value).toBeNull();
+    expect(disk.maxActive).toBe(1);
+  });
+});
 
 /** No timers. Each backing operation begins immediately but remains gated until
  * the test explicitly acknowledges success/failure. Only the owned slot mutates. */

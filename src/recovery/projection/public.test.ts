@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { ExactDecimal, quantity } from "@/core/public";
 import type { LearnerResponse } from "@/core/public";
 import { projectC04CheckpointV1, validateC04CheckpointV1 } from "./public";
+import {
+  assertCheckpointData,
+  validateC02ReferenceCheckpointV2,
+} from "./public";
 import {
   createRecoveryCheckpointV1,
   parseRecoveryCheckpointV1,
@@ -14,6 +19,275 @@ import {
   createC04ActivityRegistry,
   projectC04CheckpointModelV1,
 } from "@/engine/c04-activity-binding/public";
+
+// D5 bounded SOURCE-CONFORMANCE fixtures only. No production issuer/Store route.
+// Context 56b52bdf: final Amendment C C01 §§23–27, C03 §§30–36,
+// C05 §§30–35, C06 §§29–42; PP10-A-0202-C01/C03/C05/C06-001.
+const fixtureRevision = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(Number.MAX_SAFE_INTEGER);
+const fixtureMoney = z.string().refine((value) => {
+  try {
+    return ExactDecimal.from(value).toString() === value;
+  } catch {
+    return false;
+  }
+});
+const compatibilitySchema = z.discriminatedUnion("family", [
+  z.strictObject({
+    family: z.literal("C01"),
+    activityId: z.literal("C01-A02"),
+    scenarioId: z.literal("C01-S02"),
+    period: z.literal("MAY"),
+    members: z.array(z.enum(["REGULAR_PAY", "TRANSPORTATION_ALLOWANCE"])),
+    revision: fixtureRevision,
+    engagement: z.strictObject({
+      regularIncluded: z.boolean(),
+      allowanceIncluded: z.boolean(),
+    }),
+  }),
+  z.strictObject({
+    family: z.literal("C03"),
+    activityId: z.literal("C03-A02"),
+    scenarioId: z.literal("C03-S02"),
+    selectedChildId: z.enum(["C03-S02-A", "C03-S02-B"]),
+    revision: fixtureRevision,
+  }),
+  z.strictObject({
+    family: z.literal("C05"),
+    activityId: z.literal("C05-A02"),
+    scenarioId: z.literal("C05-S02"),
+    revision: fixtureRevision,
+    months: z
+      .strictObject({ count: z.literal(12), monthlyGiven: fixtureMoney })
+      .nullable(),
+    semimonthly: z
+      .strictObject({ count: z.literal(2), amount: fixtureMoney })
+      .nullable(),
+    engagement: z.strictObject({ year: z.boolean(), month: z.boolean() }),
+  }),
+  z.strictObject({
+    family: z.literal("C06"),
+    activityId: z.enum(["C06-A01", "C06-A02"]),
+    scenarioId: z.enum(["C06-S01", "C06-S02"]),
+    arrangement: z.enum(["STRAIGHT", "SALARY_PLUS"]),
+    revision: fixtureRevision,
+    selectedChildId: z.enum([
+      "C06-S01-A",
+      "C06-S01-B",
+      "C06-S02-A",
+      "C06-S02-B",
+    ]),
+    base: z.discriminatedUnion("kind", [
+      z.strictObject({ kind: z.literal("NOT_APPLICABLE") }),
+      z.strictObject({ kind: z.literal("KNOWN"), amount: fixtureMoney }),
+    ]),
+    commission: fixtureMoney,
+    total: fixtureMoney,
+  }),
+]);
+
+function inspectCompatibilityFixture(value: unknown) {
+  assertCheckpointData(value);
+  const data = compatibilitySchema.parse(value);
+  const d = (text: string) => ExactDecimal.from(text);
+  if (data.family === "C01") {
+    if (
+      new Set(data.members).size !== data.members.length ||
+      (data.members.includes("REGULAR_PAY") &&
+        !data.engagement.regularIncluded) ||
+      (data.members.includes("TRANSPORTATION_ALLOWANCE") &&
+        !data.engagement.allowanceIncluded)
+    )
+      throw new TypeError("C01 membership/engagement mismatch");
+    return {
+      data,
+      amount: data.members
+        .reduce(
+          (sum, key) => sum.add(d(key === "REGULAR_PAY" ? "17250" : "1750")),
+          d("0"),
+        )
+        .toString(),
+    };
+  }
+  if (data.family === "C03") {
+    // Source tuples share hourly rate 100 and 2 hours, not multiplier/condition.
+    return {
+      data,
+      amount: d("100")
+        .multiply(d("2"))
+        .multiply(d(data.selectedChildId === "C03-S02-A" ? "1.25" : "1.69"))
+        .toString(),
+    };
+  }
+  if (data.family === "C05") {
+    if (
+      (data.months !== null &&
+        (!data.engagement.year ||
+          data.months.monthlyGiven !==
+            d("480000").divide(d("12")).toString())) ||
+      (data.semimonthly !== null &&
+        (!data.months ||
+          !data.engagement.month ||
+          data.semimonthly.amount !==
+            d(data.months.monthlyGiven).divide(d("2")).toString()))
+    )
+      throw new TypeError("C05 missing established partition");
+    return {
+      data,
+      amount: data.semimonthly?.amount ?? data.months?.monthlyGiven ?? "480000",
+    };
+  }
+  const comparison = data.activityId === "C06-A01";
+  const second = data.selectedChildId.endsWith("B");
+  const prefix = comparison ? "C06-S01" : "C06-S02";
+  const arrangement = comparison && !second ? "STRAIGHT" : "SALARY_PLUS";
+  const base = comparison ? "10000" : "15000";
+  const commission = d(
+    comparison ? "80000" : second ? "500000" : "300000",
+  ).multiply(d(comparison ? "0.05" : "0.03"));
+  if (
+    data.scenarioId !== prefix ||
+    !data.selectedChildId.startsWith(prefix) ||
+    data.arrangement !== arrangement ||
+    (arrangement === "STRAIGHT"
+      ? data.base.kind !== "NOT_APPLICABLE"
+      : data.base.kind !== "KNOWN" || data.base.amount !== base) ||
+    data.commission !== commission.toString() ||
+    data.total !==
+      (arrangement === "STRAIGHT"
+        ? commission
+        : commission.add(d(base))
+      ).toString()
+  )
+    throw new TypeError("C06 inconsistent complete arrangement");
+  return { data, amount: data.total };
+}
+
+describe("D5 independently source-conforming fixtures (not production restoration)", () => {
+  it("C01 preserves identity, May membership and stage-specific engagement independently of revision", () => {
+    const fixture = {
+      family: "C01",
+      activityId: "C01-A02",
+      scenarioId: "C01-S02",
+      period: "MAY",
+      revision: 2,
+      members: ["REGULAR_PAY", "TRANSPORTATION_ALLOWANCE"],
+      engagement: { regularIncluded: true, allowanceIncluded: true },
+    };
+    expect(
+      inspectCompatibilityFixture(JSON.parse(JSON.stringify(fixture))).amount,
+    ).toBe("19000");
+    for (const change of [
+      { period: "APRIL" },
+      { members: ["REGULAR_PAY", "REGULAR_PAY"] },
+      { members: ["MARCH_OVERTIME"] },
+      { engagement: { regularIncluded: false, allowanceIncluded: true } },
+    ])
+      expect(() =>
+        inspectCompatibilityFixture({ ...fixture, ...change }),
+      ).toThrow();
+  });
+  it("C03 recomputes condition-specific multipliers rather than restoring a forged result", () => {
+    const fixture = {
+      family: "C03",
+      activityId: "C03-A02",
+      scenarioId: "C03-S02",
+      revision: 1,
+      selectedChildId: "C03-S02-A",
+    };
+    expect(inspectCompatibilityFixture(fixture).amount).toBe("250");
+    expect(
+      inspectCompatibilityFixture({ ...fixture, selectedChildId: "C03-S02-B" })
+        .amount,
+    ).toBe("338");
+    for (const change of [
+      { selectedChildId: "C03-S02-C" },
+      { scenarioId: "C03-S03" },
+      { multiplier: "1.25" },
+      { overtime: "250" },
+    ])
+      expect(() =>
+        inspectCompatibilityFixture({ ...fixture, ...change }),
+      ).toThrow();
+  });
+  it("C05 requires authentic ordered monthly first partition, not cumulative revision alone", () => {
+    const fixture = {
+      family: "C05",
+      activityId: "C05-A02",
+      scenarioId: "C05-S02",
+      revision: 2,
+      months: { count: 12, monthlyGiven: "40000" },
+      semimonthly: { count: 2, amount: "20000" },
+      engagement: { year: true, month: true },
+    };
+    expect(
+      inspectCompatibilityFixture(JSON.parse(JSON.stringify(fixture))).amount,
+    ).toBe("20000");
+    for (const change of [
+      { months: null },
+      { months: { count: 12, monthlyGiven: "480000" } },
+      { semimonthly: { count: 2, amount: "40000" } },
+      { engagement: { year: true, month: false } },
+      { weekly: "10000" },
+    ])
+      expect(() =>
+        inspectCompatibilityFixture({ ...fixture, ...change }),
+      ).toThrow();
+  });
+  it("C06 preserves full arrangement, straight N/A and dependent salary-plus quantities", () => {
+    const straight = {
+      family: "C06",
+      activityId: "C06-A01",
+      scenarioId: "C06-S01",
+      selectedChildId: "C06-S01-A",
+      revision: 0,
+      arrangement: "STRAIGHT",
+      base: { kind: "NOT_APPLICABLE" },
+      commission: "4000",
+      total: "4000",
+    };
+    const salary = {
+      ...straight,
+      selectedChildId: "C06-S01-B",
+      arrangement: "SALARY_PLUS",
+      base: { kind: "KNOWN", amount: "10000" },
+      total: "14000",
+    };
+    expect(inspectCompatibilityFixture(straight).amount).toBe("4000");
+    expect(inspectCompatibilityFixture(salary).amount).toBe("14000");
+    expect(
+      inspectCompatibilityFixture({
+        ...salary,
+        activityId: "C06-A02",
+        scenarioId: "C06-S02",
+        selectedChildId: "C06-S02-B",
+        base: { kind: "KNOWN", amount: "15000" },
+        commission: "15000",
+        total: "30000",
+      }).amount,
+    ).toBe("30000");
+    for (const bad of [
+      { ...straight, base: { kind: "KNOWN", amount: "0" } },
+      { ...salary, base: { kind: "NOT_APPLICABLE" } },
+      { ...salary, total: "4000" },
+      { ...salary, selectedChildId: "C06-S02-A" },
+      { ...salary, commission: "15000" },
+    ])
+      expect(() => inspectCompatibilityFixture(bad)).toThrow();
+  });
+  it("fixture provenance cannot promote any family into the C02 production DTO", () => {
+    for (const competencyId of ["C01", "C03", "C05", "C06"])
+      expect(() =>
+        validateC02ReferenceCheckpointV2({
+          competencyId,
+          fixtureVerified: true,
+        }),
+      ).toThrow();
+  });
+});
 
 describe("T029 full semantic checkpoint projection", () => {
   const ids = ["C04-A01", "C04-A02", "C04-A03", "C04-A04"];

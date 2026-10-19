@@ -2,9 +2,13 @@ import { createC04RestoredActivityActor } from "@/engine/c04-activity-binding/pu
 import type { C04Restoration } from "@/engine/c04-activity-binding/public";
 import { parseRecoveryCheckpointV1 } from "../checkpoint/public";
 import type { RecoveryCheckpointEnvelopeV1 } from "../checkpoint/public";
+import { parseRecoveryCheckpointV2 } from "../checkpoint/public";
+import type { RecoveryCheckpointEnvelopeV2 } from "../checkpoint/public";
+import { createC02ReferenceActivityActor } from "@/engine/activity-runtime/public";
 import {
   canonicalCheckpointJSON,
   projectC04CheckpointV1,
+  projectC02ReferenceCheckpointV2,
 } from "../projection/public";
 import type { C04CheckpointV1 } from "../projection/public";
 import type { RecoveryCheckpointQueue } from "../store/public";
@@ -194,5 +198,149 @@ export async function recoverCheckpoint(
     });
   } catch {
     return issueClassification(queue, { status: "UNUSABLE_CHECKPOINT" });
+  }
+}
+
+/** Distinct classification cannot enter unchanged V1 Session startup. */
+export type RecoveryClassificationV2 =
+  | Readonly<{ status: "NO_CHECKPOINT_V2" }>
+  | Readonly<{
+      status: "VALID_REFERENCE_CHECKPOINT_V2";
+      checkpoint: RecoveryCheckpointEnvelopeV2;
+      actor: Actor;
+    }>
+  | Readonly<{ status: "UNUSABLE_CHECKPOINT_V2" }>
+  | Readonly<{ status: "technical-failure-v2"; error: unknown }>;
+const referenceClaims = new WeakMap<
+  object,
+  { queue: ReadQueue; untouched: () => boolean; release: () => void }
+>();
+
+function issueReferenceClassification(
+  queue: ReadQueue,
+  value: RecoveryClassificationV2,
+): RecoveryClassificationV2 {
+  Object.freeze(value);
+  const actor =
+    value.status === "VALID_REFERENCE_CHECKPOINT_V2" ? value.actor : null;
+  const snapshot = actor?.getSnapshot();
+  const work = actor
+    ? canonicalCheckpointJSON(projectC02ReferenceCheckpointV2(actor))
+    : null;
+  let emitted = false;
+  const subscription = actor?.subscribe(() => {
+    emitted = true;
+  });
+  referenceClaims.set(value, {
+    queue,
+    untouched: () => {
+      if (emitted || (actor && actor.getSnapshot() !== snapshot)) return false;
+      try {
+        return (
+          !actor ||
+          canonicalCheckpointJSON(projectC02ReferenceCheckpointV2(actor)) ===
+            work
+        );
+      } catch {
+        return false;
+      }
+    },
+    release: () => subscription?.unsubscribe(),
+  });
+  return value;
+}
+
+export function claimRecoveryClassificationV2(
+  queue: ReadQueue,
+  value: unknown,
+): value is RecoveryClassificationV2 {
+  if (value === null || typeof value !== "object") return false;
+  const proof = referenceClaims.get(value);
+  if (!proof || proof.queue !== queue) return false;
+  referenceClaims.delete(value);
+  const untouched = proof.untouched();
+  proof.release();
+  return untouched;
+}
+
+function reconstructReference(envelope: RecoveryCheckpointEnvelopeV2): Actor {
+  const data = envelope.checkpoint;
+  const response = decodeResponse(data.response);
+  const pending =
+    data.floor.kind === "MAIN"
+      ? null
+      : {
+          basis: data.floor.basis,
+          revision: data.floor.revision,
+          mainRevision: data.floor.mainRevision,
+        };
+  const position =
+    data.position === "C02-S01-F"
+      ? data.evaluation!.outcome === "CONFIRMED"
+        ? "CONFIRMATION"
+        : "RECONSIDERATION"
+      : data.position;
+  const actor = createC02ReferenceActivityActor({
+    position,
+    response,
+    responseRevision: data.responseRevision,
+    hasChecked: data.hasChecked,
+    evaluation: data.evaluation,
+    pending,
+  });
+  try {
+    // Compare replay-normalized meaning, never force saved Floor into live Anna.
+    const expected = {
+      ...data,
+      position,
+      feedbackRevision: null,
+      floor: pending
+        ? { kind: "ANNA_REPLAY_PENDING_FLOOR", ...pending }
+        : { kind: "MAIN" },
+    };
+    if (
+      canonicalCheckpointJSON(projectC02ReferenceCheckpointV2(actor)) !==
+      canonicalCheckpointJSON(expected)
+    )
+      throw new TypeError("Reconstructed C02 reference work mismatch");
+    return actor;
+  } catch (error) {
+    actor.stop();
+    throw error;
+  }
+}
+
+/** Explicit opt-in, headless and non-destructive. No V1 dispatch or Session change. */
+export async function recoverReferenceCheckpointV2(
+  queue: ReadQueue,
+): Promise<RecoveryClassificationV2> {
+  let result: Awaited<ReturnType<ReadQueue["load"]>>;
+  try {
+    result = await queue.load();
+  } catch (error) {
+    return issueReferenceClassification(queue, {
+      status: "technical-failure-v2",
+      error,
+    });
+  }
+  if (result.status === "technical-failure")
+    return issueReferenceClassification(queue, {
+      status: "technical-failure-v2",
+      error: result.error,
+    });
+  if (result.checkpoint === null)
+    return issueReferenceClassification(queue, { status: "NO_CHECKPOINT_V2" });
+  try {
+    const checkpoint = parseRecoveryCheckpointV2(result.checkpoint);
+    const actor = reconstructReference(checkpoint);
+    return issueReferenceClassification(queue, {
+      status: "VALID_REFERENCE_CHECKPOINT_V2",
+      checkpoint,
+      actor,
+    });
+  } catch {
+    return issueReferenceClassification(queue, {
+      status: "UNUSABLE_CHECKPOINT_V2",
+    });
   }
 }

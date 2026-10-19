@@ -9,6 +9,7 @@ import {
 } from "@/engine/activity-machine/public";
 import type { ActivityContext } from "@/engine/activity-machine/public";
 import type { ActivityActor } from "@/engine/activity-runtime/public";
+import { inspectC02ReferenceActivityActor } from "@/engine/activity-runtime/public";
 import {
   createC04ActivityBindings,
   projectC04CheckpointIdentity,
@@ -169,6 +170,242 @@ const activitySchema = z.strictObject({
     .optional(),
 });
 export type C04CheckpointV1 = z.infer<typeof activitySchema>;
+
+// D061/S6–S8: reference transport only, not production response/model IDs.
+const c02Roles = [
+  "gross",
+  "SSS",
+  "PhilHealth",
+  "Pag-IBIG",
+  "withholding",
+  "total deductions",
+  "net pay",
+] as const;
+const c02Response = z.strictObject({
+  kind: z.literal("COMPOSITE"),
+  parts: z
+    .array(
+      z.strictObject({
+        key: z.enum(c02Roles),
+        response: z.strictObject({
+          kind: z.literal("EXACT_QUANTITY"),
+          value: z.strictObject({
+            magnitude: decimal,
+            kind: z.literal("MONETARY_AMOUNT"),
+            unit: z.literal("PHP"),
+            basis: z.null(),
+          }),
+        }),
+      }),
+    )
+    .length(7),
+});
+const c02Pending = {
+  basis: z.enum(["8000.00", "10000.00"]).nullable(),
+  revision,
+  mainRevision: revision,
+};
+const c02Schema = z.strictObject({
+  competencyId: z.literal("C02"),
+  activityId: z.literal("C02-A01"),
+  scenarioId: z.literal("C02-S01"),
+  embeddedScenarioId: z.literal("C02-S01-F"),
+  profileId: z.literal("D5-C02-A01-REFERENCE"),
+  position: z.enum([
+    "ENTRY",
+    "ACTIVE",
+    "REVISION",
+    "CONFIRMATION",
+    "RECONSIDERATION",
+    "C02-S01-F",
+  ]),
+  response: c02Response.nullable(),
+  checkedResponse: c02Response.nullable(),
+  responseRevision: revision,
+  hasChecked: z.boolean(),
+  checkedRevision: revision.nullable(),
+  feedbackRevision: revision.nullable(),
+  evaluation: z
+    .strictObject({
+      outcome: z.enum(["CONFIRMED", "RECONSIDERATION"]),
+      diagnostic: z
+        .enum([
+          "c02/S01/reconsider-payroll-role",
+          "c02/S01/reconsider-arithmetic",
+        ])
+        .nullable(),
+    })
+    .nullable(),
+  floor: z.discriminatedUnion("kind", [
+    z.strictObject({ kind: z.literal("MAIN") }),
+    z.strictObject({
+      kind: z.literal("FLOOR_WORK"),
+      ...c02Pending,
+      teachingRevision: revision.nullable(),
+    }),
+    z.strictObject({
+      kind: z.literal("ANNA_REPLAY_PENDING_FLOOR"),
+      ...c02Pending,
+    }),
+  ]),
+});
+export type C02ReferenceCheckpointV2 = z.infer<typeof c02Schema>;
+
+/** Detached consistency validation, never proof of source or historical delivery.
+ * Runtime must independently authenticate current Study facts before actor issuance.
+ */
+export function validateC02ReferenceCheckpointV2(
+  value: unknown,
+): C02ReferenceCheckpointV2 {
+  assertCheckpointData(value);
+  const data = c02Schema.parse(value);
+  for (const response of [data.response, data.checkedResponse]) {
+    if (!response) continue;
+    if (
+      new Set(response.parts.map((part) => part.key)).size !== c02Roles.length
+    )
+      fail("Duplicate C02 reference role");
+    response.parts.sort(
+      (a, b) => c02Roles.indexOf(a.key) - c02Roles.indexOf(b.key),
+    );
+    // Exercise the existing quantity/response domain, not just string syntax.
+    if (!isLearnerResponse(decodeResponse(response)))
+      fail("Invalid C02 monetary response");
+  }
+  if ((data.responseRevision === 0) !== (data.response === null))
+    fail("Invalid C02 response revision");
+  if (data.hasChecked && data.response === null)
+    fail("Missing C02 checked history response");
+  const checked = data.evaluation !== null;
+  const feedbackPosition =
+    data.position === "CONFIRMATION" || data.position === "RECONSIDERATION";
+  if (checked) {
+    if (
+      !data.hasChecked ||
+      !data.response ||
+      !data.checkedResponse ||
+      data.checkedRevision !== data.responseRevision ||
+      (data.feedbackRevision !== null &&
+        data.feedbackRevision !== data.responseRevision) ||
+      canonicalCheckpointJSON(data.response) !==
+        canonicalCheckpointJSON(data.checkedResponse) ||
+      (!feedbackPosition && data.position !== "C02-S01-F")
+    )
+      fail("Stale C02 checked work");
+    const expected = ["12100", "600", "302.5", "200", "0", "1102.5", "10997.5"];
+    const wrong = data.checkedResponse.parts.map(
+      (part, i) =>
+        !ExactDecimal.from(part.response.value.magnitude).equals(
+          ExactDecimal.from(expected[i]!),
+        ),
+    );
+    const diagnostic = wrong.slice(0, 5).some(Boolean)
+      ? "c02/S01/reconsider-payroll-role"
+      : wrong.slice(5).some(Boolean)
+        ? "c02/S01/reconsider-arithmetic"
+        : null;
+    if (
+      data.evaluation!.diagnostic !== diagnostic ||
+      data.evaluation!.outcome !==
+        (diagnostic === null ? "CONFIRMED" : "RECONSIDERATION") ||
+      (feedbackPosition &&
+        data.position !==
+          (diagnostic === null ? "CONFIRMATION" : "RECONSIDERATION"))
+    )
+      fail("Contradictory C02 evaluation");
+  } else if (
+    data.checkedResponse !== null ||
+    data.checkedRevision !== null ||
+    data.feedbackRevision !== null ||
+    feedbackPosition ||
+    data.position === "C02-S01-F"
+  ) {
+    fail("Invalid unchecked C02 work");
+  }
+  if (data.position === "ENTRY" && (data.response !== null || data.hasChecked))
+    fail("Invalid C02 entry history");
+  if (data.position === "REVISION" && !data.hasChecked)
+    fail("Invalid C02 revision history");
+  if (data.position === "ACTIVE" && data.hasChecked)
+    fail("Invalid C02 active history");
+  if (data.floor.kind === "MAIN") {
+    if (data.position === "C02-S01-F") fail("Missing C02 Floor work");
+  } else {
+    const work = data.floor;
+    if (
+      !checked ||
+      work.mainRevision !== data.checkedRevision ||
+      (work.basis === null) !== (work.revision === 0)
+    )
+      fail("Invalid C02 pending correlation");
+    if (work.kind === "FLOOR_WORK") {
+      if (
+        data.position !== "C02-S01-F" ||
+        data.feedbackRevision !== data.responseRevision ||
+        (work.teachingRevision !== null &&
+          (work.basis === null || work.teachingRevision !== work.revision))
+      )
+        fail("Invalid C02 Floor teaching claim");
+    } else if (!feedbackPosition) fail("Invalid C02 replay stage");
+  }
+  return frozen(data);
+}
+
+/** Live Runtime issuance and detached validation are intentionally separate. */
+export function projectC02ReferenceCheckpointV2(
+  actor: ActivityActor,
+): C02ReferenceCheckpointV2 {
+  const { context: c, pending } = inspectC02ReferenceActivityActor(actor);
+  if (c.position === "COMPLETE")
+    fail("Completed C02 is not an unfinished checkpoint");
+  const f = c.c02Floor!;
+  return validateC02ReferenceCheckpointV2({
+    competencyId: "C02",
+    activityId: "C02-A01",
+    scenarioId: "C02-S01",
+    embeddedScenarioId: "C02-S01-F",
+    profileId: "D5-C02-A01-REFERENCE",
+    position: c.position,
+    response: encodeResponse(c.response),
+    checkedResponse: encodeResponse(c.checkedResponse),
+    responseRevision: c.responseRevision,
+    hasChecked: c.hasChecked,
+    checkedRevision: c.checkedRevision,
+    feedbackRevision: c.feedbackRevision,
+    evaluation: c.evaluation,
+    floor: pending
+      ? { kind: "ANNA_REPLAY_PENDING_FLOOR", ...pending }
+      : f.phase === "FLOOR"
+        ? {
+            kind: "FLOOR_WORK",
+            basis: f.basis,
+            revision: f.revision,
+            mainRevision: f.mainRevision,
+            teachingRevision: f.teachingRevision,
+          }
+        : { kind: "MAIN" },
+  });
+}
+
+/** Bounded preserved work, separate from Semantic Frame live privileges.
+ * No copy, derived answer, delivery token, or synthetic historical attestation.
+ */
+export function projectC02RecoveryObligations(actor: ActivityActor) {
+  const { context, pending } = inspectC02ReferenceActivityActor(actor);
+  return frozen({
+    activityId: "C02-A01" as const,
+    livePosition: context.position,
+    preservedFloorWork: pending,
+    historicalDeliveryAuthenticated: false as const,
+    requiresAnnaPresentation:
+      context.evaluation !== null && context.feedbackRevision === null,
+    requiresLearnerContinue: pending !== null,
+    requiresFloorTeaching:
+      pending !== null ||
+      (context.c02Floor!.phase === "FLOOR" &&
+        context.c02Floor!.teachingRevision === null),
+  });
+}
 
 // Trusted fixed composition, not checkpoint-driven issuance. Detached validation
 // never constructs a model from persisted evidence or starts an actor.

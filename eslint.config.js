@@ -294,17 +294,52 @@ export default tseslint.config(
   },
   // D177/S3: only the actually consumed C04 source-composition facade.
   {
-    ...restriction("recovery/rehydration", [
-      "engine/c04-activity-binding/public",
-    ]),
+    ...restriction(
+      "recovery/rehydration",
+      ["engine/c04-activity-binding/public", "engine/activity-runtime/public"],
+      [
+        {
+          regex:
+            "^(?!@/engine/activity-runtime/public$)(?:@/engine/activity-runtime|(?:\\.\\./)+engine/activity-runtime)(?:/|$)",
+          message: "D5 uses the exact canonical Runtime public target.",
+        },
+      ],
+    ),
     files: ["src/recovery/rehydration/public.ts"],
   },
   {
-    ...restriction("recovery/rehydration", [
-      "engine/c04-activity-binding/public",
-    ]),
+    ...restriction(
+      "recovery/rehydration",
+      ["engine/c04-activity-binding/public", "engine/activity-runtime/public"],
+      [
+        {
+          regex:
+            "^(?!@/engine/activity-runtime/public$)(?:@/engine/activity-runtime|(?:\\.\\./)+engine/activity-runtime)(?:/|$)",
+          message: "D5 uses the exact canonical Runtime public target.",
+        },
+      ],
+    ),
     files: ["src/recovery/rehydration/public.test.ts"],
   },
+  // D177/S11: exact reference-only Runtime consumers, no directory grant.
+  ...[
+    "src/engine/activity-runtime/public.ts",
+    "src/engine/activity-runtime/public.test.ts",
+  ].map((file) => ({
+    ...restriction(
+      "engine/activity-runtime",
+      ["study/competencies/c02/public"],
+      [
+        {
+          regex:
+            "^(?!@/study/competencies/c02/public$)(?:@/study/competencies/c02|(?:\\.\\./)+study/competencies/c02)(?:/|$)",
+          message:
+            "D5 Runtime Study access uses the exact canonical @/ public target.",
+        },
+      ],
+    ),
+    files: [file],
+  })),
   // D177/S4: only the exact Session composition consumers and used targets.
   {
     ...restriction("session/app-machine", [

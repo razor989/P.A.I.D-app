@@ -1,5 +1,7 @@
 import { serializeRecoveryCheckpointV1 } from "../checkpoint/public";
+import { serializeRecoveryCheckpointV2 } from "../checkpoint/public";
 import type { RecoveryCheckpointEnvelopeV1 } from "../checkpoint/public";
+import type { RecoveryCheckpointEnvelopeV2 } from "../checkpoint/public";
 
 /** One owned checkpoint target, not a general key/value store. An adapter must
  * resolve mutations only on storage acknowledgment and reject unavailable or
@@ -44,6 +46,13 @@ export interface RecoveryCheckpointQueue {
   ): Promise<RecoveryMutationResult>;
   replaceBarrier(
     checkpoint: RecoveryCheckpointEnvelopeV1,
+  ): Promise<RecoveryMutationResult>;
+  /** D061/S5: explicit future-family entry points, same queue and owned slot. */
+  replaceV2(
+    checkpoint: RecoveryCheckpointEnvelopeV2,
+  ): Promise<RecoveryMutationResult>;
+  replaceBarrierV2(
+    checkpoint: RecoveryCheckpointEnvelopeV2,
   ): Promise<RecoveryMutationResult>;
   clear(): Promise<RecoveryMutationResult>;
   retry(): Promise<RecoveryMutationResult>;
@@ -270,6 +279,18 @@ export function createRecoveryCheckpointQueue(
       submit({
         operation: "replace",
         checkpoint: serializeRecoveryCheckpointV1(checkpoint),
+        barrier: true,
+      }),
+    replaceV2: (checkpoint: RecoveryCheckpointEnvelopeV2) =>
+      submit({
+        operation: "replace",
+        checkpoint: serializeRecoveryCheckpointV2(checkpoint),
+        barrier: false,
+      }),
+    replaceBarrierV2: (checkpoint: RecoveryCheckpointEnvelopeV2) =>
+      submit({
+        operation: "replace",
+        checkpoint: serializeRecoveryCheckpointV2(checkpoint),
         barrier: true,
       }),
     clear: () => submit({ operation: "clear" }),

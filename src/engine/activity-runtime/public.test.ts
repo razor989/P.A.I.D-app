@@ -2,12 +2,288 @@ import { describe, expect, it, vi } from "vitest";
 import type { ExecutableActivityBinding } from "../registry/public";
 import { ActivityRegistry } from "../registry/public";
 import { createActivityActor } from "./public";
+import {
+  createC02ReferenceActivityActor,
+  evaluateC02ReferenceResponse,
+  inspectC02ReferenceActivityActor,
+  cancelC02ReferencePendingWork,
+} from "./public";
+import {
+  c02Scenarios,
+  c02PhilHealthFloor,
+} from "@/study/competencies/c02/public";
+import { projectSemanticActivityFrame } from "../semantic-frame/public";
+import type { LearnerResponse } from "../../core/public";
 import { createActivityRestoration } from "../activity-machine/public";
 import type {
   ActivityIntentAdapter,
   ModelIntent,
 } from "../activity-machine/public";
 import { ExactDecimal } from "../../core/public";
+
+const d5Roles = [
+  "gross",
+  "SSS",
+  "PhilHealth",
+  "Pag-IBIG",
+  "withholding",
+  "total deductions",
+  "net pay",
+] as const;
+function d5Response(mask = 0): LearnerResponse {
+  return {
+    kind: "COMPOSITE",
+    parts: d5Roles.map((key, i) => ({
+      key,
+      response: {
+        kind: "EXACT_QUANTITY",
+        value: {
+          magnitude: ExactDecimal.from(
+            mask & (1 << i)
+              ? "-12.345"
+              : ["12100", "600", "302.5", "200", "0", "1102.5", "10997.5"][i]!,
+          ),
+          kind: "MONETARY_AMOUNT",
+          unit: "PHP",
+          basis: null,
+        },
+      },
+    })),
+  };
+}
+
+function referenceFrame(
+  actor: ReturnType<typeof createC02ReferenceActivityActor>,
+) {
+  const { context, definition, ports } =
+    inspectC02ReferenceActivityActor(actor);
+  const feedback =
+    context.evaluation === null
+      ? null
+      : context.evaluation.outcome === "CONFIRMED"
+        ? definition.embeddedFloor!.mainFeedback.confirmation
+        : context.evaluation.diagnostic === "c02/S01/reconsider-arithmetic"
+          ? definition.embeddedFloor!.mainFeedback.arithmetic
+          : definition.embeddedFloor!.mainFeedback.payrollRole;
+  return projectSemanticActivityFrame({
+    context,
+    definition,
+    ports,
+    phase: context.position,
+    support: context.origin === null ? "NONE" : "REVIEW",
+    content: {
+      references: [],
+      modelFacts: [],
+      derivedFacts: [],
+      responseContract: {
+        id: "c02/S01/task",
+        text: "Identify the starting gross income, each individual deduction, total deductions, and Anna's final take-home pay.",
+      },
+      ...(feedback
+        ? {
+            feedback: {
+              outcome: context.evaluation!.outcome,
+              revision: context.responseRevision,
+              content: feedback,
+            },
+          }
+        : {}),
+    },
+  });
+}
+
+describe("D5 Runtime canonical source-authenticated reference", () => {
+  it("uses actual immutable C02 source facts, not Floor quantities for Anna", () => {
+    expect(
+      c02Scenarios.find((s) => s.id === "C02-S01")!.facts[0]!.resolution.kind,
+    ).toBe("KNOWN");
+    expect(c02PhilHealthFloor.basicSalary.magnitude.toString()).toBe("8000");
+    expect(evaluateC02ReferenceResponse(d5Response())).toEqual({
+      outcome: "CONFIRMED",
+      diagnostic: null,
+    });
+  });
+  it("projects a replay-normalized actor through unchanged Semantic Frame before and after genuine Continue", () => {
+    const actor = createC02ReferenceActivityActor({
+      position: "RECONSIDERATION",
+      response: d5Response(32),
+      responseRevision: 2,
+      hasChecked: true,
+      evaluation: {
+        outcome: "RECONSIDERATION",
+        diagnostic: "c02/S01/reconsider-arithmetic",
+      },
+      pending: { basis: "10000.00", revision: 6, mainRevision: 2 },
+    });
+    actor.start();
+    const initial = referenceFrame(actor);
+    expect(initial.c02Delivery!.purpose).toBe("MAIN_FEEDBACK");
+    expect(initial.c02Delivery!.passages[0]!.id).toBe(
+      "c02/S01/reconsider-arithmetic",
+    );
+    expect(actor.getSnapshot().context.c02Floor).toMatchObject({
+      phase: "MAIN",
+      basis: null,
+      revision: 0,
+    });
+    // Availability is explicit before the trusted harness acknowledges.
+    expect(initial.c02Delivery!.passages[0]!.text.length).toBeGreaterThan(0);
+    expect(initial.c02Delivery!.nonvisual.text.length).toBeGreaterThan(0);
+    actor.send({
+      type: "C02_MAIN_FEEDBACK_DELIVERED",
+      capability: initial.c02Delivery!.capability,
+    });
+    actor.send({ type: "CONTINUE" });
+    const floor = referenceFrame(actor);
+    expect(floor.c02Delivery!.purpose).toBe("FLOOR_TEACHING");
+    expect(floor.embeddedFloor!.consequence).not.toBeNull();
+    expect(floor.c02Delivery!.passages).toContainEqual(
+      floor.embeddedFloor!.explanation,
+    );
+    expect(floor.c02Delivery!.nonvisual).toEqual(
+      floor.embeddedFloor!.nonvisual,
+    );
+    expect(actor.getSnapshot().context.c02Floor).toMatchObject({
+      basis: "10000.00",
+      revision: 6,
+      teachingRevision: null,
+    });
+    const before = actor.getSnapshot().context;
+    actor.send({ type: "FINISH_ACTIVITY" });
+    expect(actor.getSnapshot().context).toBe(before);
+    actor.send({
+      type: "C02_FLOOR_TEACHING_DELIVERED",
+      capability: floor.c02Delivery!.capability,
+    });
+    actor.send({ type: "FINISH_ACTIVITY" });
+    expect(actor.getSnapshot().context.position).toBe("COMPLETE");
+    actor.stop();
+  });
+  it("executes all 128 S8 mismatch masks with source-role precedence", () => {
+    const counts = { confirmation: 0, arithmetic: 0, payroll: 0 };
+    for (let mask = 0; mask < 128; mask++) {
+      const expected =
+        mask === 0
+          ? null
+          : (mask & 31) !== 0
+            ? "c02/S01/reconsider-payroll-role"
+            : "c02/S01/reconsider-arithmetic";
+      const response = d5Response(mask);
+      const result = evaluateC02ReferenceResponse(response);
+      expect(result).toEqual({
+        outcome: mask === 0 ? "CONFIRMED" : "RECONSIDERATION",
+        diagnostic: expected,
+      });
+      const actor = createC02ReferenceActivityActor();
+      actor.start();
+      actor.send({ type: "CONTINUE" });
+      actor.send({ type: "RESPONSE_CHANGED", response });
+      actor.send({ type: "CHECK_RESPONSE" });
+      expect(actor.getSnapshot().context.evaluation).toEqual(result);
+      const frame = referenceFrame(actor);
+      expect(frame.c02Delivery!.passages[0]!.id).toBe(
+        expected ?? "c02/S01/confirmation",
+      );
+      expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+      actor.stop();
+      if (expected === null) counts.confirmation++;
+      else if (expected.endsWith("arithmetic")) counts.arithmetic++;
+      else counts.payroll++;
+    }
+    expect(counts).toEqual({ confirmation: 1, arithmetic: 3, payroll: 124 });
+  });
+  it("rejects duplicate roles, malformed monetary domain and contradictory checked claims", () => {
+    const response = d5Response();
+    if (response.kind !== "COMPOSITE") throw new Error("fixture");
+    expect(() =>
+      evaluateC02ReferenceResponse({
+        ...response,
+        parts: response.parts.map((part) => ({ ...part, key: "gross" })),
+      }),
+    ).toThrow();
+    expect(() =>
+      evaluateC02ReferenceResponse({
+        ...response,
+        parts: response.parts.map((part) => ({
+          ...part,
+          response: {
+            kind: "EXACT_QUANTITY",
+            value: {
+              magnitude: ExactDecimal.from("0"),
+              kind: "MONETARY_AMOUNT",
+              unit: "USD",
+              basis: null,
+            },
+          },
+        })),
+      }),
+    ).toThrow();
+    expect(() =>
+      createC02ReferenceActivityActor({
+        position: "RECONSIDERATION",
+        response,
+        responseRevision: 1,
+        hasChecked: true,
+        evaluation: {
+          outcome: "RECONSIDERATION",
+          diagnostic: "c02/S01/reconsider-arithmetic",
+        },
+        pending: null,
+      }),
+    ).toThrow("disagrees with current Study");
+  });
+  it("rejects unsafe initialization without invoking an accessor and rejects a copied actor", () => {
+    let invoked = false;
+    const seed = Object.defineProperty({}, "response", {
+      enumerable: true,
+      get() {
+        invoked = true;
+        return d5Response();
+      },
+    });
+    expect(() => createC02ReferenceActivityActor(seed as never)).toThrow(
+      "Unsafe C02 reference property",
+    );
+    expect(invoked).toBe(false);
+    const actor = createC02ReferenceActivityActor();
+    expect(() =>
+      inspectC02ReferenceActivityActor({ ...actor } as never),
+    ).toThrow("Unissued");
+    actor.start();
+    actor.stop();
+    expect(() => inspectC02ReferenceActivityActor(actor)).toThrow("inactive");
+  });
+  it("creates fresh unstarted checked actors, legal Semantic Frames, and cancellable private work", () => {
+    const init = {
+      position: "CONFIRMATION" as const,
+      response: d5Response(),
+      responseRevision: 7,
+      hasChecked: true,
+      evaluation: { outcome: "CONFIRMED" as const, diagnostic: null },
+      pending: { basis: "10000.00" as const, revision: 4, mainRevision: 7 },
+    };
+    const a = createC02ReferenceActivityActor(init);
+    const b = createC02ReferenceActivityActor(init);
+    const published = vi.fn();
+    a.subscribe(published);
+    expect(published).not.toHaveBeenCalled();
+    expect(a.getSnapshot().context).not.toBe(b.getSnapshot().context);
+    expect(a.getSnapshot().context.response).toBe(
+      a.getSnapshot().context.checkedResponse,
+    );
+    expect(a.getSnapshot().context.c02Floor).toMatchObject({
+      phase: "MAIN",
+      basis: null,
+      revision: 0,
+    });
+    expect(referenceFrame(a).c02Delivery!.purpose).toBe("MAIN_FEEDBACK");
+    cancelC02ReferencePendingWork(a);
+    expect(inspectC02ReferenceActivityActor(a).pending).toBeNull();
+    expect(inspectC02ReferenceActivityActor(b).pending).toEqual(init.pending);
+    a.stop();
+    b.stop();
+  });
+});
 
 describe("D1 Registry → Runtime → actor intent transport", () => {
   // C05 final C3 §§30–35 / D050/S1; compatibility fixture, not production binding.

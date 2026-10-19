@@ -1,4 +1,4 @@
-import { setup } from "xstate";
+import { createActor, setup } from "xstate";
 import {
   ExactDecimal,
   isActivityId,
@@ -113,7 +113,16 @@ export type C02DeliveryDescriptor = Readonly<{
   nonvisual: C02FloorText;
   capability: C02DeliveryCapability;
 }>;
-type C02Owner = { current?: ActivityContext; definition: C02FloorDefinition };
+type C02PendingWork = Readonly<{
+  basis: "8000.00" | "10000.00" | null;
+  revision: number;
+  mainRevision: number;
+}>;
+type C02Owner = {
+  current?: ActivityContext;
+  definition: C02FloorDefinition;
+  pending?: C02PendingWork;
+};
 const floorOwners = new WeakMap<C02FloorState, C02Owner>();
 const c02Deliveries = new WeakMap<
   C02DeliveryCapability,
@@ -125,6 +134,8 @@ const c02Deliveries = new WeakMap<
 >();
 
 function issueFloor(owner: C02Owner, value?: C02FloorState): C02FloorState {
+  // Ordinary reset/recheck paths revoke pending work even at equal counters.
+  if (value === undefined) delete owner.pending;
   const state: C02FloorState = Object.freeze(
     value ?? {
       id: "C02-S01-F",
@@ -1945,6 +1956,259 @@ const restorationIssuers = new WeakMap<
 >();
 export type ActivityRestoration = Readonly<{ activityId: ActivityId }>;
 
+export type C02ReferenceInitialization = Readonly<{
+  position:
+    "ENTRY" | "ACTIVE" | "REVISION" | "CONFIRMATION" | "RECONSIDERATION";
+  response: LearnerResponse | null;
+  responseRevision: number;
+  hasChecked: boolean;
+  evaluation: Evaluation | null;
+  pending: C02PendingWork | null;
+}>;
+const c02ReferenceSeeds = new WeakMap<
+  ActivityDefinition,
+  C02ReferenceInitialization
+>();
+const c02ReferenceRoles = [
+  "gross",
+  "SSS",
+  "PhilHealth",
+  "Pag-IBIG",
+  "withholding",
+  "total deductions",
+  "net pay",
+] as const;
+
+function c02ReferenceResponseReady(response: LearnerResponse): boolean {
+  return (
+    isLearnerResponse(response) &&
+    response.kind === "COMPOSITE" &&
+    response.parts.length === 7 &&
+    new Set(response.parts.map((part) => part.key)).size === 7 &&
+    response.parts.every(
+      (part) =>
+        c02ReferenceRoles.some((key) => key === part.key) &&
+        part.response.kind === "EXACT_QUANTITY" &&
+        part.response.value.kind === "MONETARY_AMOUNT" &&
+        part.response.value.unit === "PHP" &&
+        part.response.value.basis === null,
+    )
+  );
+}
+
+function evaluateC02Reference(response: LearnerResponse): Evaluation {
+  if (!c02ReferenceResponseReady(response) || response.kind !== "COMPOSITE")
+    throw new TypeError("Invalid C02 reference response");
+  const expected = ["12100", "600", "302.5", "200", "0", "1102.5", "10997.5"];
+  const wrong = c02ReferenceRoles.map((key, i) => {
+    const answer = response.parts.find((part) => part.key === key)!.response;
+    return (
+      answer.kind !== "EXACT_QUANTITY" ||
+      !answer.value.magnitude.equals(ExactDecimal.from(expected[i]!))
+    );
+  });
+  const diagnostic = wrong.slice(0, 5).some(Boolean)
+    ? "c02/S01/reconsider-payroll-role"
+    : wrong.slice(5).some(Boolean)
+      ? "c02/S01/reconsider-arithmetic"
+      : null;
+  return Object.freeze({
+    outcome: diagnostic === null ? "CONFIRMED" : "RECONSIDERATION",
+    diagnostic,
+  });
+}
+
+/** Fixed Machine-owned reference composition; no caller prose, ports or binding.
+ * Runtime separately authenticates current Study source before using this seam.
+ */
+export function createC02ReferenceMachine(
+  sourceAmounts: readonly string[],
+  initialization?: C02ReferenceInitialization,
+) {
+  if (
+    !Array.isArray(sourceAmounts) ||
+    sourceAmounts.length !== 7 ||
+    Reflect.ownKeys(sourceAmounts).length !== 8 ||
+    sourceAmounts.some(
+      (amount, i) =>
+        amount !==
+        ["12100", "600", "302.5", "200", "0", "1102.5", "10997.5"][i],
+    )
+  )
+    throw new TypeError("Invalid C02 reference source facts");
+  const text = (id: string): C02FloorText =>
+    Object.freeze({ id, text: c02ApprovedCopy[id]! });
+  const floor: C02FloorDefinition = Object.freeze({
+    id: "C02-S01-F",
+    activityId: "C02-A01",
+    primaryScenarioId: "C02-S01",
+    salary: "8000.00",
+    minimumBasis: "10000.00",
+    rate: "2.5%",
+    scenario: text("c02/S01-F/scenario"),
+    task: text("c02/S01-F/task"),
+    help: text("c02/S01-F/relationship-help"),
+    explanation: text("C02-FLOOR-EXPLANATION"),
+    nonvisual: text("c02/S01-F/accessibility-summary"),
+    mainFeedback: Object.freeze({
+      confirmation: text("c02/S01/confirmation"),
+      payrollRole: text("c02/S01/reconsider-payroll-role"),
+      arithmetic: text("c02/S01/reconsider-arithmetic"),
+    }),
+    choices: Object.freeze([
+      Object.freeze({
+        basis: "8000.00" as const,
+        share: "200.00" as const,
+        outcome: "RECONSIDERATION" as const,
+        feedback: text("c02/S01-F/reconsider"),
+      }),
+      Object.freeze({
+        basis: "10000.00" as const,
+        share: "250.00" as const,
+        outcome: "CONFIRMED" as const,
+        feedback: text("c02/S01-F/confirmation"),
+      }),
+    ]),
+  });
+  const definition: ActivityDefinition = Object.freeze({
+    activityId: "C02-A01",
+    embeddedFloor: floor,
+    edges: Object.freeze({
+      ENTRY: Object.freeze({ CONTINUE: "ACTIVE" as const }),
+      CONFIRMATION: Object.freeze({ CONTINUE: "C02-S01-F" as const }),
+      RECONSIDERATION: Object.freeze({ CONTINUE: "C02-S01-F" as const }),
+    }),
+    support: Object.freeze({
+      ACTIVE: Object.freeze(["REVIEW" as const]),
+      CONFIRMATION: Object.freeze(["REVIEW" as const]),
+      RECONSIDERATION: Object.freeze(["REVIEW" as const]),
+    }),
+  });
+  const ports: ActivityPorts = Object.freeze({
+    ready: c02ReferenceResponseReady,
+    evaluate: evaluateC02Reference,
+    completionEligible: (e) =>
+      e.activityId === "C02-A01" &&
+      e.evaluation !== null &&
+      e.checkedRevision === e.responseRevision &&
+      e.feedbackRevision === e.responseRevision,
+    sourceReviewAvailable: () => false,
+    informationNeeded: () => false,
+    informationReturn: () => false,
+  });
+  if (initialization !== undefined) {
+    if (
+      !fields(initialization, [
+        "position",
+        "response",
+        "responseRevision",
+        "hasChecked",
+        "evaluation",
+        "pending",
+      ]) ||
+      ![
+        "ENTRY",
+        "ACTIVE",
+        "REVISION",
+        "CONFIRMATION",
+        "RECONSIDERATION",
+      ].includes(initialization.position) ||
+      !Number.isSafeInteger(initialization.responseRevision) ||
+      initialization.responseRevision < 0 ||
+      typeof initialization.hasChecked !== "boolean" ||
+      (initialization.hasChecked && initialization.response === null) ||
+      (initialization.responseRevision === 0) !==
+        (initialization.response === null) ||
+      (initialization.response !== null &&
+        !c02ReferenceResponseReady(initialization.response))
+    )
+      throw new TypeError("Invalid C02 reference initialization");
+    const checked = initialization.evaluation !== null;
+    if (checked) {
+      const result = evaluateC02Reference(initialization.response!);
+      if (
+        !fields(initialization.evaluation, ["outcome", "diagnostic"]) ||
+        !initialization.hasChecked ||
+        initialization.evaluation.outcome !== result.outcome ||
+        initialization.evaluation.diagnostic !== result.diagnostic ||
+        initialization.position !==
+          (result.outcome === "CONFIRMED" ? "CONFIRMATION" : "RECONSIDERATION")
+      )
+        throw new TypeError("Invalid C02 checked initialization");
+    } else if (
+      ["CONFIRMATION", "RECONSIDERATION"].includes(initialization.position)
+    )
+      throw new TypeError("Missing C02 checked work");
+    if (
+      (initialization.position === "ENTRY" &&
+        (initialization.response !== null || initialization.hasChecked)) ||
+      (initialization.position === "ACTIVE" && initialization.hasChecked) ||
+      (initialization.position === "REVISION" && !initialization.hasChecked)
+    )
+      throw new TypeError("Invalid C02 reference history");
+    const pending = initialization.pending;
+    if (
+      pending !== null &&
+      (!checked ||
+        !fields(pending, ["basis", "revision", "mainRevision"]) ||
+        ![null, "8000.00", "10000.00"].includes(pending.basis) ||
+        !Number.isSafeInteger(pending.revision) ||
+        pending.revision < 0 ||
+        (pending.basis === null) !== (pending.revision === 0) ||
+        pending.mainRevision !== initialization.responseRevision)
+    )
+      throw new TypeError("Invalid C02 provisional work");
+    c02ReferenceSeeds.set(
+      definition,
+      Object.freeze({
+        ...initialization,
+        response:
+          initialization.response === null
+            ? null
+            : immutableResponse(initialization.response),
+        evaluation:
+          initialization.evaluation === null
+            ? null
+            : Object.freeze({ ...initialization.evaluation }),
+        pending: pending === null ? null : Object.freeze({ ...pending }),
+      }),
+    );
+  }
+  const machine = createActivityMachine(definition, ports);
+  const actor = createActor(machine);
+  // XState publishes a distinct initial context while deferring entry actions
+  // until start(). Bind this fresh actor here, never accept a caller context.
+  const initial = actor.getSnapshot().context;
+  const owner = initial.c02Floor && floorOwners.get(initial.c02Floor);
+  if (!owner) {
+    actor.stop();
+    throw new TypeError("Missing C02 initial owner");
+  }
+  owner.current = initial;
+  if (!c02WorkingStateValid(initial, definition)) {
+    actor.stop();
+    throw new TypeError("Invalid C02 initial reference state");
+  }
+  return Object.freeze({ definition, ports, machine, actor });
+}
+
+/** Live private-owner inspection; no instructional copy or delivery capabilities. */
+export function inspectC02ReferenceRecovery(
+  context: ActivityContext,
+): C02PendingWork | null {
+  const owner = context.c02Floor && floorOwners.get(context.c02Floor);
+  if (!owner || owner.current !== context)
+    throw new TypeError("Unissued C02 recovery context");
+  return owner.pending ? Object.freeze({ ...owner.pending }) : null;
+}
+
+export function abandonC02ReferenceRecovery(context: ActivityContext): void {
+  const owner = context.c02Floor && floorOwners.get(context.c02Floor);
+  if (!owner || owner.current !== context)
+    throw new TypeError("Unissued C02 recovery context");
+  delete owner.pending;
+}
+
 /** Trusted source composition must validate response membership and model issuance.
  * Like ordinary ports, this is a composition capability, never a JSON boundary.
  */
@@ -2092,6 +2356,7 @@ export function createActivityMachine(
     ? structuredClone(definition.terminalTeaching)
     : undefined;
   const activityId = definition.activityId;
+  const referenceSeed = c02ReferenceSeeds.get(definition);
   const floor = definition.embeddedFloor
     ? structuredClone(definition.embeddedFloor)
     : undefined;
@@ -2464,15 +2729,33 @@ export function createActivityMachine(
       context.feedbackRevision === context.responseRevision &&
       !!c02MainText(context, floor),
     actions: [
-      assign(({ context }: { context: ActivityContext }) => ({
-        position: "C02-S01-F" as const,
-        c02Floor: issueFloor(floorOwners.get(context.c02Floor!)!, {
-          ...context.c02Floor!,
-          phase: "FLOOR",
-          mainRevision: context.responseRevision,
-          entryOutcome: context.evaluation!.outcome,
-        }),
-      })),
+      assign(({ context }: { context: ActivityContext }) => {
+        const owner = floorOwners.get(context.c02Floor!)!;
+        const pending = owner.pending;
+        const choice =
+          pending && floor!.choices.find((row) => row.basis === pending.basis);
+        if (pending && pending.mainRevision !== context.checkedRevision)
+          throw new TypeError("Stale C02 provisional epoch");
+        delete owner.pending;
+        return {
+          position: "C02-S01-F" as const,
+          c02Floor: issueFloor(owner, {
+            ...context.c02Floor!,
+            phase: "FLOOR",
+            mainRevision: context.responseRevision,
+            entryOutcome: context.evaluation!.outcome,
+            ...(pending
+              ? {
+                  basis: pending.basis,
+                  revision: pending.revision,
+                  outcome: choice?.outcome ?? null,
+                  feedbackId: choice?.feedback.id ?? null,
+                  teachingRevision: null,
+                }
+              : {}),
+          }),
+        };
+      }),
       seal,
     ],
   };
@@ -2573,20 +2856,21 @@ export function createActivityMachine(
     ],
   });
   const instruction = {
-    initial: restored
-      ? restored.position.startsWith("EXP-")
-        ? "exp"
-        : (
-            {
-              ENTRY: "entry",
-              ACTIVE: "active",
-              REVISION: "revision",
-              CONFIRMATION: "confirmation",
-              RECONSIDERATION: "reconsideration",
-              POST_CONFIRMATION_EXPLANATION: "postConfirmationExplanation",
-            } as Record<string, string>
-          )[restored.position]!
-      : "entry",
+    initial:
+      (restored ?? referenceSeed)
+        ? (restored ?? referenceSeed)!.position.startsWith("EXP-")
+          ? "exp"
+          : (
+              {
+                ENTRY: "entry",
+                ACTIVE: "active",
+                REVISION: "revision",
+                CONFIRMATION: "confirmation",
+                RECONSIDERATION: "reconsideration",
+                POST_CONFIRMATION_EXPLANATION: "postConfirmationExplanation",
+              } as Record<string, string>
+            )[(restored ?? referenceSeed)!.position]!
+        : "entry",
     states: {
       entry: {
         on: {
@@ -2761,7 +3045,9 @@ export function createActivityMachine(
             }) =>
               valid(event) &&
               idle({ context }) &&
-              !floor &&
+              (!floor ||
+                (referenceSeed !== undefined &&
+                  floorOwners.get(context.c02Floor!)?.pending !== undefined)) &&
               context.response !== null &&
               (!staging || context.responseRevision < Number.MAX_SAFE_INTEGER),
             target: "revision",
@@ -3000,6 +3286,38 @@ export function createActivityMachine(
     context: () => {
       if (restored) return restored;
       const owner: C02Owner = { definition: floor! };
+      if (referenceSeed) {
+        const response =
+          referenceSeed.response === null
+            ? null
+            : immutableResponse(referenceSeed.response);
+        const initial: ActivityContext = Object.freeze({
+          activityId,
+          c02Floor: issueFloor(owner),
+          position: referenceSeed.position,
+          origin: null,
+          infoOrigin: null,
+          response,
+          checkedResponse: referenceSeed.evaluation === null ? null : response,
+          responseRevision: referenceSeed.responseRevision,
+          hasChecked: referenceSeed.hasChecked,
+          checkedRevision:
+            referenceSeed.evaluation === null
+              ? null
+              : referenceSeed.responseRevision,
+          feedbackRevision: null,
+          evaluation:
+            referenceSeed.evaluation === null
+              ? null
+              : Object.freeze({ ...referenceSeed.evaluation }),
+        });
+        if (referenceSeed.pending)
+          owner.pending = Object.freeze({ ...referenceSeed.pending });
+        owner.current = initial;
+        if (!c02WorkingStateValid(initial, floorDefinition))
+          throw new TypeError("Invalid C02 replay state");
+        return initial;
+      }
       const initial = Object.freeze({
         activityId,
         ...(floor ? { c02Floor: issueFloor(owner) } : {}),

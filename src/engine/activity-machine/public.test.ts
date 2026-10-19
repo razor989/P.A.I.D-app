@@ -9,6 +9,9 @@ import {
   validateC04A02StageEngagementV1,
   instructionalContinueEligible,
   c02WorkingStateValid,
+  createC02ReferenceMachine,
+  inspectC02ReferenceRecovery,
+  c02DeliveryFor,
 } from "./public";
 import type {
   ActivityContext,
@@ -23,6 +26,84 @@ import type {
 import { ActivityRegistry } from "../registry/public";
 import { createActivityActor } from "../activity-runtime/public";
 import type { ExecutableActivityBinding } from "../registry/public";
+
+describe("D5 fixed Machine reference actor initialization", () => {
+  it("same-machine actors retain distinct owners and pending custody before and after start", () => {
+    const reference = createC02ReferenceMachine(
+      ["12100", "600", "302.5", "200", "0", "1102.5", "10997.5"],
+      {
+        position: "CONFIRMATION",
+        response: d4Anna(),
+        responseRevision: 1,
+        hasChecked: true,
+        evaluation: { outcome: "CONFIRMED", diagnostic: null },
+        pending: { basis: "10000.00", revision: 3, mainRevision: 1 },
+      },
+    );
+    const a = reference.actor;
+    const b = createActor(reference.machine);
+    a.start();
+    b.start();
+    const ca = a.getSnapshot().context;
+    const cb = b.getSnapshot().context;
+    expect(ca.response).toBe(ca.checkedResponse);
+    expect(cb.response).toBe(cb.checkedResponse);
+    expect(ca.response).not.toBe(cb.response);
+    expect(ca.c02Floor).not.toBe(cb.c02Floor);
+    const token = c02DeliveryFor(ca, reference.definition)!.capability;
+    b.send({ type: "C02_MAIN_FEEDBACK_DELIVERED", capability: token });
+    expect(b.getSnapshot().context).toBe(cb);
+    a.send({ type: "REVISE" });
+    a.send({ type: "CHECK_AGAIN" });
+    expect(inspectC02ReferenceRecovery(a.getSnapshot().context)).toBeNull();
+    expect(inspectC02ReferenceRecovery(b.getSnapshot().context)).toEqual({
+      basis: "10000.00",
+      revision: 3,
+      mainRevision: 1,
+    });
+    const delivery = c02DeliveryFor(
+      b.getSnapshot().context,
+      reference.definition,
+    )!;
+    expect(delivery.passages[0]).toEqual(
+      reference.definition.embeddedFloor!.mainFeedback.confirmation,
+    );
+    expect(delivery.nonvisual.text.length).toBeGreaterThan(0);
+    b.send({
+      type: "C02_MAIN_FEEDBACK_DELIVERED",
+      capability: delivery.capability,
+    });
+    b.send({ type: "CONTINUE" });
+    expect(b.getSnapshot().context.c02Floor).toMatchObject({
+      basis: "10000.00",
+      revision: 3,
+      teachingRevision: null,
+    });
+    expect(a.getSnapshot().context.c02Floor).toMatchObject({
+      phase: "MAIN",
+      revision: 0,
+    });
+    a.stop();
+    b.stop();
+  });
+  it("rejects caller-selected prose, arbitrary source amounts and malformed seeds", () => {
+    const amounts = ["12100", "600", "302.5", "200", "0", "1102.5", "10997.5"];
+    expect(() =>
+      createC02ReferenceMachine([...amounts.slice(0, 6), "10000"]),
+    ).toThrow();
+    expect(() =>
+      createC02ReferenceMachine(amounts, {
+        position: "ENTRY",
+        response: null,
+        responseRevision: 0,
+        hasChecked: false,
+        evaluation: null,
+        pending: null,
+        explanation: "caller-selected prose",
+      } as never),
+    ).toThrow();
+  });
+});
 import { projectSemanticActivityFrame } from "../semantic-frame/public";
 
 // D1 compatibility fixtures only, NOT Study-authenticated production bindings.
