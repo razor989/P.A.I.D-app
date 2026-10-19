@@ -95,6 +95,7 @@ function retain(value: unknown): ExecutableActivityBinding {
   };
   if (definition.responseStages) freezeMetadata(definition.responseStages);
   if (definition.terminalTeaching) freezeMetadata(definition.terminalTeaching);
+  if (definition.embeddedFloor) freezeMetadata(definition.embeddedFloor);
   if (definition.modelSelection) freezeMetadata(definition.modelSelection);
   if (definition.modelIntents) freezeMetadata(definition.modelIntents);
   if (definition.instructionalContinuation)

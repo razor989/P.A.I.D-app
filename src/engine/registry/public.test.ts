@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ActivityModelAdapter } from "../activity-machine/public";
+import type { ActivityDefinition } from "../activity-machine/public";
+import { ExactDecimal, quantity } from "../../core/public";
+import type { LearnerResponse } from "../../core/public";
 import type { ExecutableActivityBinding } from "./public";
 import { ActivityRegistry } from "./public";
 import { createActivityActor } from "../activity-runtime/public";
@@ -575,5 +578,294 @@ describe("closed executable registry", () => {
     expect(() => new ActivityRegistry(null as never)).toThrow(
       /Invalid registrations/,
     );
+  });
+});
+
+// D4 fixture-only composition, NOT T071/T072 production binding or D5 issuer.
+// Context ddc0bb26: final C02 §§13–23, 68–69; D054/S1–S2.
+// Exact fixed copy: App f480888 src/study/competencies/c02/content.ts:10–37.
+// Full explanation: final C02 §20, lines 4120–4122, no paraphrase.
+const d4Texts: Readonly<Record<string, string>> = {
+  "c02/S01/confirmation":
+    "Confirmed. SSS is ₱600.00, PhilHealth is ₱302.50, Pag-IBIG is ₱200.00, and withholding tax is ₱0.00. Total deductions are ₱1,102.50, so net pay is ₱10,997.50.",
+  "c02/S01/reconsider-payroll-role":
+    "Check whether you are identifying gross income, one deduction, total deductions, or net pay. These are different payroll roles.",
+  "c02/S01/reconsider-arithmetic":
+    "Add the four employee deductions before subtracting the total from ₱12,100.00 gross income.",
+  "c02/S01-F/scenario":
+    "For this PhilHealth check, the employee's established monthly basic salary is ₱8,000.00. The approved PhilHealth minimum contribution basis is ₱10,000.00.",
+  "c02/S01-F/task":
+    "Identify the contribution basis that applies and determine the employee share at 2.5%.",
+  "c02/S01-F/relationship-help":
+    "Because ₱8,000.00 is below the approved ₱10,000.00 floor, use ₱10,000.00 as the contribution basis.",
+  "c02/S01-F/confirmation":
+    "Confirmed. The contribution basis is ₱10,000.00, so the employee share is ₱250.00.",
+  "c02/S01-F/reconsider":
+    "Do not calculate ₱8,000.00 × 2.5%. That gives ₱200.00 and ignores the approved PhilHealth floor.",
+  "c02/S01-F/accessibility-summary":
+    "Monthly basic salary ₱8,000.00. PhilHealth minimum contribution basis ₱10,000.00. Employee share at 2.5%: ₱250.00.",
+  "C02-FLOOR-EXPLANATION":
+    "A contribution rule may place a boundary on the basis used in its calculation. Here, the employee’s monthly basic salary is ₱8,000.00, but the approved PhilHealth rule uses a minimum contribution basis of ₱10,000.00.\n\nThat does not mean the employee suddenly earns ₱10,000.00. The employee’s salary remains ₱8,000.00. The ₱10,000.00 amount is the basis required by this contribution rule.",
+};
+function d4Fixture(): ExecutableActivityBinding {
+  const text = (id: string) => ({ id, text: d4Texts[id]! });
+  const definition: ActivityDefinition = {
+    activityId: "C02-A01",
+    edges: {
+      ENTRY: { CONTINUE: "ACTIVE" },
+      CONFIRMATION: { CONTINUE: "C02-S01-F" },
+      RECONSIDERATION: { CONTINUE: "C02-S01-F" },
+    },
+    support: {
+      ACTIVE: ["REVIEW"],
+      CONFIRMATION: ["REVIEW"],
+      RECONSIDERATION: ["REVIEW"],
+    },
+    embeddedFloor: {
+      id: "C02-S01-F",
+      activityId: "C02-A01",
+      primaryScenarioId: "C02-S01",
+      salary: "8000.00",
+      minimumBasis: "10000.00",
+      rate: "2.5%",
+      scenario: text("c02/S01-F/scenario"),
+      task: text("c02/S01-F/task"),
+      help: text("c02/S01-F/relationship-help"),
+      explanation: text("C02-FLOOR-EXPLANATION"),
+      nonvisual: text("c02/S01-F/accessibility-summary"),
+      mainFeedback: {
+        confirmation: text("c02/S01/confirmation"),
+        payrollRole: text("c02/S01/reconsider-payroll-role"),
+        arithmetic: text("c02/S01/reconsider-arithmetic"),
+      },
+      choices: [
+        {
+          basis: "8000.00",
+          share: "200.00",
+          outcome: "RECONSIDERATION",
+          feedback: text("c02/S01-F/reconsider"),
+        },
+        {
+          basis: "10000.00",
+          share: "250.00",
+          outcome: "CONFIRMED",
+          feedback: text("c02/S01-F/confirmation"),
+        },
+      ],
+    },
+  };
+  // Canonical A01 task identifies payroll roles in the intentionally complete static ledger.
+  // Role keys are fixture-local response transport, NOT new canonical option/content IDs.
+  const expected = d4Anna();
+  const ready = (response: LearnerResponse) =>
+    response.kind === "COMPOSITE" &&
+    response.parts.length === expected.parts.length &&
+    response.parts.every(
+      (p) =>
+        expected.parts.some((e) => e.key === p.key) &&
+        p.response.kind === "EXACT_QUANTITY" &&
+        p.response.value.kind === "MONETARY_AMOUNT" &&
+        p.response.value.unit === "PHP" &&
+        p.response.value.basis === null,
+    );
+  return {
+    activityId: "C02-A01",
+    definition,
+    ports: {
+      ready,
+      evaluate: (response) => {
+        if (!ready(response) || response.kind !== "COMPOSITE")
+          throw new TypeError("Not an Anna payroll-role response");
+        const correct = response.parts.every((p) => {
+          const target = expected.parts.find((e) => e.key === p.key)!.response;
+          return (
+            p.response.kind === "EXACT_QUANTITY" &&
+            p.response.value.magnitude.equals(target.value.magnitude)
+          );
+        });
+        return correct
+          ? { outcome: "CONFIRMED", diagnostic: null }
+          : {
+              outcome: "RECONSIDERATION",
+              diagnostic: "c02/S01/reconsider-payroll-role",
+            };
+      },
+      completionEligible: (evidence) =>
+        evidence.activityId === "C02-A01" &&
+        evidence.evaluation !== null &&
+        evidence.checkedRevision === evidence.responseRevision &&
+        evidence.feedbackRevision === evidence.responseRevision,
+      sourceReviewAvailable: () => false,
+      informationNeeded: () => false,
+      informationReturn: () => false,
+    },
+  };
+}
+function d4Anna(wrong = false) {
+  const rows: readonly (readonly [string, string])[] = [
+    ["gross", wrong ? "1102.50" : "12100.00"],
+    ["SSS", "600.00"],
+    ["PhilHealth", "302.50"],
+    ["Pag-IBIG", "200.00"],
+    ["withholding", "0.00"],
+    ["total deductions", "1102.50"],
+    ["net pay", "10997.50"],
+  ];
+  return {
+    kind: "COMPOSITE" as const,
+    parts: rows.map(([key, amount]) => ({
+      key,
+      response: {
+        kind: "EXACT_QUANTITY" as const,
+        value: quantity(
+          ExactDecimal.from(amount),
+          "MONETARY_AMOUNT",
+          "PHP",
+          null,
+        ),
+      },
+    })),
+  };
+}
+
+describe("D4 closed Floor Registry trust and retention", () => {
+  it("retains and recursively freezes detached optional source manifest through Runtime", () => {
+    const input = d4Fixture();
+    const registry = new ActivityRegistry([input]);
+    const saved = registry.resolve("C02-A01");
+    expect(saved.definition.embeddedFloor).not.toBe(
+      input.definition.embeddedFloor,
+    );
+    expect(
+      Object.isFrozen(saved.definition.embeddedFloor!.choices[0]!.feedback),
+    ).toBe(true);
+    expect(Object.isFrozen(saved.definition.embeddedFloor!.mainFeedback)).toBe(
+      true,
+    );
+    expect(Object.isFrozen(input.definition.embeddedFloor)).toBe(false);
+    const changed = input.definition.embeddedFloor! as unknown as {
+      salary: string;
+      choices: unknown[];
+    };
+    changed.salary = "9000.00";
+    changed.choices.pop();
+    expect(saved.definition.embeddedFloor!.salary).toBe("8000.00");
+    expect(saved.definition.embeddedFloor!.choices).toHaveLength(2);
+    const actor = createActivityActor(registry, "C02-A01").start();
+    expect(actor.getSnapshot().context.c02Floor!.phase).toBe("MAIN");
+    actor.stop();
+    expect(() => new ActivityRegistry([saved, saved])).toThrow("Duplicate");
+    expect(() => registry.resolve("C02-S01-F")).toThrow("Unknown");
+    expect(() => registry.resolve("C02-A05")).toThrow("Unknown");
+    const all = Array.from({ length: 6 }, (_, i) =>
+      Array.from(
+        { length: i === 4 ? 5 : 4 },
+        (_, j) => `C0${i + 1}-A0${j + 1}`,
+      ),
+    ).flat();
+    expect(all).toHaveLength(25);
+    expect(all.every((id) => registry.isKnown(id))).toBe(true);
+    expect(registry.isKnown("C02-S01-F")).toBe(false);
+  });
+  it.each([
+    "activity",
+    "scenario",
+    "id",
+    "salary",
+    "floor",
+    "rate",
+    "basis",
+    "share",
+    "outcome",
+    "copy",
+    "explanation",
+    "extra",
+    "choice-extra",
+    "duplicate-choice",
+    "direct-edge",
+    "previous",
+    "terminal",
+    "undefined",
+  ])("rejects malformed Floor registration: %s", (kind) => {
+    const input = d4Fixture();
+    const definition = structuredClone(input.definition) as unknown as Record<
+      string,
+      unknown
+    >;
+    const floor = definition.embeddedFloor as Record<string, unknown>;
+    const choices = floor.choices as Record<string, unknown>[];
+    switch (kind) {
+      case "activity":
+        definition.activityId = "C02-A02";
+        break;
+      case "scenario":
+        floor.primaryScenarioId = "C02-S02";
+        break;
+      case "id":
+        floor.id = "C02-A05";
+        break;
+      case "salary":
+        floor.salary = "9000.00";
+        break;
+      case "floor":
+        floor.minimumBasis = "8000.00";
+        break;
+      case "rate":
+        floor.rate = "5%";
+        break;
+      case "basis":
+        choices[0]!.basis = "9000.00";
+        break;
+      case "share":
+        choices[0]!.share = "250.00";
+        break;
+      case "outcome":
+        choices[0]!.outcome = "CONFIRMED";
+        break;
+      case "copy":
+        choices[0]!.feedback = {
+          id: "c02/S01-F/reconsider",
+          text: "Confirmed.",
+        };
+        break;
+      case "explanation":
+        floor.explanation = { id: "C02-FLOOR-EXPLANATION", text: "250" };
+        break;
+      case "extra":
+        floor.extra = true;
+        break;
+      case "choice-extra":
+        choices[0]!.extra = true;
+        break;
+      case "duplicate-choice":
+        choices[1] = choices[0]!;
+        break;
+      case "direct-edge":
+        definition.edges = { ENTRY: { CONTINUE: "C02-S01-F" } };
+        break;
+      case "previous":
+        definition.edges = {
+          ENTRY: { CONTINUE: "ACTIVE" },
+          CONFIRMATION: { CONTINUE: "C02-S01-F" },
+          RECONSIDERATION: { CONTINUE: "C02-S01-F" },
+          "C02-S01-F": { PREVIOUS: "ACTIVE" },
+        };
+        break;
+      case "terminal":
+        definition.terminalTeaching = {
+          outcomes: "BOTH",
+          contentId: "C02-FLOOR-EXPLANATION",
+        };
+        break;
+      case "undefined":
+        definition.embeddedFloor = undefined;
+        break;
+    }
+    expect(
+      () =>
+        new ActivityRegistry([
+          { ...input, definition: definition as ActivityDefinition },
+        ]),
+    ).toThrow();
   });
 });

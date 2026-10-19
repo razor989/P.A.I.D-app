@@ -6,6 +6,7 @@ import type {
   ActivityDefinition,
   ActivityPorts,
   ModelIntent,
+  ActivityEvent,
 } from "../activity-machine/public";
 import {
   isCurrentInstructionalDelivery,
@@ -24,6 +25,7 @@ import { ExactDecimal, quantity } from "../../core/public";
 import type { LearnerResponse } from "../../core/public";
 import { ActivityRegistry } from "../registry/public";
 import { createActivityActor } from "../activity-runtime/public";
+import type { ExecutableActivityBinding } from "../registry/public";
 import {
   composeC04ActivityFrame,
   createC04ActivityActor,
@@ -5062,5 +5064,450 @@ describe("synthetic semantic exposure enforcement", () => {
         phase: "UNKNOWN" as "ACTIVE",
       }),
     ).toThrow("Invalid semantic projection input");
+  });
+});
+
+// D4 fixture-only composition, NOT T071/T072 production binding or D5 issuer.
+// Context ddc0bb26: final C02 §§13–23, 68–69; D054/S1–S2.
+// Exact fixed copy: App f480888 src/study/competencies/c02/content.ts:10–37.
+// Full explanation: final C02 §20, lines 4120–4122, no paraphrase.
+const d4Texts: Readonly<Record<string, string>> = {
+  "c02/S01/confirmation":
+    "Confirmed. SSS is ₱600.00, PhilHealth is ₱302.50, Pag-IBIG is ₱200.00, and withholding tax is ₱0.00. Total deductions are ₱1,102.50, so net pay is ₱10,997.50.",
+  "c02/S01/reconsider-payroll-role":
+    "Check whether you are identifying gross income, one deduction, total deductions, or net pay. These are different payroll roles.",
+  "c02/S01/reconsider-arithmetic":
+    "Add the four employee deductions before subtracting the total from ₱12,100.00 gross income.",
+  "c02/S01-F/scenario":
+    "For this PhilHealth check, the employee's established monthly basic salary is ₱8,000.00. The approved PhilHealth minimum contribution basis is ₱10,000.00.",
+  "c02/S01-F/task":
+    "Identify the contribution basis that applies and determine the employee share at 2.5%.",
+  "c02/S01-F/relationship-help":
+    "Because ₱8,000.00 is below the approved ₱10,000.00 floor, use ₱10,000.00 as the contribution basis.",
+  "c02/S01-F/confirmation":
+    "Confirmed. The contribution basis is ₱10,000.00, so the employee share is ₱250.00.",
+  "c02/S01-F/reconsider":
+    "Do not calculate ₱8,000.00 × 2.5%. That gives ₱200.00 and ignores the approved PhilHealth floor.",
+  "c02/S01-F/accessibility-summary":
+    "Monthly basic salary ₱8,000.00. PhilHealth minimum contribution basis ₱10,000.00. Employee share at 2.5%: ₱250.00.",
+  "C02-FLOOR-EXPLANATION":
+    "A contribution rule may place a boundary on the basis used in its calculation. Here, the employee’s monthly basic salary is ₱8,000.00, but the approved PhilHealth rule uses a minimum contribution basis of ₱10,000.00.\n\nThat does not mean the employee suddenly earns ₱10,000.00. The employee’s salary remains ₱8,000.00. The ₱10,000.00 amount is the basis required by this contribution rule.",
+};
+function d4Fixture(): ExecutableActivityBinding {
+  const text = (id: string) => ({ id, text: d4Texts[id]! });
+  const definition: ActivityDefinition = {
+    activityId: "C02-A01",
+    edges: {
+      ENTRY: { CONTINUE: "ACTIVE" },
+      CONFIRMATION: { CONTINUE: "C02-S01-F" },
+      RECONSIDERATION: { CONTINUE: "C02-S01-F" },
+    },
+    support: {
+      ACTIVE: ["REVIEW"],
+      CONFIRMATION: ["REVIEW"],
+      RECONSIDERATION: ["REVIEW"],
+    },
+    embeddedFloor: {
+      id: "C02-S01-F",
+      activityId: "C02-A01",
+      primaryScenarioId: "C02-S01",
+      salary: "8000.00",
+      minimumBasis: "10000.00",
+      rate: "2.5%",
+      scenario: text("c02/S01-F/scenario"),
+      task: text("c02/S01-F/task"),
+      help: text("c02/S01-F/relationship-help"),
+      explanation: text("C02-FLOOR-EXPLANATION"),
+      nonvisual: text("c02/S01-F/accessibility-summary"),
+      mainFeedback: {
+        confirmation: text("c02/S01/confirmation"),
+        payrollRole: text("c02/S01/reconsider-payroll-role"),
+        arithmetic: text("c02/S01/reconsider-arithmetic"),
+      },
+      choices: [
+        {
+          basis: "8000.00",
+          share: "200.00",
+          outcome: "RECONSIDERATION",
+          feedback: text("c02/S01-F/reconsider"),
+        },
+        {
+          basis: "10000.00",
+          share: "250.00",
+          outcome: "CONFIRMED",
+          feedback: text("c02/S01-F/confirmation"),
+        },
+      ],
+    },
+  };
+  // Canonical A01 task identifies payroll roles in the intentionally complete static ledger.
+  // Role keys are fixture-local response transport, NOT new canonical option/content IDs.
+  const expected = d4Anna();
+  const ready = (response: LearnerResponse) =>
+    response.kind === "COMPOSITE" &&
+    response.parts.length === expected.parts.length &&
+    response.parts.every(
+      (p) =>
+        expected.parts.some((e) => e.key === p.key) &&
+        p.response.kind === "EXACT_QUANTITY" &&
+        p.response.value.kind === "MONETARY_AMOUNT" &&
+        p.response.value.unit === "PHP" &&
+        p.response.value.basis === null,
+    );
+  return {
+    activityId: "C02-A01",
+    definition,
+    ports: {
+      ready,
+      evaluate: (response) => {
+        if (!ready(response) || response.kind !== "COMPOSITE")
+          throw new TypeError("Not an Anna payroll-role response");
+        const correct = response.parts.every((p) => {
+          const target = expected.parts.find((e) => e.key === p.key)!.response;
+          return (
+            p.response.kind === "EXACT_QUANTITY" &&
+            p.response.value.magnitude.equals(target.value.magnitude)
+          );
+        });
+        return correct
+          ? { outcome: "CONFIRMED", diagnostic: null }
+          : {
+              outcome: "RECONSIDERATION",
+              diagnostic: "c02/S01/reconsider-payroll-role",
+            };
+      },
+      completionEligible: (evidence) =>
+        evidence.activityId === "C02-A01" &&
+        evidence.evaluation !== null &&
+        evidence.checkedRevision === evidence.responseRevision &&
+        evidence.feedbackRevision === evidence.responseRevision,
+      sourceReviewAvailable: () => false,
+      informationNeeded: () => false,
+      informationReturn: () => false,
+    },
+  };
+}
+function d4Anna(wrong = false) {
+  const rows: readonly (readonly [string, string])[] = [
+    ["gross", wrong ? "1102.50" : "12100.00"],
+    ["SSS", "600.00"],
+    ["PhilHealth", "302.50"],
+    ["Pag-IBIG", "200.00"],
+    ["withholding", "0.00"],
+    ["total deductions", "1102.50"],
+    ["net pay", "10997.50"],
+  ];
+  return {
+    kind: "COMPOSITE" as const,
+    parts: rows.map(([key, amount]) => ({
+      key,
+      response: {
+        kind: "EXACT_QUANTITY" as const,
+        value: quantity(
+          ExactDecimal.from(amount),
+          "MONETARY_AMOUNT",
+          "PHP",
+          null,
+        ),
+      },
+    })),
+  };
+}
+type D4Actor = ReturnType<typeof createActivityActor>;
+function d4Frame(actor: D4Actor, binding: ExecutableActivityBinding) {
+  const c = actor.getSnapshot().context;
+  const feedback = c.evaluation
+    ? c.evaluation.outcome === "CONFIRMED"
+      ? binding.definition.embeddedFloor!.mainFeedback.confirmation
+      : binding.definition.embeddedFloor!.mainFeedback.payrollRole
+    : null;
+  return projectSemanticActivityFrame({
+    context: c,
+    phase: c.position,
+    support: c.origin === null ? "NONE" : "REVIEW",
+    definition: binding.definition,
+    ports: binding.ports,
+    content: {
+      references: [],
+      modelFacts: [],
+      derivedFacts: [],
+      responseContract: {
+        id: "c02/S01/task",
+        text: "Identify the starting gross income, each individual deduction, total deductions, and Anna's final take-home pay.",
+      },
+      ...(feedback
+        ? {
+            feedback: {
+              outcome: c.evaluation!.outcome,
+              revision: c.responseRevision,
+              content: feedback,
+            },
+          }
+        : {}),
+    },
+  });
+}
+function d4Check(actor: D4Actor, wrong = false) {
+  actor.send({ type: "CONTINUE" });
+  actor.send({ type: "RESPONSE_CHANGED", response: d4Anna(wrong) });
+  actor.send({ type: "CHECK_RESPONSE" });
+}
+// Test-controlled trusted presentation boundary: the complete exact feedback or
+// local passage/consequence and nonvisual equivalent become available before ACK.
+// This is headless semantic availability, NOT DOM/a11y/browser certification.
+function d4Present(
+  actor: D4Actor,
+  binding: ExecutableActivityBinding,
+  available = true,
+) {
+  const frame = d4Frame(actor, binding);
+  const delivery = frame.c02Delivery;
+  if (!delivery || !available) return false;
+  const shown = delivery.passages.map((p) => ({ ...p }));
+  const accessible = { ...delivery.nonvisual };
+  expect(shown.every((p) => d4Texts[p.id] === p.text)).toBe(true);
+  expect(d4Texts[accessible.id]).toBe(accessible.text);
+  if (delivery.purpose === "MAIN_FEEDBACK")
+    expect(frame.feedbackState?.content).toEqual(shown[0]);
+  else {
+    expect(frame.embeddedFloor!.consequence).not.toBeNull();
+    expect(shown).toContainEqual(frame.embeddedFloor!.feedback);
+    expect(shown).toContainEqual(frame.embeddedFloor!.explanation);
+    expect(accessible).toEqual(frame.embeddedFloor!.nonvisual);
+  }
+  actor.send({
+    type:
+      delivery.purpose === "MAIN_FEEDBACK"
+        ? "C02_MAIN_FEEDBACK_DELIVERED"
+        : "C02_FLOOR_TEACHING_DELIVERED",
+    capability: delivery.capability,
+  });
+  return true;
+}
+function d4Select(
+  actor: D4Actor,
+  binding: ExecutableActivityBinding,
+  basis: "8000.00" | "10000.00",
+) {
+  const event = d4Frame(actor, binding).embeddedFloor!.controls.find(
+    (e) => e.basis === basis,
+  )!;
+  expect(event).toBeDefined();
+  actor.send(event);
+}
+function d4Unchanged(actor: D4Actor, event: unknown) {
+  const before = actor.getSnapshot().context;
+  actor.send(event as ActivityEvent);
+  expect(actor.getSnapshot().context).toBe(before);
+}
+
+describe("D4 embedded Floor semantic projection and delivery parity", () => {
+  const start = () => {
+    const registry = new ActivityRegistry([d4Fixture()]);
+    return {
+      binding: registry.resolve("C02-A01"),
+      actor: createActivityActor(registry, "C02-A01").start(),
+    };
+  };
+  it.each([false, true])(
+    "both branches expose only current main feedback then distinct bounded Floor controls: reconsideration=%s",
+    (wrong) => {
+      const { actor, binding } = start();
+      let f = d4Frame(actor, binding);
+      expect(f.embeddedFloor).toBeUndefined();
+      expect(f.c02Delivery).toBeUndefined();
+      d4Check(actor, wrong);
+      f = d4Frame(actor, binding);
+      expect(f.feedbackState?.content.text).toBe(
+        d4Texts[
+          wrong ? "c02/S01/reconsider-payroll-role" : "c02/S01/confirmation"
+        ],
+      );
+      expect(f.c02Delivery!.passages).toEqual([f.feedbackState!.content]);
+      expect(f.allowedLearnerIntents).not.toContain("CONTINUE");
+      expect(f.allowedLearnerIntents.includes("REVISE")).toBe(wrong);
+      expect(f.embeddedFloor).toBeUndefined();
+      expect(f.contentReferences).toEqual([]);
+      const before = actor.getSnapshot().context;
+      d4Frame(actor, binding);
+      d4Frame(actor, binding);
+      expect(actor.getSnapshot().context).toBe(before);
+      expect(before.feedbackRevision).toBeNull();
+      d4Present(actor, binding);
+      f = d4Frame(actor, binding);
+      expect(f.c02Delivery).toBeUndefined();
+      expect(f.allowedLearnerIntents).toContain("CONTINUE");
+      expect(f.completionActionAvailability).toBe(false);
+      actor.send({ type: "CONTINUE" });
+      f = d4Frame(actor, binding);
+      expect(f.stateId).toBe("C02-S01-F");
+      expect(f.embeddedFloor!.id).toBe("C02-S01-F");
+      expect(f.embeddedFloor!.selectedBasis).toBeNull();
+      expect(f.embeddedFloor!.consequence).toBeNull();
+      expect(f.embeddedFloor!.controls.map((c) => c.basis)).toEqual([
+        "8000.00",
+        "10000.00",
+      ]);
+      expect(f.embeddedFloor!.explanation.text).toBe(
+        d4Texts["C02-FLOOR-EXPLANATION"],
+      );
+      expect(f.embeddedFloor!.nonvisual.text).toBe(
+        d4Texts["c02/S01-F/accessibility-summary"],
+      );
+      expect(f.allowedLearnerIntents).not.toContain("PREVIOUS");
+      expect(f.allowedLearnerIntents).not.toContain("OPEN_SUPPORT");
+      expect(f.c02Delivery).toBeUndefined();
+      for (const basis of ["8000.00", "10000.00"] as const) {
+        const old = f.embeddedFloor!.controls.find((e) => e.basis === basis)!;
+        actor.send(old);
+        f = d4Frame(actor, binding);
+        expect(f.embeddedFloor!.consequence?.share).toBe(
+          basis === "8000.00" ? "200.00" : "250.00",
+        );
+        expect(f.embeddedFloor!.controls).toHaveLength(1);
+        expect(f.completionActionAvailability).toBe(false);
+        d4Unchanged(actor, old);
+        d4Unchanged(actor, { type: "FINISH_ACTIVITY" });
+        expect(f.c02Delivery!.passages.map((p) => p.id)).toEqual([
+          "c02/S01-F/scenario",
+          "c02/S01-F/task",
+          "c02/S01-F/relationship-help",
+          basis === "8000.00"
+            ? "c02/S01-F/reconsider"
+            : "c02/S01-F/confirmation",
+          "C02-FLOOR-EXPLANATION",
+        ]);
+        expect(d4Present(actor, binding, false)).toBe(false);
+        expect(
+          actor.getSnapshot().context.c02Floor!.teachingRevision,
+        ).toBeNull();
+        d4Present(actor, binding);
+        f = d4Frame(actor, binding);
+        expect(f.c02Delivery).toBeUndefined();
+        expect(f.completionActionAvailability).toBe(basis === "10000.00");
+        expect(f.allowedLearnerIntents.includes("FINISH_ACTIVITY")).toBe(
+          basis === "10000.00",
+        );
+      }
+      actor.send({ type: "FINISH_ACTIVITY" });
+      expect(d4Frame(actor, binding).stateId).toBe("COMPLETE");
+      actor.stop();
+    },
+  );
+  it("rejects detached state or replaced source and blocks overlay delivery without manufacturing completion", () => {
+    const { actor, binding } = start();
+    d4Check(actor, true);
+    const context = actor.getSnapshot().context;
+    const input = {
+      context,
+      phase: context.position,
+      support: "NONE" as const,
+      definition: binding.definition,
+      ports: binding.ports,
+      content: {
+        references: [],
+        modelFacts: [],
+        derivedFacts: [],
+        responseContract: {
+          id: "c02/S01/task",
+          text: "Identify the starting gross income, each individual deduction, total deductions, and Anna's final take-home pay.",
+        },
+      },
+    };
+    expect(() =>
+      projectSemanticActivityFrame({ ...input, context: { ...context } }),
+    ).toThrow("C02");
+    const definition = structuredClone(binding.definition);
+    const changed = {
+      ...definition,
+      embeddedFloor: {
+        ...definition.embeddedFloor!,
+        explanation: { id: "C02-FLOOR-EXPLANATION", text: "wrong" },
+      },
+    };
+    expect(() =>
+      projectSemanticActivityFrame({ ...input, definition: changed }),
+    ).toThrow("C02");
+    actor.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+    const overlay = d4Frame(actor, binding);
+    expect(overlay.c02Delivery).toBeUndefined();
+    expect(overlay.completionActionAvailability).toBe(false);
+    expect(overlay.allowedLearnerIntents).toEqual(["CLOSE_SUPPORT"]);
+    actor.send({ type: "CLOSE_SUPPORT" });
+    expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+    actor.stop();
+  });
+  it("pure fixed consequence mathematics and source IDs are independent of prose parsing", () => {
+    const { actor, binding } = start();
+    const floor = binding.definition.embeddedFloor!;
+    expect(
+      ExactDecimal.from(floor.salary)
+        .multiply(ExactDecimal.from("0.025"))
+        .toString(),
+    ).toBe("200");
+    expect(
+      ExactDecimal.from(floor.minimumBasis)
+        .multiply(ExactDecimal.from("0.025"))
+        .toString(),
+    ).toBe("250");
+    expect(floor.scenario.id).toBe("c02/S01-F/scenario");
+    d4Check(actor);
+    d4Present(actor, binding);
+    actor.send({ type: "CONTINUE" });
+    d4Select(actor, binding, "10000.00");
+    const descriptor = d4Frame(actor, binding).c02Delivery!;
+    expect(descriptor.scenarioId).toBe("C02-S01-F");
+    expect(descriptor.localRevision).toBe(1);
+    expect(descriptor.position).toBe("C02-S01-F");
+    expect(descriptor.responseRevision).toBe(1);
+    actor.stop();
+  });
+});
+
+describe("D4 Floor relative exposure", () => {
+  it("blocks source Floor text smuggled as PUBLIC references facts or derived facts before local entry", () => {
+    const registry = new ActivityRegistry([d4Fixture()]);
+    const binding = registry.resolve("C02-A01");
+    const actor = createActivityActor(registry, "C02-A01").start();
+    actor.send({ type: "CONTINUE" });
+    const context = actor.getSnapshot().context;
+    const floor = binding.definition.embeddedFloor!;
+    const passages = [
+      floor.scenario,
+      floor.task,
+      floor.help,
+      floor.explanation,
+      floor.nonvisual,
+      ...floor.choices.map((c) => c.feedback),
+    ];
+    const entries = passages
+      .flatMap((p) => [p, { id: `public-${p.id}`, text: p.text }])
+      .map((content) => ({
+        content,
+        phases: ["ACTIVE" as const],
+        timing: "PUBLIC" as const,
+      }));
+    const f = projectSemanticActivityFrame({
+      context,
+      phase: "ACTIVE",
+      support: "NONE",
+      definition: binding.definition,
+      ports: binding.ports,
+      content: {
+        references: entries,
+        modelFacts: entries,
+        derivedFacts: entries,
+        responseContract: {
+          id: "c02/S01/task",
+          text: "Identify the starting gross income, each individual deduction, total deductions, and Anna's final take-home pay.",
+        },
+      },
+    });
+    expect(f.contentReferences).toEqual([]);
+    expect(f.exposedModelFacts).toEqual([]);
+    expect(f.exposedDerivedFacts).toEqual([]);
+    expect(f.embeddedFloor).toBeUndefined();
+    expect(f.c02Delivery).toBeUndefined();
+    actor.stop();
   });
 });

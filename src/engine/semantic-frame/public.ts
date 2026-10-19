@@ -7,6 +7,9 @@ import {
   modelIntentPermitted,
   primaryResponseReady,
   stagedResponseReady,
+  c02DeliveryFor,
+  c02WorkingStateValid,
+  c02FloorFinishEligible,
 } from "../activity-machine/public";
 import type {
   ActivityContext,
@@ -16,6 +19,8 @@ import type {
   CompletionEvidence,
   Position,
   SupportPhase,
+  C02DeliveryDescriptor,
+  C02FloorState,
 } from "../activity-machine/public";
 import { projectReview, projectSourceReview } from "../review/public";
 import type {
@@ -879,6 +884,34 @@ export type FrameInput = Readonly<{
 }>;
 export type LearnerIntent = ActivityEvent["type"];
 export type SemanticActivityFrame = Readonly<{
+  c02Delivery?: C02DeliveryDescriptor;
+  embeddedFloor?: Readonly<{
+    id: "C02-S01-F";
+    revision: number;
+    mainRevision: number;
+    selectedBasis: C02FloorState["basis"];
+    outcome: C02FloorState["outcome"];
+    teachingRevision: number | null;
+    actualSalary: "8000.00";
+    minimumContributionBasis: "10000.00";
+    employeeRate: "2.5%";
+    readingOrder: readonly string[];
+    consequence: Readonly<{
+      basis: string;
+      share: string;
+      rate: "2.5%";
+    }> | null;
+    feedback: SafeText | null;
+    explanation: SafeText;
+    nonvisual: SafeText;
+    scenario: SafeText;
+    task: SafeText;
+    help: SafeText;
+    controls: readonly Extract<
+      ActivityEvent,
+      { type: "C02_SELECT_FLOOR_BASIS" }
+    >[];
+  }>;
   activityId: ActivityId;
   stateId: string;
   contentReferences: readonly SafeText[];
@@ -909,6 +942,7 @@ export type SemanticActivityFrame = Readonly<{
 }>;
 
 const phaseValid = (value: unknown): value is Position =>
+  value === "C02-S01-F" ||
   value === "ENTRY" ||
   value === "ACTIVE" ||
   value === "REVISION" ||
@@ -1197,6 +1231,7 @@ export function projectSemanticActivityFrame(
   const { context: c, phase, support, definition, ports, content } = input;
   const staging = definition.responseStages;
   const teaching = definition.terminalTeaching;
+  const floor = definition.embeddedFloor;
   if (
     !isActivityId(c.activityId) ||
     c.activityId !== definition.activityId ||
@@ -1213,6 +1248,40 @@ export function projectSemanticActivityFrame(
     !safeText(content.responseContract)
   )
     throw new TypeError("Invalid semantic projection input");
+  if (
+    (floor && !c02WorkingStateValid(c, definition)) ||
+    (!floor && (c.c02Floor || phase === "C02-S01-F"))
+  )
+    throw new TypeError("Invalid live C02 Floor projection");
+  const c02Delivery = floor ? c02DeliveryFor(c, definition) : null;
+  const floorState = c.c02Floor;
+  const floorChoice = floor?.choices.find(
+    (row) => row.basis === floorState?.basis,
+  );
+  const floorControls: Extract<
+    ActivityEvent,
+    { type: "C02_SELECT_FLOOR_BASIS" }
+  >[] = [];
+  if (
+    floor &&
+    phase === "C02-S01-F" &&
+    support === "NONE" &&
+    floorState!.revision < Number.MAX_SAFE_INTEGER
+  ) {
+    for (const row of floor.choices)
+      if (row.basis !== floorState!.basis)
+        floorControls.push(
+          Object.freeze({
+            type: "C02_SELECT_FLOOR_BASIS",
+            activityId: "C02-A01",
+            scenarioId: "C02-S01-F",
+            position: "C02-S01-F",
+            mainRevision: c.responseRevision,
+            revision: floorState!.revision,
+            basis: row.basis,
+          }),
+        );
+  }
   if (
     staging &&
     c.responseStage !== "PRIMARY" &&
@@ -1248,6 +1317,9 @@ export function projectSemanticActivityFrame(
         c.feedbackRevision === c.responseRevision) ||
       (phase === "RECONSIDERATION" &&
         c.evaluation.outcome === "RECONSIDERATION") ||
+      (phase === "C02-S01-F" &&
+        !!floor &&
+        c02WorkingStateValid(c, definition)) ||
       phase === "COMPLETE");
   const currentFeedback =
     currentCheck && c.feedbackRevision === c.responseRevision;
@@ -1291,6 +1363,7 @@ export function projectSemanticActivityFrame(
       : null;
   const finish =
     idle &&
+    (!floor || c02FloorFinishEligible(c, definition)) &&
     currentFeedback &&
     (!teaching ||
       (phase === "POST_CONFIRMATION_EXPLANATION" &&
@@ -1300,7 +1373,8 @@ export function projectSemanticActivityFrame(
       definition.edges.CONFIRMATION?.CONTINUE !==
         "POST_CONFIRMATION_EXPLANATION") ||
       phase === "POST_CONFIRMATION_EXPLANATION" ||
-      phase === "RECONSIDERATION") &&
+      phase === "RECONSIDERATION" ||
+      phase === "C02-S01-F") &&
     authorized(() =>
       ports.completionEligible({
         activityId: c.activityId,
@@ -1311,6 +1385,13 @@ export function projectSemanticActivityFrame(
       } satisfies CompletionEvidence),
     );
   const intents: LearnerIntent[] = [];
+  if (floorControls.length) intents.push("C02_SELECT_FLOOR_BASIS");
+  if (c02Delivery)
+    intents.push(
+      c02Delivery.purpose === "MAIN_FEEDBACK"
+        ? "C02_MAIN_FEEDBACK_DELIVERED"
+        : "C02_FLOOR_TEACHING_DELIVERED",
+    );
   const allowedModels = idle
     ? availableModelSelections(c, definition.modelSelection)
     : [];
@@ -1349,6 +1430,12 @@ export function projectSemanticActivityFrame(
   }
   if (idle) {
     const edge = definition.edges[phase];
+    if (
+      floor &&
+      (phase === "CONFIRMATION" || phase === "RECONSIDERATION") &&
+      currentFeedback
+    )
+      intents.push("CONTINUE");
     if (
       (phase === "CONFIRMATION" ||
         (phase === "RECONSIDERATION" && teaching?.outcomes === "BOTH")) &&
@@ -1417,6 +1504,7 @@ export function projectSemanticActivityFrame(
     }
     if (
       (phase === "CONFIRMATION" || phase === "RECONSIDERATION") &&
+      (!floor || phase === "RECONSIDERATION") &&
       c.response !== null &&
       (!staging || c.responseRevision < Number.MAX_SAFE_INTEGER)
     )
@@ -1429,10 +1517,22 @@ export function projectSemanticActivityFrame(
     )
       intents.push("OPEN_SUPPORT");
   } else intents.push("CLOSE_SUPPORT");
-  const feedback =
-    currentFeedback &&
-    content.feedback?.revision === c.responseRevision &&
-    content.feedback.outcome === c.evaluation?.outcome
+  const approvedMain =
+    floor &&
+    currentCheck &&
+    (phase === "CONFIRMATION" || phase === "RECONSIDERATION")
+      ? c.evaluation?.outcome === "CONFIRMED"
+        ? floor.mainFeedback.confirmation
+        : c.evaluation?.diagnostic === floor.mainFeedback.payrollRole.id
+          ? floor.mainFeedback.payrollRole
+          : floor.mainFeedback.arithmetic
+      : null;
+  const feedback = approvedMain
+    ? safeText(approvedMain)
+    : !floor &&
+        currentFeedback &&
+        content.feedback?.revision === c.responseRevision &&
+        content.feedback.outcome === c.evaluation?.outcome
       ? safeText(content.feedback.content)
       : null;
   const editable = idle && (phase === "ACTIVE" || phase === "REVISION");
@@ -1562,16 +1662,38 @@ export function projectSemanticActivityFrame(
   }
   // The declared terminal reference cannot be smuggled through a PUBLIC exposure
   // in an earlier phase. Projection is not a delivery acknowledgment.
-  const exposures = (items: readonly Exposure[]): readonly Exposure[] =>
-    teaching
-      ? items.filter(
+  const exposures = (items: readonly Exposure[]): readonly Exposure[] => {
+    // The optional manifest owns these exact passages. A PUBLIC transport entry
+    // cannot bring Floor instruction into Anna's earlier main work.
+    const local = floor
+      ? [
+          floor.scenario,
+          floor.task,
+          floor.help,
+          floor.explanation,
+          floor.nonvisual,
+          ...floor.choices.map((row) => row.feedback),
+        ]
+      : [];
+    const filtered =
+      floor && phase !== "C02-S01-F"
+        ? items.filter(
+            (item) =>
+              !local.some(
+                (p) => p.id === item.content.id || p.text === item.content.text,
+              ),
+          )
+        : items;
+    return teaching
+      ? filtered.filter(
           (item) =>
             item.content.id !== teaching.contentId ||
             (phase === "POST_CONFIRMATION_EXPLANATION" &&
               currentFeedback &&
               item.timing === "CURRENT_FEEDBACK"),
         )
-      : items;
+      : filtered;
+  };
   const contentReferences = projectFacts(
     exposures(content.references),
     phase,
@@ -1601,6 +1723,44 @@ export function projectSemanticActivityFrame(
       )!.text,
     });
   return Object.freeze({
+    ...(c02Delivery ? { c02Delivery } : {}),
+    ...(floor && phase === "C02-S01-F"
+      ? {
+          embeddedFloor: Object.freeze({
+            id: "C02-S01-F" as const,
+            revision: floorState!.revision,
+            mainRevision: c.responseRevision,
+            selectedBasis: floorState!.basis,
+            outcome: floorState!.outcome,
+            teachingRevision: floorState!.teachingRevision,
+            actualSalary: floor.salary,
+            minimumContributionBasis: floor.minimumBasis,
+            employeeRate: floor.rate,
+            readingOrder: Object.freeze([
+              floor.scenario.id,
+              floor.task.id,
+              floor.help.id,
+              ...(floorChoice ? [floorChoice.feedback.id] : []),
+              floor.explanation.id,
+              floor.nonvisual.id,
+            ]),
+            consequence: floorChoice
+              ? Object.freeze({
+                  basis: floorChoice.basis,
+                  share: floorChoice.share,
+                  rate: floor.rate,
+                })
+              : null,
+            feedback: floorChoice ? safeText(floorChoice.feedback) : null,
+            explanation: safeText(floor.explanation)!,
+            nonvisual: safeText(floor.nonvisual)!,
+            scenario: safeText(floor.scenario)!,
+            task: safeText(floor.task)!,
+            help: safeText(floor.help)!,
+            controls: Object.freeze(floorControls),
+          }),
+        }
+      : {}),
     activityId: c.activityId,
     stateId: support === "NONE" ? phase : `${support}[${phase}]`,
     contentReferences,

@@ -14,12 +14,14 @@ export type InstructionalPhase =
   | "REVISION"
   | "CONFIRMATION"
   | "POST_CONFIRMATION_EXPLANATION"
+  | "C02-S01-F"
   | "RECONSIDERATION"
   | "INFO_NEEDED"
   | "COMPLETE";
 export type SupportPhase =
   "NONE" | "REVIEW" | "SOURCE_REVIEW" | "REINFORCEMENT";
 export type Position =
+  | "C02-S01-F"
   | "ENTRY"
   | "ACTIVE"
   | "REVISION"
@@ -60,6 +62,361 @@ export type TerminalTeachingDefinition = Readonly<{
   outcomes: "BOTH";
   contentId: string;
 }>;
+/** D054/S1–S2: trusted, source-traced fixture/composition data, not a Study issuer. */
+export type C02FloorText = Readonly<{ id: string; text: string }>;
+export type C02FloorDefinition = Readonly<{
+  id: "C02-S01-F";
+  activityId: "C02-A01";
+  primaryScenarioId: "C02-S01";
+  salary: "8000.00";
+  minimumBasis: "10000.00";
+  rate: "2.5%";
+  scenario: C02FloorText;
+  task: C02FloorText;
+  help: C02FloorText;
+  explanation: C02FloorText;
+  nonvisual: C02FloorText;
+  mainFeedback: Readonly<{
+    confirmation: C02FloorText;
+    payrollRole: C02FloorText;
+    arithmetic: C02FloorText;
+  }>;
+  choices: readonly Readonly<{
+    basis: "8000.00" | "10000.00";
+    share: "200.00" | "250.00";
+    outcome: Evaluation["outcome"];
+    feedback: C02FloorText;
+  }>[];
+}>;
+export type C02FloorState = Readonly<{
+  id: "C02-S01-F";
+  phase: "MAIN" | "FLOOR";
+  entryOutcome: Evaluation["outcome"] | null;
+  mainRevision: number | null;
+  revision: number;
+  basis: "8000.00" | "10000.00" | null;
+  outcome: Evaluation["outcome"] | null;
+  feedbackId: string | null;
+  teachingRevision: number | null;
+}>;
+/** Live reference identity only; copying or JSON cannot reproduce issuance. */
+export type C02DeliveryCapability = Readonly<{ identity: symbol }>;
+export type C02DeliveryDescriptor = Readonly<{
+  purpose: "MAIN_FEEDBACK" | "FLOOR_TEACHING";
+  activityId: "C02-A01";
+  scenarioId: "C02-S01" | "C02-S01-F";
+  position: Position;
+  responseRevision: number;
+  localRevision: number;
+  outcome: Evaluation["outcome"];
+  passages: readonly C02FloorText[];
+  nonvisual: C02FloorText;
+  capability: C02DeliveryCapability;
+}>;
+type C02Owner = { current?: ActivityContext; definition: C02FloorDefinition };
+const floorOwners = new WeakMap<C02FloorState, C02Owner>();
+const c02Deliveries = new WeakMap<
+  C02DeliveryCapability,
+  Readonly<{
+    context: ActivityContext;
+    owner: C02Owner;
+    purpose: C02DeliveryDescriptor["purpose"];
+  }>
+>();
+
+function issueFloor(owner: C02Owner, value?: C02FloorState): C02FloorState {
+  const state: C02FloorState = Object.freeze(
+    value ?? {
+      id: "C02-S01-F",
+      phase: "MAIN",
+      entryOutcome: null,
+      mainRevision: null,
+      revision: 0,
+      basis: null,
+      outcome: null,
+      feedbackId: null,
+      teachingRevision: null,
+    },
+  );
+  floorOwners.set(state, owner);
+  return state;
+}
+
+function c02MainText(
+  c: ActivityContext,
+  f: C02FloorDefinition,
+): C02FloorText | null {
+  if (c.evaluation?.outcome === "CONFIRMED") return f.mainFeedback.confirmation;
+  if (c.evaluation?.diagnostic === f.mainFeedback.payrollRole.id)
+    return f.mainFeedback.payrollRole;
+  if (c.evaluation?.diagnostic === f.mainFeedback.arithmetic.id)
+    return f.mainFeedback.arithmetic;
+  return null;
+}
+
+/** Bounded LIVE-state feasibility validation. Not a checkpoint parser/issuer. */
+export function c02WorkingStateValid(
+  c: ActivityContext,
+  d: ActivityDefinition,
+): boolean {
+  const f = d.embeddedFloor;
+  const s = c.c02Floor;
+  const owner = s && floorOwners.get(s);
+  if (
+    !f ||
+    !s ||
+    !owner ||
+    owner.current !== c ||
+    JSON.stringify(f) !== JSON.stringify(owner.definition) ||
+    c.activityId !== "C02-A01" ||
+    d.activityId !== c.activityId ||
+    s.id !== f.id ||
+    !Number.isSafeInteger(c.responseRevision) ||
+    c.responseRevision < 0 ||
+    !Number.isSafeInteger(s.revision) ||
+    s.revision < 0
+  )
+    return false;
+  if (s.phase === "MAIN")
+    return (
+      [
+        "ENTRY",
+        "ACTIVE",
+        "REVISION",
+        "CONFIRMATION",
+        "RECONSIDERATION",
+      ].includes(c.position) &&
+      (c.evaluation === null
+        ? c.checkedRevision === null &&
+          c.feedbackRevision === null &&
+          c.checkedResponse === null
+        : c.hasChecked &&
+          c.response !== null &&
+          c.checkedResponse === c.response &&
+          c.checkedRevision === c.responseRevision &&
+          (c.feedbackRevision === null ||
+            c.feedbackRevision === c.responseRevision) &&
+          c02MainText(c, f) !== null &&
+          (c.position === "CONFIRMATION"
+            ? c.evaluation.outcome === "CONFIRMED"
+            : c.position === "RECONSIDERATION" &&
+              c.evaluation.outcome === "RECONSIDERATION")) &&
+      s.entryOutcome === null &&
+      s.mainRevision === null &&
+      s.revision === 0 &&
+      s.basis === null &&
+      s.outcome === null &&
+      s.feedbackId === null &&
+      s.teachingRevision === null
+    );
+  if (!(
+    (c.position === "C02-S01-F" || c.position === "COMPLETE") &&
+    c.hasChecked &&
+    c.response !== null &&
+    c.checkedResponse === c.response &&
+    c.checkedRevision === c.responseRevision &&
+    c.feedbackRevision === c.responseRevision &&
+    s.mainRevision === c.responseRevision &&
+    s.entryOutcome === c.evaluation?.outcome &&
+    c02MainText(c, f)
+  ))
+    return false;
+  if (s.basis === null)
+    return (
+      s.revision === 0 &&
+      s.outcome === null &&
+      s.feedbackId === null &&
+      s.teachingRevision === null &&
+      c.position !== "COMPLETE"
+    );
+  const choice = f.choices.find((row) => row.basis === s.basis);
+  return (
+    !!choice &&
+    s.revision > 0 &&
+    s.outcome === choice.outcome &&
+    s.feedbackId === choice.feedback.id &&
+    (s.teachingRevision === null || s.teachingRevision === s.revision) &&
+    (c.position !== "COMPLETE" ||
+      (s.outcome === "CONFIRMED" && s.teachingRevision === s.revision))
+  );
+}
+
+export function c02FloorFinishEligible(
+  c: ActivityContext,
+  d: ActivityDefinition,
+): boolean {
+  return (
+    c02WorkingStateValid(c, d) &&
+    c.origin === null &&
+    c.infoOrigin === null &&
+    c.position === "C02-S01-F" &&
+    c.c02Floor!.basis === "10000.00" &&
+    c.c02Floor!.outcome === "CONFIRMED" &&
+    c.c02Floor!.teachingRevision === c.c02Floor!.revision
+  );
+}
+
+/** Projection can issue eligibility, never delivery. Trusted harness/UI must expose
+ * all passages and the nonvisual equivalent before sending this one-shot command. */
+export function c02DeliveryFor(
+  c: ActivityContext,
+  d: ActivityDefinition,
+): C02DeliveryDescriptor | null {
+  if (!c02WorkingStateValid(c, d) || c.origin !== null || c.infoOrigin !== null)
+    return null;
+  const f = d.embeddedFloor!;
+  const s = c.c02Floor!;
+  let passages: readonly C02FloorText[];
+  let nonvisual: C02FloorText;
+  let purpose: C02DeliveryDescriptor["purpose"];
+  if (s.phase === "MAIN") {
+    const text = c02MainText(c, f);
+    if (
+      !text ||
+      !c.hasChecked ||
+      !c.response ||
+      c.checkedRevision !== c.responseRevision ||
+      c.feedbackRevision !== null ||
+      (c.position !== "CONFIRMATION" && c.position !== "RECONSIDERATION") ||
+      (c.position === "CONFIRMATION") !==
+        (c.evaluation?.outcome === "CONFIRMED")
+    )
+      return null;
+    purpose = "MAIN_FEEDBACK";
+    passages = [text];
+    nonvisual = text;
+  } else {
+    const choice = f.choices.find((row) => row.basis === s.basis);
+    if (!choice || s.teachingRevision !== null || c.position !== "C02-S01-F")
+      return null;
+    purpose = "FLOOR_TEACHING";
+    passages = [f.scenario, f.task, f.help, choice.feedback, f.explanation];
+    nonvisual = f.nonvisual;
+  }
+  const capability = Object.freeze({ identity: Symbol("C02 delivery") });
+  c02Deliveries.set(capability, {
+    context: c,
+    owner: floorOwners.get(s)!,
+    purpose,
+  });
+  return Object.freeze({
+    purpose,
+    activityId: "C02-A01",
+    scenarioId: purpose === "MAIN_FEEDBACK" ? "C02-S01" : "C02-S01-F",
+    position: c.position,
+    responseRevision: c.responseRevision,
+    localRevision: s.revision,
+    outcome: (purpose === "MAIN_FEEDBACK" ? c.evaluation!.outcome : s.outcome)!,
+    passages: Object.freeze(passages.map((p) => Object.freeze({ ...p }))),
+    nonvisual: Object.freeze({ ...nonvisual }),
+    capability,
+  });
+}
+
+function c02DeliveryValid(
+  c: ActivityContext,
+  d: ActivityDefinition,
+  capability: C02DeliveryCapability,
+  purpose: C02DeliveryDescriptor["purpose"],
+): boolean {
+  const issued = c02Deliveries.get(capability);
+  return (
+    !!issued &&
+    issued.context === c &&
+    issued.owner.current === c &&
+    issued.purpose === purpose &&
+    c02DeliveryFor(c, d)?.purpose === purpose
+  );
+}
+
+const c02ApprovedCopy: Readonly<Record<string, string>> = {
+  "c02/S01/confirmation":
+    "Confirmed. SSS is ₱600.00, PhilHealth is ₱302.50, Pag-IBIG is ₱200.00, and withholding tax is ₱0.00. Total deductions are ₱1,102.50, so net pay is ₱10,997.50.",
+  "c02/S01/reconsider-payroll-role":
+    "Check whether you are identifying gross income, one deduction, total deductions, or net pay. These are different payroll roles.",
+  "c02/S01/reconsider-arithmetic":
+    "Add the four employee deductions before subtracting the total from ₱12,100.00 gross income.",
+  "c02/S01-F/scenario":
+    "For this PhilHealth check, the employee's established monthly basic salary is ₱8,000.00. The approved PhilHealth minimum contribution basis is ₱10,000.00.",
+  "c02/S01-F/task":
+    "Identify the contribution basis that applies and determine the employee share at 2.5%.",
+  "c02/S01-F/relationship-help":
+    "Because ₱8,000.00 is below the approved ₱10,000.00 floor, use ₱10,000.00 as the contribution basis.",
+  "c02/S01-F/confirmation":
+    "Confirmed. The contribution basis is ₱10,000.00, so the employee share is ₱250.00.",
+  "c02/S01-F/reconsider":
+    "Do not calculate ₱8,000.00 × 2.5%. That gives ₱200.00 and ignores the approved PhilHealth floor.",
+  "c02/S01-F/accessibility-summary":
+    "Monthly basic salary ₱8,000.00. PhilHealth minimum contribution basis ₱10,000.00. Employee share at 2.5%: ₱250.00.",
+  "C02-FLOOR-EXPLANATION":
+    "A contribution rule may place a boundary on the basis used in its calculation. Here, the employee’s monthly basic salary is ₱8,000.00, but the approved PhilHealth rule uses a minimum contribution basis of ₱10,000.00.\n\nThat does not mean the employee suddenly earns ₱10,000.00. The employee’s salary remains ₱8,000.00. The ₱10,000.00 amount is the basis required by this contribution rule.",
+};
+
+/** Closed literal mathematics; composition supplies source-authored prose. No
+ * engine statutory calculator, free rate, or new independent assessment. */
+function validateC02Floor(value: unknown): asserts value is C02FloorDefinition {
+  const text = (v: unknown, id: string): boolean =>
+    fields(v, ["id", "text"]) &&
+    v.id === id &&
+    typeof v.text === "string" &&
+    v.text === c02ApprovedCopy[id];
+  if (
+    !fields(value, [
+      "id",
+      "activityId",
+      "primaryScenarioId",
+      "salary",
+      "minimumBasis",
+      "rate",
+      "scenario",
+      "task",
+      "help",
+      "explanation",
+      "nonvisual",
+      "mainFeedback",
+      "choices",
+    ]) ||
+    value.id !== "C02-S01-F" ||
+    value.activityId !== "C02-A01" ||
+    value.primaryScenarioId !== "C02-S01" ||
+    value.salary !== "8000.00" ||
+    value.minimumBasis !== "10000.00" ||
+    value.rate !== "2.5%" ||
+    !text(value.scenario, "c02/S01-F/scenario") ||
+    !text(value.task, "c02/S01-F/task") ||
+    !text(value.help, "c02/S01-F/relationship-help") ||
+    !text(value.explanation, "C02-FLOOR-EXPLANATION") ||
+    !text(value.nonvisual, "c02/S01-F/accessibility-summary") ||
+    !fields(value.mainFeedback, [
+      "confirmation",
+      "payrollRole",
+      "arithmetic",
+    ]) ||
+    !text(value.mainFeedback.confirmation, "c02/S01/confirmation") ||
+    !text(value.mainFeedback.payrollRole, "c02/S01/reconsider-payroll-role") ||
+    !text(value.mainFeedback.arithmetic, "c02/S01/reconsider-arithmetic") ||
+    !Array.isArray(value.choices) ||
+    value.choices.length !== 2 ||
+    Reflect.ownKeys(value.choices).length !== 3
+  )
+    throw new TypeError("Invalid C02 floor source contract");
+  for (let i = 0; i < 2; i++) {
+    const descriptor = Object.getOwnPropertyDescriptor(value.choices, i);
+    const row: unknown =
+      descriptor && "value" in descriptor ? descriptor.value : null;
+    if (
+      !fields(row, ["basis", "share", "outcome", "feedback"]) ||
+      row.basis !== (i === 0 ? "8000.00" : "10000.00") ||
+      row.share !== (i === 0 ? "200.00" : "250.00") ||
+      row.outcome !== (i === 0 ? "RECONSIDERATION" : "CONFIRMED") ||
+      !text(
+        row.feedback,
+        i === 0 ? "c02/S01-F/reconsider" : "c02/S01-F/confirmation",
+      )
+    )
+      throw new TypeError("Invalid C02 floor alternative");
+  }
+}
 export type ModelSelectionDefinition = Readonly<{
   modelId: string;
   scenarioId: string;
@@ -199,6 +556,7 @@ export type ActivityDefinition = Readonly<{
   modelSelection?: ModelSelectionDefinition;
   modelIntents?: ModelIntentDefinition;
   instructionalContinuation?: InstructionalContinuationPolicy;
+  embeddedFloor?: C02FloorDefinition;
 }>;
 export type ActivityPorts = Readonly<{
   ready: (response: LearnerResponse) => boolean;
@@ -212,6 +570,17 @@ export type ActivityPorts = Readonly<{
   informationReturn: (activityId: ActivityId, origin: Position) => boolean;
 }>;
 export type ActivityEvent =
+  | { type: "C02_MAIN_FEEDBACK_DELIVERED"; capability: C02DeliveryCapability }
+  | { type: "C02_FLOOR_TEACHING_DELIVERED"; capability: C02DeliveryCapability }
+  | {
+      type: "C02_SELECT_FLOOR_BASIS";
+      activityId: "C02-A01";
+      scenarioId: "C02-S01-F";
+      position: "C02-S01-F";
+      mainRevision: number;
+      revision: number;
+      basis: "8000.00" | "10000.00";
+    }
   | {
       type: "MODEL_INTENT";
       activityId: ActivityId;
@@ -257,6 +626,7 @@ function stageEngagement(
 }
 
 export type ActivityContext = Readonly<{
+  c02Floor?: C02FloorState;
   activityId: ActivityId;
   position: Position;
   model?: ActivityModelContext;
@@ -837,6 +1207,7 @@ export function validateActivityDefinition(
       "support",
       ...("responseStages" in value ? ["responseStages"] : []),
       ...("terminalTeaching" in value ? ["terminalTeaching"] : []),
+      ...("embeddedFloor" in value ? ["embeddedFloor"] : []),
       ...("modelSelection" in value ? ["modelSelection"] : []),
       ...("modelIntents" in value ? ["modelIntents"] : []),
       ...("instructionalContinuation" in value
@@ -849,6 +1220,37 @@ export function validateActivityDefinition(
   )
     throw new TypeError("Invalid activity definition");
   if ("responseStages" in value) validateStages(value.responseStages);
+  if ("embeddedFloor" in value) {
+    validateC02Floor(value.embeddedFloor);
+    if (
+      value.activityId !== "C02-A01" ||
+      "terminalTeaching" in value ||
+      "responseStages" in value ||
+      "modelIntents" in value ||
+      "modelSelection" in value ||
+      "instructionalContinuation" in value ||
+      !fields(value.edges, ["ENTRY", "CONFIRMATION", "RECONSIDERATION"]) ||
+      !fields(value.edges.ENTRY, ["CONTINUE"]) ||
+      value.edges.ENTRY.CONTINUE !== "ACTIVE" ||
+      !fields(value.edges.CONFIRMATION, ["CONTINUE"]) ||
+      value.edges.CONFIRMATION.CONTINUE !== "C02-S01-F" ||
+      !fields(value.edges.RECONSIDERATION, ["CONTINUE"]) ||
+      value.edges.RECONSIDERATION.CONTINUE !== "C02-S01-F" ||
+      Object.keys(value.support).some(
+        (key) =>
+          key !== "ACTIVE" &&
+          key !== "CONFIRMATION" &&
+          key !== "RECONSIDERATION",
+      )
+    )
+      throw new TypeError("C02 floor requires the closed Anna route");
+    // The bounded route is validated above; shared graph rules intentionally do
+    // not generalize Floor into an explanation node or global activity.
+    for (const modes of Object.values(value.support))
+      if (!Array.isArray(modes) || modes.length !== 1 || modes[0] !== "REVIEW")
+        throw new TypeError("Invalid C02 floor support route");
+    return;
+  }
   if ("modelSelection" in value) validateModelSelection(value.modelSelection);
   if ("modelIntents" in value) {
     if ("modelSelection" in value)
@@ -965,6 +1367,33 @@ export function isActivityEvent(value: unknown): value is ActivityEvent {
   const type = Object.getOwnPropertyDescriptor(value, "type");
   if (!type || !("value" in type)) return false;
   switch (value.type) {
+    case "C02_MAIN_FEEDBACK_DELIVERED":
+    case "C02_FLOOR_TEACHING_DELIVERED":
+      return (
+        fields(value, ["type", "capability"]) &&
+        fields(value.capability, ["identity"]) &&
+        typeof value.capability.identity === "symbol"
+      );
+    case "C02_SELECT_FLOOR_BASIS":
+      return (
+        fields(value, [
+          "type",
+          "activityId",
+          "scenarioId",
+          "position",
+          "mainRevision",
+          "revision",
+          "basis",
+        ]) &&
+        value.activityId === "C02-A01" &&
+        value.scenarioId === "C02-S01-F" &&
+        value.position === "C02-S01-F" &&
+        Number.isSafeInteger(value.mainRevision) &&
+        (value.mainRevision as number) >= 0 &&
+        Number.isSafeInteger(value.revision) &&
+        (value.revision as number) >= 0 &&
+        (value.basis === "8000.00" || value.basis === "10000.00")
+      );
     case "MODEL_INTENT":
       return (
         fields(value, [
@@ -1526,6 +1955,8 @@ export function createActivityRestoration(
   modelAdapter?: ActivityModelAdapter,
 ): ActivityRestoration {
   validateActivityDefinition(definition);
+  if (definition.embeddedFloor)
+    throw new TypeError("C02 checkpoint issuance belongs to D5");
   if (!!definition.modelSelection !== (modelAdapter !== undefined))
     throw new TypeError("Missing restoration model authority");
   if (modelAdapter && context.model) {
@@ -1661,6 +2092,20 @@ export function createActivityMachine(
     ? structuredClone(definition.terminalTeaching)
     : undefined;
   const activityId = definition.activityId;
+  const floor = definition.embeddedFloor
+    ? structuredClone(definition.embeddedFloor)
+    : undefined;
+  const freezeFloor = (value: unknown): void => {
+    if (value !== null && typeof value === "object") {
+      for (const child of Object.values(value)) freezeFloor(child);
+      Object.freeze(value);
+    }
+  };
+  if (floor) freezeFloor(floor);
+  const floorDefinition: ActivityDefinition = {
+    ...definition,
+    ...(floor ? { embeddedFloor: floor } : {}),
+  };
   const continuationPolicy = definition.instructionalContinuation
     ? structuredClone(definition.instructionalContinuation)
     : undefined;
@@ -1769,6 +2214,9 @@ export function createActivityMachine(
     )
       throw new TypeError("Invalid evaluation result");
     return {
+      ...(floor
+        ? { c02Floor: issueFloor(floorOwners.get(context.c02Floor!)!) }
+        : {}),
       hasChecked: true,
       position:
         result.outcome === "CONFIRMED" ? "CONFIRMATION" : "RECONSIDERATION",
@@ -1800,6 +2248,7 @@ export function createActivityMachine(
     if (
       !valid(event) ||
       !idle({ context }) ||
+      (floor && !c02FloorFinishEligible(context, floorDefinition)) ||
       (teaching &&
         (context.position !== "POST_CONFIRMATION_EXPLANATION" ||
           context.terminalEntryRevision !== context.responseRevision ||
@@ -1836,6 +2285,11 @@ export function createActivityMachine(
   ) => edges[context.position]?.[intent];
   // A post-assignment action freezes the actual XState-owned context, not just a projection.
   const seal = ({ context }: { context: ActivityContext }) => {
+    if (floor && context.c02Floor) {
+      floorOwners.get(context.c02Floor)!.current = context;
+      if (!c02WorkingStateValid(context, floorDefinition))
+        throw new TypeError("Contradictory C02 working state");
+    }
     Object.freeze(context);
   };
   const resetPrimary = (context: ActivityContext) =>
@@ -1970,6 +2424,9 @@ export function createActivityMachine(
           .response,
       ),
       responseRevision: context.responseRevision + 1,
+      ...(floor
+        ? { c02Floor: issueFloor(floorOwners.get(context.c02Floor!)!) }
+        : {}),
       ...(staging
         ? context.responseStage === "PRIMARY"
           ? {
@@ -1986,7 +2443,62 @@ export function createActivityMachine(
   const revise = assign(({ context }: { context: ActivityContext }) => ({
     position: "REVISION" as const,
     ...resetPrimary(context),
+    ...(floor
+      ? { ...clear, c02Floor: issueFloor(floorOwners.get(context.c02Floor!)!) }
+      : {}),
   }));
+  const enterFloor = {
+    target: "c02Floor",
+    guard: ({
+      context,
+      event,
+    }: {
+      context: ActivityContext;
+      event: ActivityEvent;
+    }) =>
+      !!floor &&
+      valid(event) &&
+      idle({ context }) &&
+      c02WorkingStateValid(context, floorDefinition) &&
+      context.checkedRevision === context.responseRevision &&
+      context.feedbackRevision === context.responseRevision &&
+      !!c02MainText(context, floor),
+    actions: [
+      assign(({ context }: { context: ActivityContext }) => ({
+        position: "C02-S01-F" as const,
+        c02Floor: issueFloor(floorOwners.get(context.c02Floor!)!, {
+          ...context.c02Floor!,
+          phase: "FLOOR",
+          mainRevision: context.responseRevision,
+          entryOutcome: context.evaluation!.outcome,
+        }),
+      })),
+      seal,
+    ],
+  };
+  const mainFloorDelivery = {
+    guard: ({
+      context,
+      event,
+    }: {
+      context: ActivityContext;
+      event: ActivityEvent;
+    }) =>
+      valid(event) &&
+      event.type === "C02_MAIN_FEEDBACK_DELIVERED" &&
+      c02DeliveryValid(
+        context,
+        floorDefinition,
+        event.capability,
+        "MAIN_FEEDBACK",
+      ),
+    actions: [
+      assign(({ context }: { context: ActivityContext }) => ({
+        feedbackRevision: context.responseRevision,
+      })),
+      seal,
+    ],
+  };
   const enterTeaching = assign(({ context }: { context: ActivityContext }) => ({
     position: "POST_CONFIRMATION_EXPLANATION" as const,
     ...(teaching
@@ -2193,27 +2705,31 @@ export function createActivityMachine(
           target: "reconsideration",
         },
         on: {
-          CONTINUE: {
-            guard: ({
-              context,
-              event,
-            }: {
-              context: ActivityContext;
-              event: ActivityEvent;
-            }) =>
-              valid(event) &&
-              idle({ context }) &&
-              edges.CONFIRMATION?.CONTINUE ===
-                "POST_CONFIRMATION_EXPLANATION" &&
-              context.position === "CONFIRMATION" &&
-              context.response !== null &&
-              context.hasChecked &&
-              context.checkedRevision === context.responseRevision &&
-              context.evaluation?.outcome === "CONFIRMED" &&
-              context.feedbackRevision === context.responseRevision,
-            target: "postConfirmationExplanation",
-            actions: [enterTeaching, seal],
-          },
+          C02_MAIN_FEEDBACK_DELIVERED: mainFloorDelivery,
+          CONTINUE: [
+            enterFloor,
+            {
+              guard: ({
+                context,
+                event,
+              }: {
+                context: ActivityContext;
+                event: ActivityEvent;
+              }) =>
+                valid(event) &&
+                idle({ context }) &&
+                edges.CONFIRMATION?.CONTINUE ===
+                  "POST_CONFIRMATION_EXPLANATION" &&
+                context.position === "CONFIRMATION" &&
+                context.response !== null &&
+                context.hasChecked &&
+                context.checkedRevision === context.responseRevision &&
+                context.evaluation?.outcome === "CONFIRMED" &&
+                context.feedbackRevision === context.responseRevision,
+              target: "postConfirmationExplanation",
+              actions: [enterTeaching, seal],
+            },
+          ],
           FEEDBACK_DELIVERED: {
             guard: ({
               context,
@@ -2224,6 +2740,7 @@ export function createActivityMachine(
             }) =>
               valid(event) &&
               idle({ context }) &&
+              !floor &&
               event.type === "FEEDBACK_DELIVERED" &&
               context.checkedRevision === event.revision &&
               context.feedbackRevision === null,
@@ -2244,6 +2761,7 @@ export function createActivityMachine(
             }) =>
               valid(event) &&
               idle({ context }) &&
+              !floor &&
               context.response !== null &&
               (!staging || context.responseRevision < Number.MAX_SAFE_INTEGER),
             target: "revision",
@@ -2295,28 +2813,32 @@ export function createActivityMachine(
       },
       reconsideration: {
         on: {
-          CONTINUE: {
-            guard: ({
-              context,
-              event,
-            }: {
-              context: ActivityContext;
-              event: ActivityEvent;
-            }) =>
-              valid(event) &&
-              !!teaching &&
-              idle({ context }) &&
-              edges.RECONSIDERATION?.CONTINUE ===
-                "POST_CONFIRMATION_EXPLANATION" &&
-              context.position === "RECONSIDERATION" &&
-              context.hasChecked &&
-              context.response !== null &&
-              context.evaluation?.outcome === "RECONSIDERATION" &&
-              context.checkedRevision === context.responseRevision &&
-              context.feedbackRevision === context.responseRevision,
-            target: "postConfirmationExplanation",
-            actions: [enterTeaching, seal],
-          },
+          C02_MAIN_FEEDBACK_DELIVERED: mainFloorDelivery,
+          CONTINUE: [
+            enterFloor,
+            {
+              guard: ({
+                context,
+                event,
+              }: {
+                context: ActivityContext;
+                event: ActivityEvent;
+              }) =>
+                valid(event) &&
+                !!teaching &&
+                idle({ context }) &&
+                edges.RECONSIDERATION?.CONTINUE ===
+                  "POST_CONFIRMATION_EXPLANATION" &&
+                context.position === "RECONSIDERATION" &&
+                context.hasChecked &&
+                context.response !== null &&
+                context.evaluation?.outcome === "RECONSIDERATION" &&
+                context.checkedRevision === context.responseRevision &&
+                context.feedbackRevision === context.responseRevision,
+              target: "postConfirmationExplanation",
+              actions: [enterTeaching, seal],
+            },
+          ],
           FEEDBACK_DELIVERED: {
             guard: ({
               context,
@@ -2327,6 +2849,7 @@ export function createActivityMachine(
             }) =>
               valid(event) &&
               idle({ context }) &&
+              !floor &&
               event.type === "FEEDBACK_DELIVERED" &&
               context.checkedRevision === event.revision &&
               context.feedbackRevision === null,
@@ -2386,6 +2909,86 @@ export function createActivityMachine(
           ],
         },
       },
+      c02Floor: {
+        on: {
+          C02_SELECT_FLOOR_BASIS: {
+            guard: ({
+              context,
+              event,
+            }: {
+              context: ActivityContext;
+              event: ActivityEvent;
+            }) =>
+              valid(event) &&
+              event.type === "C02_SELECT_FLOOR_BASIS" &&
+              idle({ context }) &&
+              c02WorkingStateValid(context, floorDefinition) &&
+              context.position === "C02-S01-F" &&
+              event.mainRevision === context.responseRevision &&
+              event.revision === context.c02Floor!.revision &&
+              event.basis !== context.c02Floor!.basis &&
+              event.revision < Number.MAX_SAFE_INTEGER,
+            actions: [
+              assign(
+                ({
+                  context,
+                  event,
+                }: {
+                  context: ActivityContext;
+                  event: ActivityEvent;
+                }) => {
+                  if (event.type !== "C02_SELECT_FLOOR_BASIS") return {};
+                  const row = floor!.choices.find(
+                    (row) => row.basis === event.basis,
+                  )!;
+                  return {
+                    c02Floor: issueFloor(floorOwners.get(context.c02Floor!)!, {
+                      ...context.c02Floor!,
+                      basis: row.basis,
+                      revision: context.c02Floor!.revision + 1,
+                      outcome: row.outcome,
+                      feedbackId: row.feedback.id,
+                      teachingRevision: null,
+                    }),
+                  };
+                },
+              ),
+              seal,
+            ],
+          },
+          C02_FLOOR_TEACHING_DELIVERED: {
+            guard: ({
+              context,
+              event,
+            }: {
+              context: ActivityContext;
+              event: ActivityEvent;
+            }) =>
+              valid(event) &&
+              event.type === "C02_FLOOR_TEACHING_DELIVERED" &&
+              c02DeliveryValid(
+                context,
+                floorDefinition,
+                event.capability,
+                "FLOOR_TEACHING",
+              ),
+            actions: [
+              assign(({ context }: { context: ActivityContext }) => ({
+                c02Floor: issueFloor(floorOwners.get(context.c02Floor!)!, {
+                  ...context.c02Floor!,
+                  teachingRevision: context.c02Floor!.revision,
+                }),
+              })),
+              seal,
+            ],
+          },
+          FINISH_ACTIVITY: {
+            guard: finish,
+            target: "complete",
+            actions: [assign({ position: "COMPLETE" }), seal],
+          },
+        },
+      },
       complete: {},
     },
   };
@@ -2393,10 +2996,13 @@ export function createActivityMachine(
   return machineSetup.createMachine({
     id: "activity",
     type: "parallel",
-    context: () =>
-      restored ??
-      Object.freeze({
+    ...(floor ? { entry: seal } : {}),
+    context: () => {
+      if (restored) return restored;
+      const owner: C02Owner = { definition: floor! };
+      const initial = Object.freeze({
         activityId,
+        ...(floor ? { c02Floor: issueFloor(owner) } : {}),
         ...(modelPolicy ? { model: initializeModel() } : {}),
         ...(intentPolicy ? { intentModel: initializeIntentModel() } : {}),
         ...(continuationPolicy
@@ -2429,7 +3035,10 @@ export function createActivityMachine(
         ...(teaching
           ? { terminalEntryRevision: null, terminalTeachingRevision: null }
           : {}),
-      }),
+      });
+      if (floor) owner.current = initial;
+      return initial;
+    },
     on: {
       "*": { guard: ({ event }) => !valid(event) },
       MODEL_INTENT: {

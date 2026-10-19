@@ -8,6 +8,7 @@ import {
   availableModelSelections,
   validateC04A02StageEngagementV1,
   instructionalContinueEligible,
+  c02WorkingStateValid,
 } from "./public";
 import type {
   ActivityContext,
@@ -3197,5 +3198,696 @@ describe("shared parallel activity grammar", () => {
       support: "none",
     });
     denied.stop();
+  });
+});
+
+// D4 fixture-only composition, NOT T071/T072 production binding or D5 issuer.
+// Context ddc0bb26: final C02 §§13–23, 68–69; D054/S1–S2.
+// Exact fixed copy: App f480888 src/study/competencies/c02/content.ts:10–37.
+// Full explanation: final C02 §20, lines 4120–4122, no paraphrase.
+const d4Texts: Readonly<Record<string, string>> = {
+  "c02/S01/confirmation":
+    "Confirmed. SSS is ₱600.00, PhilHealth is ₱302.50, Pag-IBIG is ₱200.00, and withholding tax is ₱0.00. Total deductions are ₱1,102.50, so net pay is ₱10,997.50.",
+  "c02/S01/reconsider-payroll-role":
+    "Check whether you are identifying gross income, one deduction, total deductions, or net pay. These are different payroll roles.",
+  "c02/S01/reconsider-arithmetic":
+    "Add the four employee deductions before subtracting the total from ₱12,100.00 gross income.",
+  "c02/S01-F/scenario":
+    "For this PhilHealth check, the employee's established monthly basic salary is ₱8,000.00. The approved PhilHealth minimum contribution basis is ₱10,000.00.",
+  "c02/S01-F/task":
+    "Identify the contribution basis that applies and determine the employee share at 2.5%.",
+  "c02/S01-F/relationship-help":
+    "Because ₱8,000.00 is below the approved ₱10,000.00 floor, use ₱10,000.00 as the contribution basis.",
+  "c02/S01-F/confirmation":
+    "Confirmed. The contribution basis is ₱10,000.00, so the employee share is ₱250.00.",
+  "c02/S01-F/reconsider":
+    "Do not calculate ₱8,000.00 × 2.5%. That gives ₱200.00 and ignores the approved PhilHealth floor.",
+  "c02/S01-F/accessibility-summary":
+    "Monthly basic salary ₱8,000.00. PhilHealth minimum contribution basis ₱10,000.00. Employee share at 2.5%: ₱250.00.",
+  "C02-FLOOR-EXPLANATION":
+    "A contribution rule may place a boundary on the basis used in its calculation. Here, the employee’s monthly basic salary is ₱8,000.00, but the approved PhilHealth rule uses a minimum contribution basis of ₱10,000.00.\n\nThat does not mean the employee suddenly earns ₱10,000.00. The employee’s salary remains ₱8,000.00. The ₱10,000.00 amount is the basis required by this contribution rule.",
+};
+function d4Fixture(): ExecutableActivityBinding {
+  const text = (id: string) => ({ id, text: d4Texts[id]! });
+  const definition: ActivityDefinition = {
+    activityId: "C02-A01",
+    edges: {
+      ENTRY: { CONTINUE: "ACTIVE" },
+      CONFIRMATION: { CONTINUE: "C02-S01-F" },
+      RECONSIDERATION: { CONTINUE: "C02-S01-F" },
+    },
+    support: {
+      ACTIVE: ["REVIEW"],
+      CONFIRMATION: ["REVIEW"],
+      RECONSIDERATION: ["REVIEW"],
+    },
+    embeddedFloor: {
+      id: "C02-S01-F",
+      activityId: "C02-A01",
+      primaryScenarioId: "C02-S01",
+      salary: "8000.00",
+      minimumBasis: "10000.00",
+      rate: "2.5%",
+      scenario: text("c02/S01-F/scenario"),
+      task: text("c02/S01-F/task"),
+      help: text("c02/S01-F/relationship-help"),
+      explanation: text("C02-FLOOR-EXPLANATION"),
+      nonvisual: text("c02/S01-F/accessibility-summary"),
+      mainFeedback: {
+        confirmation: text("c02/S01/confirmation"),
+        payrollRole: text("c02/S01/reconsider-payroll-role"),
+        arithmetic: text("c02/S01/reconsider-arithmetic"),
+      },
+      choices: [
+        {
+          basis: "8000.00",
+          share: "200.00",
+          outcome: "RECONSIDERATION",
+          feedback: text("c02/S01-F/reconsider"),
+        },
+        {
+          basis: "10000.00",
+          share: "250.00",
+          outcome: "CONFIRMED",
+          feedback: text("c02/S01-F/confirmation"),
+        },
+      ],
+    },
+  };
+  // Canonical A01 task identifies payroll roles in the intentionally complete static ledger.
+  // Role keys are fixture-local response transport, NOT new canonical option/content IDs.
+  const expected = d4Anna();
+  const ready = (response: LearnerResponse) =>
+    response.kind === "COMPOSITE" &&
+    response.parts.length === expected.parts.length &&
+    response.parts.every(
+      (p) =>
+        expected.parts.some((e) => e.key === p.key) &&
+        p.response.kind === "EXACT_QUANTITY" &&
+        p.response.value.kind === "MONETARY_AMOUNT" &&
+        p.response.value.unit === "PHP" &&
+        p.response.value.basis === null,
+    );
+  return {
+    activityId: "C02-A01",
+    definition,
+    ports: {
+      ready,
+      evaluate: (response) => {
+        if (!ready(response) || response.kind !== "COMPOSITE")
+          throw new TypeError("Not an Anna payroll-role response");
+        const correct = response.parts.every((p) => {
+          const target = expected.parts.find((e) => e.key === p.key)!.response;
+          return (
+            p.response.kind === "EXACT_QUANTITY" &&
+            p.response.value.magnitude.equals(target.value.magnitude)
+          );
+        });
+        return correct
+          ? { outcome: "CONFIRMED", diagnostic: null }
+          : {
+              outcome: "RECONSIDERATION",
+              diagnostic: "c02/S01/reconsider-payroll-role",
+            };
+      },
+      completionEligible: (evidence) =>
+        evidence.activityId === "C02-A01" &&
+        evidence.evaluation !== null &&
+        evidence.checkedRevision === evidence.responseRevision &&
+        evidence.feedbackRevision === evidence.responseRevision,
+      sourceReviewAvailable: () => false,
+      informationNeeded: () => false,
+      informationReturn: () => false,
+    },
+  };
+}
+function d4Anna(wrong = false) {
+  const rows: readonly (readonly [string, string])[] = [
+    ["gross", wrong ? "1102.50" : "12100.00"],
+    ["SSS", "600.00"],
+    ["PhilHealth", "302.50"],
+    ["Pag-IBIG", "200.00"],
+    ["withholding", "0.00"],
+    ["total deductions", "1102.50"],
+    ["net pay", "10997.50"],
+  ];
+  return {
+    kind: "COMPOSITE" as const,
+    parts: rows.map(([key, amount]) => ({
+      key,
+      response: {
+        kind: "EXACT_QUANTITY" as const,
+        value: quantity(
+          ExactDecimal.from(amount),
+          "MONETARY_AMOUNT",
+          "PHP",
+          null,
+        ),
+      },
+    })),
+  };
+}
+type D4Actor = ReturnType<typeof createActivityActor>;
+function d4Frame(actor: D4Actor, binding: ExecutableActivityBinding) {
+  const c = actor.getSnapshot().context;
+  const feedback = c.evaluation
+    ? c.evaluation.outcome === "CONFIRMED"
+      ? binding.definition.embeddedFloor!.mainFeedback.confirmation
+      : binding.definition.embeddedFloor!.mainFeedback.payrollRole
+    : null;
+  return projectSemanticActivityFrame({
+    context: c,
+    phase: c.position,
+    support: c.origin === null ? "NONE" : "REVIEW",
+    definition: binding.definition,
+    ports: binding.ports,
+    content: {
+      references: [],
+      modelFacts: [],
+      derivedFacts: [],
+      responseContract: {
+        id: "c02/S01/task",
+        text: "Identify the starting gross income, each individual deduction, total deductions, and Anna's final take-home pay.",
+      },
+      ...(feedback
+        ? {
+            feedback: {
+              outcome: c.evaluation!.outcome,
+              revision: c.responseRevision,
+              content: feedback,
+            },
+          }
+        : {}),
+    },
+  });
+}
+function d4Check(actor: D4Actor, wrong = false) {
+  actor.send({ type: "CONTINUE" });
+  actor.send({ type: "RESPONSE_CHANGED", response: d4Anna(wrong) });
+  actor.send({ type: "CHECK_RESPONSE" });
+}
+// Test-controlled trusted presentation boundary: the complete exact feedback or
+// local passage/consequence and nonvisual equivalent become available before ACK.
+// This is headless semantic availability, NOT DOM/a11y/browser certification.
+function d4Present(
+  actor: D4Actor,
+  binding: ExecutableActivityBinding,
+  available = true,
+) {
+  const frame = d4Frame(actor, binding);
+  const delivery = frame.c02Delivery;
+  if (!delivery || !available) return false;
+  const shown = delivery.passages.map((p) => ({ ...p }));
+  const accessible = { ...delivery.nonvisual };
+  expect(shown.every((p) => d4Texts[p.id] === p.text)).toBe(true);
+  expect(d4Texts[accessible.id]).toBe(accessible.text);
+  if (delivery.purpose === "MAIN_FEEDBACK")
+    expect(frame.feedbackState?.content).toEqual(shown[0]);
+  else {
+    expect(frame.embeddedFloor!.consequence).not.toBeNull();
+    expect(shown).toContainEqual(frame.embeddedFloor!.feedback);
+    expect(shown).toContainEqual(frame.embeddedFloor!.explanation);
+    expect(accessible).toEqual(frame.embeddedFloor!.nonvisual);
+  }
+  actor.send({
+    type:
+      delivery.purpose === "MAIN_FEEDBACK"
+        ? "C02_MAIN_FEEDBACK_DELIVERED"
+        : "C02_FLOOR_TEACHING_DELIVERED",
+    capability: delivery.capability,
+  });
+  return true;
+}
+function d4Select(
+  actor: D4Actor,
+  binding: ExecutableActivityBinding,
+  basis: "8000.00" | "10000.00",
+) {
+  const event = d4Frame(actor, binding).embeddedFloor!.controls.find(
+    (e) => e.basis === basis,
+  )!;
+  expect(event).toBeDefined();
+  actor.send(event);
+}
+function d4Unchanged(actor: D4Actor, event: unknown) {
+  const before = actor.getSnapshot().context;
+  actor.send(event as ActivityEvent);
+  expect(actor.getSnapshot().context).toBe(before);
+}
+
+describe("D4 C02 Anna/Floor source-backed public execution", () => {
+  const start = () => {
+    const registry = new ActivityRegistry([d4Fixture()]);
+    const binding = registry.resolve("C02-A01");
+    return { binding, actor: createActivityActor(registry, "C02-A01").start() };
+  };
+  const early = (actor: D4Actor, binding: ExecutableActivityBinding) => {
+    expect(d4Frame(actor, binding).completionActionAvailability).toBe(false);
+    d4Unchanged(actor, { type: "FINISH_ACTIVITY" });
+    expect(
+      c02WorkingStateValid(actor.getSnapshot().context, binding.definition),
+    ).toBe(true);
+  };
+  const main = (c: ActivityContext) => ({
+    response: c.response,
+    checkedResponse: c.checkedResponse,
+    responseRevision: c.responseRevision,
+    checkedRevision: c.checkedRevision,
+    feedbackRevision: c.feedbackRevision,
+    evaluation: c.evaluation,
+    hasChecked: c.hasChecked,
+  });
+  it.each([false, true])(
+    "both checked branches, meaningful main delivery, diagnostic correction and current Floor teaching: reconsideration=%s",
+    (wrong) => {
+      const { actor, binding } = start();
+      early(actor, binding);
+      actor.send({ type: "CONTINUE" });
+      early(actor, binding);
+      actor.send({ type: "RESPONSE_CHANGED", response: d4Anna(wrong) });
+      early(actor, binding);
+      actor.send({ type: "CHECK_RESPONSE" });
+      early(actor, binding);
+      const pending = d4Frame(actor, binding).c02Delivery!;
+      expect(pending.purpose).toBe("MAIN_FEEDBACK");
+      expect(pending.outcome).toBe(wrong ? "RECONSIDERATION" : "CONFIRMED");
+      expect(pending.passages[0]!.id).toBe(
+        wrong ? "c02/S01/reconsider-payroll-role" : "c02/S01/confirmation",
+      );
+      expect(d4Present(actor, binding, false)).toBe(false);
+      d4Unchanged(actor, { type: "CONTINUE" });
+      d4Unchanged(actor, { type: "FEEDBACK_DELIVERED", revision: 1 });
+      expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+      d4Present(actor, binding);
+      expect(actor.getSnapshot().context.feedbackRevision).toBe(1);
+      expect(actor.getSnapshot().context.position).toBe(
+        wrong ? "RECONSIDERATION" : "CONFIRMATION",
+      );
+      early(actor, binding);
+      d4Unchanged(actor, {
+        type: "C02_MAIN_FEEDBACK_DELIVERED",
+        capability: pending.capability,
+      });
+      actor.send({ type: "CONTINUE" });
+      expect(actor.getSnapshot().context.position).toBe("C02-S01-F");
+      early(actor, binding);
+      const anna = main(actor.getSnapshot().context);
+      expect(d4Frame(actor, binding).embeddedFloor!.consequence).toBeNull();
+      d4Select(actor, binding, "8000.00");
+      early(actor, binding);
+      const diagnostic = d4Frame(actor, binding);
+      expect(diagnostic.embeddedFloor!.consequence).toEqual({
+        basis: "8000.00",
+        share: "200.00",
+        rate: "2.5%",
+      });
+      expect(diagnostic.embeddedFloor!.feedback!.text).toBe(
+        d4Texts["c02/S01-F/reconsider"],
+      );
+      const stale = diagnostic.c02Delivery!;
+      d4Present(actor, binding);
+      early(actor, binding);
+      expect(actor.getSnapshot().context.c02Floor!.teachingRevision).toBe(1);
+      d4Select(actor, binding, "10000.00");
+      early(actor, binding);
+      expect(main(actor.getSnapshot().context)).toEqual(anna);
+      expect(actor.getSnapshot().context.response).toBe(anna.response);
+      expect(actor.getSnapshot().context.checkedResponse).toBe(
+        anna.checkedResponse,
+      );
+      expect(actor.getSnapshot().context.evaluation).toBe(anna.evaluation);
+      expect(actor.getSnapshot().context.c02Floor!.revision).toBe(2);
+      expect(actor.getSnapshot().context.c02Floor!.teachingRevision).toBeNull();
+      d4Unchanged(actor, {
+        type: "C02_FLOOR_TEACHING_DELIVERED",
+        capability: stale.capability,
+      });
+      expect(d4Frame(actor, binding).embeddedFloor!.consequence).toEqual({
+        basis: "10000.00",
+        share: "250.00",
+        rate: "2.5%",
+      });
+      d4Present(actor, binding);
+      expect(d4Frame(actor, binding).completionActionAvailability).toBe(true);
+      expect(main(actor.getSnapshot().context)).toEqual(anna);
+      actor.send({ type: "FINISH_ACTIVITY" });
+      expect(actor.getSnapshot().context.position).toBe("COMPLETE");
+      expect(
+        c02WorkingStateValid(actor.getSnapshot().context, binding.definition),
+      ).toBe(true);
+      actor.stop();
+    },
+  );
+  it.each([false, true])(
+    "direct correct basis requires its own delivery and main completion port: reconsideration=%s",
+    (wrong) => {
+      const { actor, binding } = start();
+      d4Check(actor, wrong);
+      d4Present(actor, binding);
+      actor.send({ type: "CONTINUE" });
+      d4Select(actor, binding, "10000.00");
+      early(actor, binding);
+      d4Present(actor, binding);
+      expect(d4Frame(actor, binding).completionActionAvailability).toBe(true);
+      actor.send({ type: "FINISH_ACTIVITY" });
+      expect(actor.getSnapshot().context.position).toBe("COMPLETE");
+      actor.stop();
+      const fixture = d4Fixture();
+      const refused = {
+        ...fixture,
+        ports: { ...fixture.ports, completionEligible: () => false },
+      };
+      const registry = new ActivityRegistry([refused]);
+      const b = registry.resolve("C02-A01");
+      const a = createActivityActor(registry, "C02-A01").start();
+      d4Check(a, wrong);
+      d4Present(a, b);
+      a.send({ type: "CONTINUE" });
+      d4Select(a, b, "10000.00");
+      d4Present(a, b);
+      early(a, b);
+      a.stop();
+    },
+  );
+  it("rejects forged copied excess-field wrong-purpose and stale capabilities in both pending branches", () => {
+    for (const wrong of [false, true]) {
+      const { actor, binding } = start();
+      d4Check(actor, wrong);
+      const token = d4Frame(actor, binding).c02Delivery!.capability;
+      for (const input of [
+        { type: "C02_MAIN_FEEDBACK_DELIVERED" },
+        { type: "C02_MAIN_FEEDBACK_DELIVERED", capability: {} },
+        { type: "C02_MAIN_FEEDBACK_DELIVERED", capability: { ...token } },
+        {
+          type: "C02_MAIN_FEEDBACK_DELIVERED",
+          capability: { identity: Symbol("forged") },
+        },
+        { type: "C02_MAIN_FEEDBACK_DELIVERED", capability: token, revision: 1 },
+        {
+          type: "C02_MAIN_FEEDBACK_DELIVERED",
+          capability: token,
+          contentId: "wrong",
+        },
+        {
+          type: "C02_MAIN_FEEDBACK_DELIVERED",
+          capability: token,
+          branch: "CONFIRMED",
+        },
+        {
+          type: "C02_MAIN_FEEDBACK_DELIVERED",
+          capability: token,
+          revision: -1,
+        },
+        { type: "C02_FLOOR_TEACHING_DELIVERED", capability: token },
+        { type: "FEEDBACK_DELIVERED", revision: 1 },
+        { type: "FEEDBACK_DELIVERED", revision: 0 },
+        { type: "FEEDBACK_DELIVERED", revision: 2 },
+        { type: "FEEDBACK_DELIVERED", revision: NaN },
+      ])
+        d4Unchanged(actor, input);
+      actor.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      d4Unchanged(actor, {
+        type: "C02_MAIN_FEEDBACK_DELIVERED",
+        capability: token,
+      });
+      d4Unchanged(actor, { type: "CONTINUE" });
+      d4Unchanged(actor, { type: "FINISH_ACTIVITY" });
+      actor.send({ type: "CLOSE_SUPPORT" });
+      d4Unchanged(actor, {
+        type: "C02_MAIN_FEEDBACK_DELIVERED",
+        capability: token,
+      });
+      d4Present(actor, binding);
+      actor.send({ type: "CONTINUE" });
+      d4Unchanged(actor, {
+        type: "C02_MAIN_FEEDBACK_DELIVERED",
+        capability: token,
+      });
+      actor.stop();
+    }
+  });
+  it("isolates matching actors from one machine and separate Runtime actors; wrong actor and branch never acknowledge", () => {
+    const fixture = d4Fixture();
+    const machine = createActivityMachine(fixture.definition, fixture.ports);
+    const a = createActor(machine).start();
+    const b = createActor(machine).start();
+    for (const actor of [a, b]) d4Check(actor);
+    const ta = d4Frame(a, fixture).c02Delivery!.capability;
+    d4Unchanged(b, { type: "C02_MAIN_FEEDBACK_DELIVERED", capability: ta });
+    d4Present(a, fixture);
+    expect(b.getSnapshot().context.feedbackRevision).toBeNull();
+    const other = start();
+    d4Check(other.actor, true);
+    d4Unchanged(other.actor, {
+      type: "C02_MAIN_FEEDBACK_DELIVERED",
+      capability: ta,
+    });
+    d4Present(b, fixture);
+    a.send({ type: "CONTINUE" });
+    b.send({ type: "CONTINUE" });
+    d4Select(a, fixture, "8000.00");
+    d4Select(b, fixture, "8000.00");
+    const local = d4Frame(a, fixture).c02Delivery!.capability;
+    d4Unchanged(b, { type: "C02_FLOOR_TEACHING_DELIVERED", capability: local });
+    d4Present(a, fixture);
+    expect(b.getSnapshot().context.c02Floor!.teachingRevision).toBeNull();
+    d4Select(a, fixture, "10000.00");
+    expect(b.getSnapshot().context.c02Floor!.basis).toBe("8000.00");
+    for (const actor of [a, b, other.actor]) actor.stop();
+  });
+  it("REVISE changed Anna CHECK_AGAIN invalidates pending delivery and starts fresh Floor; fresh replay starts at Entry", () => {
+    const { actor, binding } = start();
+    d4Check(actor, true);
+    const old = d4Frame(actor, binding).c02Delivery!.capability;
+    actor.send({ type: "REVISE" });
+    expect(actor.getSnapshot().context.position).toBe("REVISION");
+    expect(actor.getSnapshot().context.c02Floor!.phase).toBe("MAIN");
+    d4Unchanged(actor, {
+      type: "C02_MAIN_FEEDBACK_DELIVERED",
+      capability: old,
+    });
+    early(actor, binding);
+    actor.send({ type: "RESPONSE_CHANGED", response: d4Anna() });
+    actor.send({ type: "CHECK_AGAIN" });
+    expect(actor.getSnapshot().context.evaluation!.outcome).toBe("CONFIRMED");
+    expect(actor.getSnapshot().context.responseRevision).toBe(2);
+    d4Unchanged(actor, {
+      type: "C02_MAIN_FEEDBACK_DELIVERED",
+      capability: old,
+    });
+    d4Present(actor, binding);
+    actor.send({ type: "CONTINUE" });
+    expect(actor.getSnapshot().context.c02Floor).toMatchObject({
+      mainRevision: 2,
+      revision: 0,
+      basis: null,
+      teachingRevision: null,
+    });
+    d4Select(actor, binding, "10000.00");
+    d4Present(actor, binding);
+    actor.send({ type: "FINISH_ACTIVITY" });
+    const replay = start();
+    expect(replay.actor.getSnapshot().context).toMatchObject({
+      position: "ENTRY",
+      response: null,
+      responseRevision: 0,
+    });
+    expect(replay.actor.getSnapshot().context.c02Floor!.basis).toBeNull();
+    d4Unchanged(replay.actor, {
+      type: "C02_MAIN_FEEDBACK_DELIVERED",
+      capability: old,
+    });
+    actor.stop();
+    replay.actor.stop();
+  });
+  it("rejects invalid basis stage revisions overlays and generic terminal-teaching bypass without Anna mutation", () => {
+    const { actor, binding } = start();
+    d4Check(actor);
+    d4Present(actor, binding);
+    actor.send({ type: "CONTINUE" });
+    const event = d4Frame(actor, binding).embeddedFloor!.controls[0]!;
+    for (const patch of [
+      { basis: "9000.00" },
+      { rate: "5%" },
+      { revision: -1 },
+      { revision: 1 },
+      { revision: Number.MAX_SAFE_INTEGER },
+      { mainRevision: 0 },
+      { mainRevision: 2 },
+      { activityId: "C02-A02" },
+      { scenarioId: "C02-S01" },
+      { position: "ACTIVE" },
+    ])
+      d4Unchanged(actor, { ...event, ...patch });
+    for (const input of [
+      { type: "PREVIOUS" },
+      { type: "CONTINUE" },
+      { type: "REVISE" },
+      { type: "CHECK_RESPONSE" },
+      { type: "OPEN_SUPPORT", mode: "REVIEW" },
+      { type: "OPEN_SUPPORT", mode: "SOURCE_REVIEW" },
+      {
+        type: "TERMINAL_TEACHING_DELIVERED",
+        revision: 1,
+        contentId: "C02-FLOOR-EXPLANATION",
+      },
+    ])
+      d4Unchanged(actor, input);
+    d4Select(actor, binding, "8000.00");
+    const stale = d4Frame(actor, binding).c02Delivery!.capability;
+    d4Unchanged(actor, event);
+    d4Select(actor, binding, "10000.00");
+    d4Unchanged(actor, {
+      type: "C02_FLOOR_TEACHING_DELIVERED",
+      capability: stale,
+    });
+    const current = d4Frame(actor, binding).c02Delivery!.capability;
+    d4Unchanged(actor, {
+      type: "C02_MAIN_FEEDBACK_DELIVERED",
+      capability: current,
+    });
+    d4Unchanged(actor, {
+      type: "C02_FLOOR_TEACHING_DELIVERED",
+      capability: { ...current },
+    });
+    d4Unchanged(actor, {
+      type: "C02_FLOOR_TEACHING_DELIVERED",
+      capability: current,
+      contentId: "wrong",
+    });
+    d4Present(actor, binding);
+    d4Unchanged(actor, {
+      type: "C02_FLOOR_TEACHING_DELIVERED",
+      capability: current,
+    });
+    actor.stop();
+  });
+  it("proves live interruption invariants at every boundary and rejects detached contradictory unissued D5 restoration", () => {
+    const { actor, binding } = start();
+    const inspect = () => {
+      const c = actor.getSnapshot().context;
+      expect(c02WorkingStateValid(c, binding.definition)).toBe(true);
+      expect(c02WorkingStateValid({ ...c }, binding.definition)).toBe(false);
+      for (const patch of [
+        { activityId: "C02-A02" },
+        { responseRevision: c.responseRevision + 1 },
+        { position: "ACTIVE" },
+        { c02Floor: { ...c.c02Floor!, revision: -1 } },
+        {
+          c02Floor: {
+            ...c.c02Floor!,
+            basis: "10000.00",
+            outcome: "RECONSIDERATION",
+          },
+        },
+      ]) {
+        expect(
+          c02WorkingStateValid(
+            { ...c, ...patch } as ActivityContext,
+            binding.definition,
+          ),
+        ).toBe(false);
+      }
+      expect(() =>
+        createActivityRestoration(binding.definition, binding.ports, c),
+      ).toThrow("D5");
+      expect(() =>
+        createActivityMachine(binding.definition, binding.ports, undefined, {
+          activityId: "C02-A01",
+        }),
+      ).toThrow("Unissued");
+    };
+    inspect();
+    actor.send({ type: "CONTINUE" });
+    inspect();
+    actor.send({ type: "RESPONSE_CHANGED", response: d4Anna() });
+    inspect();
+    actor.send({ type: "CHECK_RESPONSE" });
+    inspect();
+    d4Present(actor, binding);
+    inspect();
+    actor.send({ type: "CONTINUE" });
+    inspect();
+    d4Select(actor, binding, "8000.00");
+    inspect();
+    d4Present(actor, binding);
+    inspect();
+    d4Select(actor, binding, "10000.00");
+    inspect();
+    d4Present(actor, binding);
+    inspect();
+    actor.send({ type: "FINISH_ACTIVITY" });
+    inspect();
+    actor.stop();
+  });
+});
+
+describe("D4 additional main content and revision epochs", () => {
+  it("source arithmetic reconsideration authenticates its own current content before explicit Continue", () => {
+    const source = d4Fixture();
+    const binding = {
+      ...source,
+      ports: {
+        ...source.ports,
+        evaluate: (response: LearnerResponse) => {
+          const result = source.ports.evaluate(response);
+          return result.outcome === "CONFIRMED"
+            ? result
+            : { ...result, diagnostic: "c02/S01/reconsider-arithmetic" };
+        },
+      },
+    };
+    const registry = new ActivityRegistry([binding]);
+    const saved = registry.resolve("C02-A01");
+    const actor = createActivityActor(registry, "C02-A01").start();
+    d4Check(actor, true);
+    const f = d4Frame(actor, saved);
+    const descriptor = f.c02Delivery!;
+    expect(descriptor.passages[0]!.id).toBe("c02/S01/reconsider-arithmetic");
+    expect(f.feedbackState!.content).toEqual(descriptor.passages[0]);
+    // Explicit exact branch passage and accessible equivalent available first.
+    expect(descriptor.passages[0]!.text).toBe(
+      d4Texts["c02/S01/reconsider-arithmetic"],
+    );
+    expect(descriptor.nonvisual).toEqual(descriptor.passages[0]);
+    actor.send({
+      type: "C02_MAIN_FEEDBACK_DELIVERED",
+      capability: descriptor.capability,
+    });
+    expect(actor.getSnapshot().context.position).toBe("RECONSIDERATION");
+    actor.send({ type: "CONTINUE" });
+    expect(actor.getSnapshot().context.position).toBe("C02-S01-F");
+    actor.stop();
+  });
+  it("same-revision recheck after Revise rejects the prior delivery epoch; valid Floor acknowledgments cannot unlock main", () => {
+    const registry = new ActivityRegistry([d4Fixture()]);
+    const binding = registry.resolve("C02-A01");
+    const actor = createActivityActor(registry, "C02-A01").start();
+    d4Check(actor, true);
+    const previous = d4Frame(actor, binding).c02Delivery!.capability;
+    d4Present(actor, binding);
+    actor.send({ type: "REVISE" });
+    expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+    actor.send({ type: "CHECK_AGAIN" });
+    expect(actor.getSnapshot().context.responseRevision).toBe(1);
+    d4Unchanged(actor, {
+      type: "C02_MAIN_FEEDBACK_DELIVERED",
+      capability: previous,
+    });
+    d4Present(actor, binding);
+    actor.send({ type: "CONTINUE" });
+    d4Select(actor, binding, "10000.00");
+    const local = d4Frame(actor, binding).c02Delivery!.capability;
+    d4Unchanged(actor, {
+      type: "C02_MAIN_FEEDBACK_DELIVERED",
+      capability: local,
+    });
+    d4Unchanged(actor, { type: "FINISH_ACTIVITY" });
+    d4Present(actor, binding);
+    d4Unchanged(actor, {
+      type: "C02_FLOOR_TEACHING_DELIVERED",
+      capability: local,
+    });
+    actor.stop();
   });
 });
