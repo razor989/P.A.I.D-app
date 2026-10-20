@@ -831,6 +831,321 @@ describe("four canonical production C04 bindings", () => {
   );
 });
 
+describe("D6 D139/S1 five-stage instructional fidelity", () => {
+  // Source: final C04 C3 §§41,45,48,50,54 (full prose), final §§28–39
+  // (stage/interaction authority). Literals deliberately do not read the binding map.
+  const passages = [
+    "Both employees receive the same increase in pesos. Before thinking about percentages, calculate the absolute change for each salary. Employee A: ₱22,000 − ₱20,000 = ₱2,000. Employee B: ₱12,000 − ₱10,000 = ₱2,000. So the two absolute changes are equal: each salary increased by ₱2,000.00. That does not yet tell us whether the percentage increases are equal.",
+    "The Original stays fixed as the reference basis. The ₱22,000.00 New value tells us the ending salary. It does not replace ₱20,000.00 as the reference denominator.",
+    "Employee B also gains ₱2,000.00. But this time the Original salary is only ₱10,000.00. The same absolute increase is now compared with a smaller starting reference.",
+    "Both employees gained exactly ₱2,000.00. Their absolute increases are equal. But percentage change does not ask only how many pesos changed. It asks how large that change is relative to the Original value. ₱2,000.00 is 10% of ₱20,000.00, but it is 20% of ₱10,000.00. That is why equal peso increases can produce different percentage increases. Absolute Change A = Absolute Change B but Percentage Change A ≠ Percentage Change B because Original A ≠ Original B.",
+    "We can now state the full relationship. First find the signed difference: New minus Original. Then compare that difference with the Original value. Finally, multiply by 100 to express the relative change as a percentage. The Original is the reference denominator because percentage change describes change from the starting value.",
+  ] as const;
+  const dependent = [
+    "For Employee A, the ₱2,000.00 increase is measured relative to the Original salary of ₱20,000.00. ₱2,000 ÷ ₱20,000 × 100 = 10%. Employee A’s salary therefore increased by 10% from the Original salary.",
+    "₱2,000 ÷ ₱10,000 × 100 = 20%. Employee B’s salary therefore increased by 20% from the Original salary. The important changed element is: Original Reference Basis ₱20,000 → ₱10,000 not the absolute change.",
+  ] as const;
+  const teachingAt = (a: ActivityActor, stage: string, suffix = "teaching") =>
+    frame(a).contentReferences.find(
+      (item) => item.id === `c04/S02/${stage}/${suffix}`,
+    )?.text;
+  const focusFacts = (a: ActivityActor, child: string) =>
+    frame(a)
+      .exposedModelFacts.filter((item) =>
+        item.id.includes(`/authored-focus/${child}/`),
+      )
+      .map((item) => item.text);
+  const consequences = (a: ActivityActor, child: string) =>
+    frame(a)
+      .exposedDerivedFacts.filter((item) =>
+        item.id.includes(`/authored-focus/${child}/`),
+      )
+      .map((item) => item.text);
+  const noAssessment = (a: ActivityActor) => {
+    const f = frame(a);
+    const encoded = JSON.stringify(f);
+    expect(f.feedbackState).toBeUndefined();
+    expect(f.responseControls).toEqual([]);
+    expect(f.eligibleInstructionalDelivery).toBeUndefined();
+    for (const forbidden of [
+      "Confirmed.",
+      "Activity complete.",
+      "c04/S03/",
+      "c04/S04/",
+      "undefined-result",
+      "checkedResponse",
+      "correctOption",
+      "knownAnswer",
+    ])
+      expect(encoded).not.toContain(forbidden);
+  };
+  it.each([1, 2, 3, 4, 5])(
+    "EXP-0%s complete canonical prose, stage focus, controls and passive projection boundaries",
+    (step) => {
+      const a = start("C04-A02");
+      try {
+        advance(a, step);
+        const stage = `EXP-0${step}`;
+        expect(a.getSnapshot().context.position).toBe(stage);
+        expect(teachingAt(a, stage)).toBe(passages[step - 1]);
+        expect(
+          frame(a).contentReferences.filter((item) =>
+            /\/EXP-\d+\/teaching$/.test(item.id),
+          ),
+        ).toHaveLength(1);
+        const children =
+          step === 2
+            ? ["C04-S02-A"]
+            : step === 3
+              ? ["C04-S02-B"]
+              : ["C04-S02-A", "C04-S02-B"];
+        for (const child of children) {
+          const employeeA = child === "C04-S02-A";
+          const facts = focusFacts(a, child);
+          expect(facts).toHaveLength(2);
+          expect(facts[0]).toContain(
+            `${employeeA ? "20000" : "10000"} PHP per month`,
+          );
+          expect(facts[0]).toContain("Original");
+          expect(facts[1]).toContain(
+            `${employeeA ? "22000" : "12000"} PHP per month`,
+          );
+          expect(facts[1]).toContain("New");
+        }
+        const control = frame(a).modelSelectionControl;
+        if (step === 2 || step === 3) {
+          expect(control?.options.map((item) => item.id)).toEqual(children);
+          expect(control?.position).toBe(stage);
+          expect(control?.revision).toBe(0);
+          expect(
+            control?.options.every((item) => item.text.includes("New")),
+          ).toBe(true);
+          expect(frame(a).exposedDerivedFacts).toEqual([]);
+        } else expect(control).toBeUndefined();
+        const before = a.getSnapshot().context;
+        expect(frame(a)).toEqual(frame(a));
+        expect(a.getSnapshot().context).toBe(before);
+        expect(before.model?.revision).toBe(0);
+        expect(before.c04A02StageEngagement).toEqual({
+          "EXP-02": { "C04-S02-A": false },
+          "EXP-03": { "C04-S02-B": false },
+        });
+        noAssessment(a);
+        if (step <= 3) expect(JSON.stringify(frame(a))).not.toMatch(/10%|20%/);
+        if (step === 1) {
+          for (const child of children)
+            expect(consequences(a, child)).toEqual([
+              "New minus Original: 2000 PHP per month",
+            ]);
+          expect(JSON.stringify(frame(a))).not.toContain("÷");
+        }
+      } finally {
+        a.stop();
+      }
+    },
+  );
+  it.each([
+    [2, "C04-S02-A", "C04-S02-B", "20000", "22000", "10", "20", 0],
+    [3, "C04-S02-B", "C04-S02-A", "10000", "12000", "20", "10", 1],
+  ] as const)(
+    "EXP-0%s genuine %s action synchronizes full explanation with issued mathematics",
+    (
+      step,
+      child,
+      wrongChild,
+      original,
+      newValue,
+      percentage,
+      forbidden,
+      index,
+    ) => {
+      const a = start("C04-A02");
+      try {
+        advance(a, step);
+        const stage = `EXP-0${step}`;
+        const initial = a.getSnapshot().context;
+        select(a, wrongChild);
+        select(a, "25000");
+        select(a, child, { revision: 99 });
+        expect(a.getSnapshot().context).toBe(initial);
+        expect(teachingAt(a, stage, "dependent-teaching")).toBeUndefined();
+        select(a, child);
+        const c = a.getSnapshot().context;
+        expect(c.model?.revision).toBe(1);
+        expect(c.c04A02StageEngagement?.[stage as "EXP-02" | "EXP-03"]).toEqual(
+          { [child]: true },
+        );
+        const view = deriveC04ModelState(c.model!.value.state as C04ModelState);
+        expect(view.original.value.magnitude.toString()).toBe(original);
+        expect(view.newValue.value.magnitude.toString()).toBe(newValue);
+        expect(view.change.difference.resolution).toMatchObject({
+          kind: "KNOWN",
+        });
+        if (view.change.difference.resolution.kind === "KNOWN")
+          expect(
+            view.change.difference.resolution.value.magnitude.toString(),
+          ).toBe("2000");
+        expect(view.change.percentageChange.resolution.kind).toBe("KNOWN");
+        if (view.change.percentageChange.resolution.kind === "KNOWN")
+          expect(
+            view.change.percentageChange.resolution.value.magnitude.toString(),
+          ).toBe(percentage);
+        expect(teachingAt(a, stage)).toBe(passages[step - 1]);
+        expect(teachingAt(a, stage, "dependent-teaching")).toBe(
+          dependent[index],
+        );
+        expect(consequences(a, child)).toEqual([
+          "New minus Original: 2000 PHP per month",
+          `Difference relative to Original ${original} PHP per month: ${percentage}%`,
+        ]);
+        expect(JSON.stringify(frame(a))).not.toContain(`${forbidden}%`);
+        noAssessment(a);
+      } finally {
+        a.stop();
+      }
+    },
+  );
+  it.each([4, 5])(
+    "EXP-0%s paired causal mathematics and model-linked formalization without fabricated engagement",
+    (step) => {
+      const a = start("C04-A02");
+      try {
+        advance(a, step);
+        expect(consequences(a, "C04-S02-A")).toEqual([
+          "New minus Original: 2000 PHP per month",
+          "Difference relative to Original 20000 PHP per month: 10%",
+        ]);
+        expect(consequences(a, "C04-S02-B")).toEqual([
+          "New minus Original: 2000 PHP per month",
+          "Difference relative to Original 10000 PHP per month: 20%",
+        ]);
+        const encoded = JSON.stringify(frame(a));
+        expect(encoded).not.toMatch(
+          /moved farther|looked longer|salary slider/,
+        );
+        expect(teachingAt(a, `EXP-0${step}`)).toBe(passages[step - 1]);
+        expect(
+          frame(a).contentReferences.find(
+            (item) => item.id === "c04/S02/formula",
+          )?.text,
+        ).toBe(
+          step === 5
+            ? "Percentage Change = (New − Original) ÷ Original × 100"
+            : undefined,
+        );
+        const before = a.getSnapshot().context.model;
+        select(a, "C04-S02-B");
+        expect(a.getSnapshot().context.model).toBe(before);
+        a.send({ type: "PREVIOUS" });
+        advance(a);
+        expect(teachingAt(a, `EXP-0${step}`)).toBe(passages[step - 1]);
+        expect(a.getSnapshot().context.model).toBe(before);
+        noAssessment(a);
+      } finally {
+        a.stop();
+      }
+    },
+  );
+});
+
+describe("D6 D139/S1 stage-specific engagement exposure", () => {
+  it("EXP-02/EXP-03 Review open/close preserves stage, model, copy and unearned exposure", () => {
+    const a = start("C04-A02");
+    try {
+      advance(a, 2);
+      for (const stage of ["EXP-02", "EXP-03"]) {
+        expect(a.getSnapshot().context.position).toBe(stage);
+        const model = a.getSnapshot().context.model;
+        const presence = a.getSnapshot().context.c04A02StageEngagement;
+        const before = frame(a);
+        a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+        expect(a.getSnapshot().matches({ support: "review" })).toBe(true);
+        expect(a.getSnapshot().context.position).toBe(stage);
+        expect(a.getSnapshot().context.model).toBe(model);
+        expect(a.getSnapshot().context.c04A02StageEngagement).toBe(presence);
+        expect(JSON.stringify(frame(a))).not.toMatch(
+          /10%|20%|dependent-teaching/,
+        );
+        a.send({ type: "CLOSE_SUPPORT" });
+        expect(frame(a)).toEqual(before);
+        advance(a);
+      }
+    } finally {
+      a.stop();
+    }
+  });
+  it("EXP-04 revision-collision histories authorize comparison without inventing independent A engagement", () => {
+    const a = start("C04-A02");
+    const b = start("C04-A02");
+    try {
+      advance(a, 2);
+      advance(b, 3);
+      select(a, "C04-S02-A");
+      advance(a);
+      select(a, "C04-S02-B");
+      select(b, "C04-S02-B");
+      select(b, "C04-S02-B");
+      advance(a);
+      advance(b);
+      expect(a.getSnapshot().context.model).toEqual(
+        b.getSnapshot().context.model,
+      );
+      expect(a.getSnapshot().context.model?.revision).toBe(2);
+      expect(a.getSnapshot().context.c04A02StageEngagement).toEqual({
+        "EXP-02": { "C04-S02-A": true },
+        "EXP-03": { "C04-S02-B": true },
+      });
+      expect(b.getSnapshot().context.c04A02StageEngagement).toEqual({
+        "EXP-02": { "C04-S02-A": false },
+        "EXP-03": { "C04-S02-B": true },
+      });
+      for (const actor of [a, b]) {
+        expect(JSON.stringify(frame(actor))).toContain("10%");
+        expect(JSON.stringify(frame(actor))).toContain("20%");
+        actor.send({ type: "PREVIOUS" });
+        actor.send({ type: "PREVIOUS" });
+        expect(actor.getSnapshot().context.position).toBe("EXP-02");
+        expect(JSON.stringify(frame(actor))).not.toMatch(
+          /10%|20%|dependent-teaching/,
+        );
+      }
+    } finally {
+      a.stop();
+      b.stop();
+    }
+  });
+  // D044/S1 §S1.3 and final C04 storyboard §§30–31: navigation is not engagement.
+  it.each(["C04-S02-A", "C04-S02-B"] as const)(
+    "EXP-02/EXP-03 preserve legal re-entry boundaries for %s history",
+    (child) => {
+      const a = start("C04-A02");
+      try {
+        advance(a, child === "C04-S02-A" ? 2 : 3);
+        select(a, child);
+        expect(a.getSnapshot().context.model?.revision).toBe(1);
+        expect(a.getSnapshot().context.model?.value.selectionId).toBe(child);
+        const presence = a.getSnapshot().context.c04A02StageEngagement;
+        if (child === "C04-S02-A") advance(a);
+        else a.send({ type: "PREVIOUS" });
+        expect(a.getSnapshot().context.position).toBe(
+          child === "C04-S02-A" ? "EXP-03" : "EXP-02",
+        );
+        const before = a.getSnapshot().context;
+        const projected = frame(a);
+        expect(a.getSnapshot().context).toBe(before);
+        // Scan every public field, including references, facts and controls.
+        const encoded = JSON.stringify(projected);
+        expect(encoded).not.toContain("dependent-teaching");
+        expect(encoded).not.toMatch(/10%|20%/);
+        expect(projected.exposedDerivedFacts).toEqual([]);
+        expect(a.getSnapshot().context.c04A02StageEngagement).toBe(presence);
+      } finally {
+        a.stop();
+      }
+    },
+  );
+});
+
 describe("A02 actor-local issued model and source-paced teaching", () => {
   const serialized = (a: ActivityActor) => JSON.stringify(frame(a));
   const noDependentCalculation = (a: ActivityActor) => {
