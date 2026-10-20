@@ -13,6 +13,20 @@ import type {
 } from "@/recovery/store/public";
 import { recoverCheckpoint } from "@/recovery/rehydration/public";
 import {
+  claimRecoveryClassificationV2,
+  recoverReferenceCheckpointV2,
+} from "@/recovery/rehydration/public";
+import {
+  projectC04CheckpointV1,
+  projectC02ReferenceCheckpointV2,
+  projectC02RecoveryObligations,
+} from "@/recovery/projection/public";
+import { navigate, resolveActivityBack } from "@/session/navigation/public";
+import {
+  createC02ReferenceActivityActor,
+  inspectC02ReferenceActivityActor,
+} from "@/engine/activity-runtime/public";
+import {
   acquireSessionCheckpointProducer,
   applySessionStartupClassification,
   beginSessionStartupReadRetry,
@@ -397,6 +411,834 @@ function trackedRoot(store?: RecoveryCheckpointStore) {
   sessions.push(root.session);
   return root;
 }
+
+describe("T037 B2 authentic public integration feasibility", () => {
+  it("projects a live engaged C04 actor through durable Store and exact Session Resume, then resolves real Back", async () => {
+    const store = createWebTestStore();
+    const root = trackedRoot(store);
+    root.start();
+    await tick();
+    expect(navigate(root.session, { type: "SYSTEM_BACK" })).toBe(
+      "platform-root",
+    );
+    expect(
+      navigate(root.session, {
+        type: "SELECT_ACTIVITY",
+        activityId: "C04-A02",
+      }),
+    ).toBe("destination-changed");
+    const actor = selectSession(root.session).currentActivity!;
+    actor.send({ type: "CONTINUE" });
+    actor.send({ type: "CONTINUE" });
+    expect(actor.getSnapshot().context.position).toBe("EXP-02");
+    const before = composeC04ActivityFrame(actor);
+    expect(before.exposedDerivedFacts).toEqual([]);
+    expect(actor.getSnapshot().context.model?.revision).toBe(0);
+    const control = before.modelSelectionControl!;
+    actor.send({
+      type: "SELECT_MODEL_CHILD",
+      modelId: control.modelId,
+      position: control.position,
+      revision: control.revision,
+      selectionId: "C04-S02-A",
+    });
+    const engaged = composeC04ActivityFrame(actor);
+    expect(
+      engaged.contentReferences.map((item) => item.text).join(" "),
+    ).toContain("₱2,000 ÷ ₱20,000 × 100 = 10%");
+    expect(engaged.feedbackState).toBeUndefined();
+    expect(engaged.responseControls).toEqual([]);
+    const projected = projectC04CheckpointV1(actor);
+    expect(projected.model?.engagement["EXP-02"]["C04-S02-A"]).toBe(true);
+    const envelope: Parameters<RecoveryCheckpointQueue["replace"]>[0] = {
+      schemaVersion: 1,
+      studyDefinitionRevision: "PAID-STUDY-DEF-R001",
+      kind: "unfinished-activity",
+      checkpoint: projected,
+    };
+    const producer = acquireSessionCheckpointProducer(root.session);
+    expect(await producer.replace(envelope)).toMatchObject({
+      status: "durable",
+    });
+    expect(JSON.parse((await store.load())!) as unknown).toMatchObject(
+      envelope,
+    );
+    root.stop();
+    expect(producer.replace(envelope)).toBeNull();
+    expect(() => projectC04CheckpointV1(actor)).toThrow();
+
+    const restored = trackedRoot(store);
+    restored.start();
+    await tick();
+    expect(selectSession(restored.session).startup).toBe("recovery-choice");
+    const held = selectSession(restored.session).currentActivity!;
+    const start = vi.spyOn(held, "start");
+    expect(start).not.toHaveBeenCalled();
+    expect(navigate(restored.session, { type: "SYSTEM_BACK" })).toBe(
+      "rejected",
+    );
+    restored.session.send({ type: "CONTINUE_RECOVERED_ACTIVITY" });
+    restored.session.send({ type: "CONTINUE_RECOVERED_ACTIVITY" });
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(selectSession(restored.session).currentActivity).toBe(held);
+    expect(projectC04CheckpointV1(held)).toEqual(projected);
+    held.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+    expect(navigate(restored.session, { type: "SYSTEM_BACK" })).toBe(
+      "support-closed",
+    );
+    expect(held.getSnapshot().context.position).toBe("EXP-02");
+    expect(resolveActivityBack(held)).toBe("explanation-previous");
+    expect(held.getSnapshot().context.position).toBe("EXP-01");
+    expect(held.getSnapshot().context.c04A02StageEngagement).toEqual(
+      projected.model!.engagement,
+    );
+    expect(
+      navigate(restored.session, { type: "SYSTEM_BACK", extra: true }),
+    ).toBe("rejected");
+    restored.stop();
+  });
+
+  it("authenticates opt-in C02 V2 but cannot bypass the required current main-feedback delivery", async () => {
+    const store = createWebTestStore();
+    const queue = createRecoveryCheckpointQueue(store);
+    const entry: Parameters<RecoveryCheckpointQueue["replaceV2"]>[0] = {
+      schemaVersion: 2,
+      studyDefinitionRevision: "PAID-STUDY-DEF-R001",
+      kind: "unfinished-activity",
+      checkpoint: {
+        competencyId: "C02",
+        activityId: "C02-A01",
+        scenarioId: "C02-S01",
+        embeddedScenarioId: "C02-S01-F",
+        profileId: "D5-C02-A01-REFERENCE",
+        position: "ENTRY",
+        response: null,
+        checkedResponse: null,
+        responseRevision: 0,
+        hasChecked: false,
+        checkedRevision: null,
+        feedbackRevision: null,
+        evaluation: null,
+        floor: { kind: "MAIN" },
+      },
+    };
+    expect(await queue.replaceV2(entry)).toMatchObject({ status: "durable" });
+    expect((await recoverCheckpoint(queue)).status).toBe("UNUSABLE_CHECKPOINT");
+    const recovery = await recoverReferenceCheckpointV2(queue);
+    expect(recovery.status).toBe("VALID_REFERENCE_CHECKPOINT_V2");
+    if (recovery.status !== "VALID_REFERENCE_CHECKPOINT_V2")
+      throw new Error("Expected authenticated reference actor");
+    const actor = recovery.actor;
+    try {
+      expect(claimRecoveryClassificationV2(queue, { ...recovery })).toBe(false);
+      expect(claimRecoveryClassificationV2(queue, recovery)).toBe(true);
+      expect(claimRecoveryClassificationV2(queue, recovery)).toBe(false);
+      actor.start();
+      actor.send({ type: "CONTINUE" });
+      actor.send({
+        type: "RESPONSE_CHANGED",
+        response: {
+          kind: "COMPOSITE",
+          parts: [
+            ["gross", "12100"],
+            ["SSS", "600"],
+            ["PhilHealth", "302.5"],
+            ["Pag-IBIG", "200"],
+            ["withholding", "0"],
+            ["total deductions", "1102.5"],
+            ["net pay", "10997.5"],
+          ].map(([key, amount]) => ({
+            key: key!,
+            response: {
+              kind: "EXACT_QUANTITY",
+              value: quantity(
+                ExactDecimal.from(amount!),
+                "MONETARY_AMOUNT",
+                "PHP",
+                null,
+              ),
+            },
+          })),
+        },
+      });
+      actor.send({ type: "CHECK_RESPONSE" });
+      expect(actor.getSnapshot().context.evaluation).toEqual({
+        outcome: "CONFIRMED",
+        diagnostic: null,
+      });
+      const checked = projectC02ReferenceCheckpointV2(actor);
+      expect(projectC02RecoveryObligations(actor)).toMatchObject({
+        requiresAnnaPresentation: true,
+        historicalDeliveryAuthenticated: false,
+      });
+      // The permitted C04 composer is not a generic C02 presentation seam.
+      expect(() => composeC04ActivityFrame(actor)).toThrow("Unbound C04 actor");
+      actor.send({ type: "CONTINUE" });
+      actor.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+      actor.send({ type: "CONTINUE" });
+      actor.send({
+        type: "C02_MAIN_FEEDBACK_DELIVERED",
+        capability: { identity: Symbol("unissued negative fixture") },
+      });
+      actor.send({ type: "CONTINUE" });
+      expect(projectC02ReferenceCheckpointV2(actor)).toEqual(checked);
+      expect(actor.getSnapshot().context.c02Floor?.phase).toBe("MAIN");
+      expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+      expect(await store.load()).not.toBeNull();
+    } finally {
+      actor.stop();
+    }
+  });
+});
+
+type C04Actor = ReturnType<
+  ReturnType<typeof createCanonicalC04Runtime>["createActivityActor"]
+>;
+
+function c04Composite(
+  parts: Record<
+    string,
+    Exclude<LearnerResponse, { kind: "COMPOSITE" | "MODEL_STATE" }>
+  >,
+): LearnerResponse {
+  return {
+    kind: "COMPOSITE",
+    parts: Object.entries(parts).map(([key, response]) => ({ key, response })),
+  };
+}
+
+function checkedC04Response(actor: C04Actor): LearnerResponse {
+  const id = actor.getSnapshot().context.activityId;
+  const money = (value: string) => ({
+    kind: "EXACT_QUANTITY" as const,
+    value: quantity(
+      ExactDecimal.from(value),
+      "MONETARY_AMOUNT",
+      "PHP",
+      "per month",
+    ),
+  });
+  const percent = (value: string) => ({
+    kind: "EXACT_QUANTITY" as const,
+    value: quantity(ExactDecimal.from(value), "PERCENTAGE_CHANGE", "%", null),
+  });
+  const option = (role: string) => ({
+    kind: "SINGLE_SELECTION" as const,
+    selectionId: composeC04ActivityFrame(actor).responseControls!.find(
+      (control) => control.role === role,
+    )!.options![0]!.id,
+  });
+  if (id === "C04-A01")
+    return c04Composite({
+      original: money("18000"),
+      new: money("18000"),
+      difference: money("0"),
+      percentage: percent("0"),
+      interpretation: option("interpretation"),
+    });
+  if (id === "C04-A02")
+    return c04Composite({
+      differenceA: money("2000"),
+      differenceB: money("2000"),
+      percentageA: percent("10"),
+      percentageB: percent("20"),
+      comparison: option("comparison"),
+    });
+  if (id === "C04-A03")
+    return c04Composite({
+      original: money("30000"),
+      new: money("27000"),
+      difference: money("-3000"),
+      percentage: percent("-10"),
+      interpretation: option("interpretation"),
+    });
+  const primary = {
+    difference: money("1500"),
+    percentage: {
+      kind: "SEMANTIC_BOUNDARY" as const,
+      resolution: {
+        kind: "UNDEFINED" as const,
+        reason: "Original value is zero",
+      },
+    },
+  };
+  actor.send({ type: "RESPONSE_CHANGED", response: c04Composite(primary) });
+  actor.send({ type: "CHECK_RESPONSE" });
+  expect(actor.getSnapshot().context.hasChecked).toBe(false);
+  actor.send({ type: "COMMIT_PRIMARY_RESPONSE" });
+  expect(actor.getSnapshot().context.responseStage).toBe("REASONING");
+  expect(actor.getSnapshot().context.firstPrimaryCommitment).not.toBeNull();
+  return c04Composite({ ...primary, explanation: option("explanation") });
+}
+
+describe("T037 complete public C04 roundtrips and owner boundaries", () => {
+  it.each(["C04-A01", "C04-A02", "C04-A03", "C04-A04"] as const)(
+    "roundtrips live checked %s response, model, commitments and feedback through one real root",
+    async (id) => {
+      const store = createWebTestStore();
+      const root = trackedRoot(store);
+      root.start();
+      await tick();
+      const actor = open(root.session, id);
+      actor.send({ type: "CONTINUE" });
+      if (id === "C04-A02") {
+        // All five teach steps, with real engagement at the two gated steps.
+        expect(actor.getSnapshot().context.position).toBe("EXP-01");
+        for (const stage of [
+          "EXP-01",
+          "EXP-02",
+          "EXP-03",
+          "EXP-04",
+          "EXP-05",
+        ]) {
+          expect(actor.getSnapshot().context.position).toBe(stage);
+          if (stage === "EXP-02" || stage === "EXP-03") {
+            const control =
+              composeC04ActivityFrame(actor).modelSelectionControl!;
+            const child = stage === "EXP-02" ? "C04-S02-A" : "C04-S02-B";
+            expect(control.options.some((option) => option.id === child)).toBe(
+              true,
+            );
+            actor.send({
+              type: "SELECT_MODEL_CHILD",
+              modelId: control.modelId,
+              position: control.position,
+              revision: control.revision,
+              selectionId: child,
+            });
+          }
+          actor.send({ type: "CONTINUE" });
+        }
+      }
+      expect(actor.getSnapshot().context.position).toBe("ACTIVE");
+      if (id === "C04-A03" || id === "C04-A04") {
+        expect(composeC04ActivityFrame(actor).exposedDerivedFacts).toEqual([]);
+      }
+      actor.send({ type: "FINISH_ACTIVITY" });
+      expect(actor.getSnapshot().context.position).toBe("ACTIVE");
+      actor.send({
+        type: "RESPONSE_CHANGED",
+        response: checkedC04Response(actor),
+      });
+      actor.send({ type: "CHECK_RESPONSE" });
+      expect(actor.getSnapshot().context.evaluation).toEqual({
+        outcome: "CONFIRMED",
+        diagnostic: null,
+      });
+      const feedback = composeC04ActivityFrame(actor);
+      expect(
+        feedback.contentReferences.some((item) => item.text.length > 0),
+      ).toBe(true);
+      actor.send({
+        type: "FEEDBACK_DELIVERED",
+        revision: actor.getSnapshot().context.responseRevision,
+      });
+      const projected = projectC04CheckpointV1(actor);
+      expect(projected.hasChecked).toBe(true);
+      expect(projected.feedbackRevision).toBe(projected.responseRevision);
+      const deliveredFrame = composeC04ActivityFrame(actor);
+      const envelope: Parameters<RecoveryCheckpointQueue["replace"]>[0] = {
+        schemaVersion: 1 as const,
+        studyDefinitionRevision: "PAID-STUDY-DEF-R001",
+        kind: "unfinished-activity" as const,
+        checkpoint: projected,
+      };
+      expect(() => projectC04CheckpointV1({ ...actor } as C04Actor)).toThrow();
+      const producer = acquireSessionCheckpointProducer(root.session);
+      expect(await producer.replace(envelope)).toMatchObject({
+        status: "durable",
+      });
+      const durable = await store.load();
+      root.stop();
+      expect(producer.replace(envelope)).toBeNull();
+      expect(() => projectC04CheckpointV1(actor)).toThrow();
+      const resumed = trackedRoot(store);
+      resumed.start();
+      await tick();
+      const recovery = selectSession(resumed.session).recovery;
+      if (recovery?.status !== "VALID_CHECKPOINT")
+        throw new Error("Expected current V1 recovery");
+      const held = recovery.actor;
+      const start = vi.spyOn(held, "start");
+      expect(projectC04CheckpointV1(held)).toEqual(projected);
+      expect(selectSession(resumed.session).destination).toBeNull();
+      expect(navigate(resumed.session, { type: "SYSTEM_BACK" })).toBe(
+        "rejected",
+      );
+      expect(await store.load()).toBe(durable);
+      expect(start).not.toHaveBeenCalled();
+      resumed.session.send({ type: "CONTINUE_RECOVERED_ACTIVITY" });
+      resumed.session.send({ type: "CONTINUE_RECOVERED_ACTIVITY" });
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(selectSession(resumed.session).currentActivity).toBe(held);
+      expect(projectC04CheckpointV1(held)).toEqual(projected);
+      expect(composeC04ActivityFrame(held)).toEqual(deliveredFrame);
+      resumed.stop();
+    },
+  );
+
+  it("keeps all five teach stages passive until actual stage engagement and prioritizes Review Back", async () => {
+    const root = trackedRoot();
+    root.start();
+    await tick();
+    const actor = open(root.session, "C04-A02");
+    actor.send({ type: "CONTINUE" });
+    for (const stage of ["EXP-01", "EXP-02", "EXP-03", "EXP-04", "EXP-05"]) {
+      expect(actor.getSnapshot().context.position).toBe(stage);
+      const before = projectC04CheckpointV1(actor);
+      const frame = composeC04ActivityFrame(actor);
+      expect(frame.responseControls).toEqual([]);
+      expect(actor.getSnapshot().context.model!.revision).toBe(0);
+      if (stage === "EXP-02" || stage === "EXP-03") {
+        expect(JSON.stringify(frame)).not.toMatch(/10%|20%|dependent-teaching/);
+      }
+      actor.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      expect(navigate(root.session, { type: "SYSTEM_BACK" })).toBe(
+        "support-closed",
+      );
+      expect(projectC04CheckpointV1(actor)).toEqual(before);
+      expect(composeC04ActivityFrame(actor)).toEqual(frame);
+      actor.send({ type: "CONTINUE" });
+    }
+    expect(actor.getSnapshot().context.position).toBe("ACTIVE");
+    expect(actor.getSnapshot().context.c04A02StageEngagement).toEqual({
+      "EXP-02": { "C04-S02-A": false },
+      "EXP-03": { "C04-S02-B": false },
+    });
+    root.stop();
+  });
+
+  it("cancels an activity switch through real Back without losing actor or producer ownership", async () => {
+    const root = trackedRoot();
+    root.start();
+    await tick();
+    expect(
+      navigate(root.session, {
+        type: "SELECT_COMPETENCY",
+        competencyId: "C04",
+      }),
+    ).toBe("destination-changed");
+    expect(navigate(root.session, { type: "SYSTEM_BACK" })).toBe(
+      "destination-changed",
+    );
+    expect(navigate(root.session, { type: "SYSTEM_BACK" })).toBe(
+      "platform-root",
+    );
+    expect(
+      navigate(root.session, {
+        type: "SELECT_ACTIVITY",
+        activityId: "C04-A01",
+      }),
+    ).toBe("destination-changed");
+    const actor = selectSession(root.session).currentActivity!;
+    const before = projectC04CheckpointV1(actor);
+    const producer = acquireSessionCheckpointProducer(root.session);
+    expect(
+      navigate(root.session, {
+        type: "SELECT_ACTIVITY",
+        activityId: "C04-A03",
+      }),
+    ).toBe("destination-changed");
+    expect(selectSession(root.session).decision).toBe("activitySwitchChoice");
+    expect(navigate(root.session, { type: "SYSTEM_BACK" })).toBe(
+      "destination-changed",
+    );
+    expect(selectSession(root.session).decision).toBe("none");
+    expect(selectSession(root.session).currentActivity).toBe(actor);
+    expect(projectC04CheckpointV1(actor)).toEqual(before);
+    expect(
+      await producer.replace({
+        schemaVersion: 1,
+        studyDefinitionRevision: "PAID-STUDY-DEF-R001",
+        kind: "unfinished-activity",
+        checkpoint: before,
+      }),
+    ).toMatchObject({ status: "durable" });
+    root.stop();
+  });
+
+  it("retries the same failed canonical payload before clearing and fencing further writes", async () => {
+    const target = createWebTestStore();
+    const writes: string[] = [];
+    let fail = true;
+    const root = trackedRoot({
+      load: () => target.load(),
+      clear: () => target.clear(),
+      replace: async (raw) => {
+        writes.push(raw);
+        if (fail) throw new Error("write unavailable");
+        await target.replace(raw);
+      },
+    });
+    root.start();
+    await tick();
+    const actor = open(root.session);
+    const producer = acquireSessionCheckpointProducer(root.session);
+    const envelope: Parameters<RecoveryCheckpointQueue["replace"]>[0] = {
+      schemaVersion: 1 as const,
+      studyDefinitionRevision: "PAID-STUDY-DEF-R001",
+      kind: "unfinished-activity" as const,
+      checkpoint: projectC04CheckpointV1(actor),
+    };
+    expect(await producer.replace(envelope)).toMatchObject({
+      status: "technical-failure",
+    });
+    expect(await producer.replace(envelope)).toMatchObject({
+      status: "blocked",
+      reason: "paused",
+    });
+    expect(await target.load()).toBeNull();
+    fail = false;
+    expect(await root.queue.retry()).toMatchObject({ status: "durable" });
+    expect(writes).toHaveLength(2);
+    expect(writes[1]).toBe(writes[0]);
+    expect(await target.load()).toBe(writes[0]);
+    root.session.send({ type: "SELECT_ACTIVITY", activityId: "C04-A03" });
+    root.session.send({ type: "ABANDON_AND_OPEN_SELECTED_ACTIVITY" });
+    expect(producer.replace(envelope)).toBeNull();
+    await tick();
+    expect(await target.load()).toBeNull();
+    expect(
+      selectSession(root.session).currentActivity!.getSnapshot().context
+        .activityId,
+    ).toBe("C04-A03");
+    root.stop();
+  });
+});
+
+type ReferenceActor = ReturnType<typeof createC02ReferenceActivityActor>;
+
+function referenceResponse(): LearnerResponse {
+  return {
+    kind: "COMPOSITE",
+    parts: [
+      ["gross", "12100"],
+      ["SSS", "600"],
+      ["PhilHealth", "302.5"],
+      ["Pag-IBIG", "200"],
+      ["withholding", "0"],
+      ["total deductions", "1102.5"],
+      ["net pay", "10997.5"],
+    ].map(([key, amount]) => ({
+      key: key!,
+      response: {
+        kind: "EXACT_QUANTITY",
+        value: quantity(
+          ExactDecimal.from(amount!),
+          "MONETARY_AMOUNT",
+          "PHP",
+          null,
+        ),
+      },
+    })),
+  };
+}
+
+/** Inspect actual canonical content and its nonvisual equivalent before handing
+ * back current issued authority. This proves headless availability, not a render. */
+function presentCurrentReference(actor: ReferenceActor) {
+  const { context, definition, delivery } =
+    inspectC02ReferenceActivityActor(actor);
+  if (!delivery) throw new Error("Expected current authenticated delivery");
+  expect(delivery.activityId).toBe("C02-A01");
+  expect(delivery.position).toBe(context.position);
+  expect(delivery.responseRevision).toBe(context.responseRevision);
+  expect(delivery.passages.length).toBeGreaterThan(0);
+  expect(delivery.passages.every((passage) => passage.text.length > 0)).toBe(
+    true,
+  );
+  expect(delivery.nonvisual.text.length).toBeGreaterThan(0);
+  const floor = definition.embeddedFloor!;
+  if (delivery.purpose === "MAIN_FEEDBACK") {
+    const expected =
+      context.evaluation!.outcome === "CONFIRMED"
+        ? floor.mainFeedback.confirmation
+        : context.evaluation!.diagnostic === "c02/S01/reconsider-arithmetic"
+          ? floor.mainFeedback.arithmetic
+          : floor.mainFeedback.payrollRole;
+    expect(delivery.scenarioId).toBe("C02-S01");
+    expect(delivery.passages).toEqual([expected]);
+    expect(delivery.nonvisual).toEqual(expected);
+  } else {
+    expect(delivery.scenarioId).toBe("C02-S01-F");
+    expect(delivery.passages).toEqual([
+      floor.scenario,
+      floor.task,
+      floor.help,
+      floor.choices.find((choice) => choice.basis === context.c02Floor!.basis)!
+        .feedback,
+      floor.explanation,
+    ]);
+    expect(delivery.nonvisual).toEqual(floor.nonvisual);
+  }
+  actor.send({
+    type:
+      delivery.purpose === "MAIN_FEEDBACK"
+        ? "C02_MAIN_FEEDBACK_DELIVERED"
+        : "C02_FLOOR_TEACHING_DELIVERED",
+    capability: delivery.capability,
+  });
+  return delivery;
+}
+
+function selectReferenceBasis(
+  actor: ReferenceActor,
+  basis: "8000.00" | "10000.00",
+) {
+  const { context } = inspectC02ReferenceActivityActor(actor);
+  actor.send({
+    type: "C02_SELECT_FLOOR_BASIS",
+    activityId: "C02-A01",
+    scenarioId: "C02-S01-F",
+    position: "C02-S01-F",
+    mainRevision: context.responseRevision,
+    revision: context.c02Floor!.revision,
+    basis,
+  });
+}
+
+describe("T037-14 authenticated opt-in C02 V2 Floor replay", () => {
+  it.each(["8000.00", "10000.00"] as const)(
+    "replays current main feedback before restoring %s Floor work and requiring fresh teaching",
+    async (basis) => {
+      const source = createC02ReferenceActivityActor();
+      let actor: ReferenceActor | undefined;
+      try {
+        source.start();
+        source.send({ type: "CONTINUE" });
+        source.send({
+          type: "RESPONSE_CHANGED",
+          response: referenceResponse(),
+        });
+        source.send({ type: "CHECK_RESPONSE" });
+        expect(
+          inspectC02ReferenceActivityActor(source).context.evaluation,
+        ).toEqual({
+          outcome: "CONFIRMED",
+          diagnostic: null,
+        });
+        const historicalMain = presentCurrentReference(source);
+        expect(source.getSnapshot().context.position).toBe("CONFIRMATION");
+        source.send({ type: "CONTINUE" });
+        selectReferenceBasis(source, basis);
+        const historicalFloor = presentCurrentReference(source);
+        const saved = projectC02ReferenceCheckpointV2(source);
+        expect(saved.position).toBe("C02-S01-F");
+        expect(saved.floor.kind).toBe("FLOOR_WORK");
+        const store = createWebTestStore();
+        const queue = createRecoveryCheckpointQueue(store);
+        expect(
+          await queue.replaceV2({
+            schemaVersion: 2,
+            studyDefinitionRevision: "PAID-STUDY-DEF-R001",
+            kind: "unfinished-activity",
+            checkpoint: saved,
+          }),
+        ).toMatchObject({ status: "durable" });
+        const raw = await store.load();
+        expect(raw).not.toBeNull();
+        expect((await recoverCheckpoint(queue)).status).toBe(
+          "UNUSABLE_CHECKPOINT",
+        );
+        const restored = await recoverReferenceCheckpointV2(queue);
+        if (restored.status !== "VALID_REFERENCE_CHECKPOINT_V2")
+          throw new Error("Expected authenticated V2 restoration");
+        actor = restored.actor;
+        expect(actor).not.toBe(source);
+        expect(restored.checkpoint.checkpoint).toEqual(saved);
+        expect(
+          claimRecoveryClassificationV2(
+            createRecoveryCheckpointQueue(createWebTestStore()),
+            restored,
+          ),
+        ).toBe(false);
+        expect(claimRecoveryClassificationV2(queue, { ...restored })).toBe(
+          false,
+        );
+        expect(claimRecoveryClassificationV2(queue, restored)).toBe(true);
+        expect(claimRecoveryClassificationV2(queue, restored)).toBe(false);
+        // V2 issuance is not the V1 Session startup contract.
+        const sessionRoot = trackedRoot();
+        sessionRoot.session.start();
+        expect(
+          applySessionStartupClassification(sessionRoot.session, restored),
+        ).toBe("ignored");
+        expect(selectSession(sessionRoot.session).startup).toBe("pending");
+        sessionRoot.stop();
+        actor.start();
+        const replay = projectC02ReferenceCheckpointV2(actor);
+        expect(replay).toMatchObject({
+          position: "CONFIRMATION",
+          evaluation: saved.evaluation,
+          response: saved.response,
+          checkedResponse: saved.checkedResponse,
+          responseRevision: saved.responseRevision,
+          checkedRevision: saved.checkedRevision,
+          feedbackRevision: null,
+          floor: {
+            kind: "ANNA_REPLAY_PENDING_FLOOR",
+            basis,
+            revision: 1,
+            mainRevision: 1,
+          },
+        });
+        expect(projectC02RecoveryObligations(actor)).toMatchObject({
+          historicalDeliveryAuthenticated: false,
+          requiresAnnaPresentation: true,
+          requiresLearnerContinue: true,
+          requiresFloorTeaching: true,
+          preservedFloorWork: { basis, revision: 1, mainRevision: 1 },
+        });
+        // No legacy event, historical owner, wrong purpose, or structural copy
+        // can turn previously saved delivery into current actor authority.
+        const current = inspectC02ReferenceActivityActor(actor).delivery!;
+        actor.send({ type: "CONTINUE" });
+        actor.send({
+          type: "FEEDBACK_DELIVERED",
+          revision: replay.responseRevision,
+        });
+        actor.send({
+          type: "C02_MAIN_FEEDBACK_DELIVERED",
+          capability: historicalMain.capability,
+        });
+        actor.send({
+          type: "C02_MAIN_FEEDBACK_DELIVERED",
+          capability: historicalFloor.capability,
+        });
+        actor.send({
+          type: "C02_MAIN_FEEDBACK_DELIVERED",
+          capability: { ...current.capability },
+        });
+        actor.send({
+          type: "C02_FLOOR_TEACHING_DELIVERED",
+          capability: current.capability,
+        });
+        actor.send({ type: "CONTINUE" });
+        expect(projectC02ReferenceCheckpointV2(actor)).toEqual(replay);
+        const delivered = presentCurrentReference(actor);
+        expect(delivered.purpose).toBe("MAIN_FEEDBACK");
+        expect(actor.getSnapshot().context.feedbackRevision).toBe(
+          replay.responseRevision,
+        );
+        expect(actor.getSnapshot().context.position).toBe("CONFIRMATION");
+        const acknowledged = actor.getSnapshot().context;
+        actor.send({
+          type: "C02_MAIN_FEEDBACK_DELIVERED",
+          capability: delivered.capability,
+        });
+        expect(actor.getSnapshot().context).toBe(acknowledged);
+        expect(
+          projectC02RecoveryObligations(actor).requiresLearnerContinue,
+        ).toBe(true);
+        actor.send({ type: "CONTINUE" });
+        expect(actor.getSnapshot().context).toMatchObject({
+          position: "C02-S01-F",
+          c02Floor: {
+            phase: "FLOOR",
+            basis,
+            revision: 1,
+            mainRevision: 1,
+            teachingRevision: null,
+          },
+        });
+        expect(projectC02RecoveryObligations(actor)).toMatchObject({
+          preservedFloorWork: null,
+          requiresAnnaPresentation: false,
+          requiresFloorTeaching: true,
+          historicalDeliveryAuthenticated: false,
+        });
+        const floorBefore = projectC02ReferenceCheckpointV2(actor);
+        actor.send({
+          type: "C02_FLOOR_TEACHING_DELIVERED",
+          capability: historicalFloor.capability,
+        });
+        actor.send({
+          type: "C02_FLOOR_TEACHING_DELIVERED",
+          capability: delivered.capability,
+        });
+        actor.send({ type: "FINISH_ACTIVITY" });
+        expect(projectC02ReferenceCheckpointV2(actor)).toEqual(floorBefore);
+        expect(await store.load()).toBe(raw);
+        const teaching = presentCurrentReference(actor);
+        expect(teaching.purpose).toBe("FLOOR_TEACHING");
+        expect(projectC02RecoveryObligations(actor).requiresFloorTeaching).toBe(
+          false,
+        );
+        actor.send({ type: "FINISH_ACTIVITY" });
+        expect(actor.getSnapshot().context.position).toBe(
+          basis === "10000.00" ? "COMPLETE" : "C02-S01-F",
+        );
+      } finally {
+        actor?.stop();
+        source.stop();
+      }
+    },
+  );
+
+  it("rejects stale same-number recheck authority and cross-owner current authority", async () => {
+    const source = createC02ReferenceActivityActor();
+    source.start();
+    source.send({ type: "CONTINUE" });
+    source.send({ type: "RESPONSE_CHANGED", response: referenceResponse() });
+    source.send({ type: "CHECK_RESPONSE" });
+    presentCurrentReference(source);
+    source.send({ type: "CONTINUE" });
+    selectReferenceBasis(source, "10000.00");
+    const store = createWebTestStore();
+    const queue = createRecoveryCheckpointQueue(store);
+    await queue.replaceV2({
+      schemaVersion: 2,
+      studyDefinitionRevision: "PAID-STUDY-DEF-R001",
+      kind: "unfinished-activity",
+      checkpoint: projectC02ReferenceCheckpointV2(source),
+    });
+    source.stop();
+    const first = await recoverReferenceCheckpointV2(queue);
+    const second = await recoverReferenceCheckpointV2(queue);
+    if (
+      first.status !== "VALID_REFERENCE_CHECKPOINT_V2" ||
+      second.status !== "VALID_REFERENCE_CHECKPOINT_V2"
+    )
+      throw new Error("Expected replay actors with pending Floor custody");
+    const a = first.actor;
+    const b = second.actor;
+    try {
+      for (const actor of [a, b]) {
+        actor.start();
+        expect(
+          projectC02RecoveryObligations(actor).preservedFloorWork,
+        ).not.toBeNull();
+      }
+      const stale = inspectC02ReferenceActivityActor(a).delivery!;
+      const bBefore = projectC02ReferenceCheckpointV2(b);
+      b.send({
+        type: "C02_MAIN_FEEDBACK_DELIVERED",
+        capability: stale.capability,
+      });
+      b.send({ type: "CONTINUE" });
+      expect(projectC02ReferenceCheckpointV2(b)).toEqual(bBefore);
+      a.send({ type: "REVISE" });
+      expect(a.getSnapshot().context.position).toBe("REVISION");
+      a.send({ type: "CHECK_AGAIN" });
+      expect(a.getSnapshot().context.responseRevision).toBe(
+        stale.responseRevision,
+      );
+      const before = projectC02ReferenceCheckpointV2(a);
+      a.send({
+        type: "C02_MAIN_FEEDBACK_DELIVERED",
+        capability: stale.capability,
+      });
+      a.send({ type: "CONTINUE" });
+      expect(projectC02ReferenceCheckpointV2(a)).toEqual(before);
+      presentCurrentReference(a);
+      a.send({ type: "CONTINUE" });
+      expect(a.getSnapshot().context.position).toBe("C02-S01-F");
+    } finally {
+      a.stop();
+      b.stop();
+    }
+  });
+});
 
 describe("T036 genuine production-root startup", () => {
   it("late clear acknowledgment after shutdown cannot enter Library or start the held actor", async () => {
