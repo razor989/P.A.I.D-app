@@ -406,7 +406,10 @@ export default tseslint.config(
   },
   // Include new nested App paths even before directory discovery.
   { ...restriction("app"), files: ["src/app/**/*.{ts,tsx}"] },
-  { ...restriction("app"), files: ["src/main.tsx"] },
+  {
+    ...restriction("app", ["presentation/styles/base.css"]),
+    files: ["src/main.tsx"],
+  },
   ...[
     [
       "composition-root.tsx",

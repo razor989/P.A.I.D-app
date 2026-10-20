@@ -1,0 +1,89 @@
+/* P-D008 immutable palette; semantic aliases below define safe usage. */
+:root {
+  --palette-canvas: #fbf7ef;
+  --palette-surface: #ffffff;
+  --palette-ink: #263128;
+  --palette-secondary: #657064;
+  --palette-border: #ddd5c7;
+  --palette-forest: #2f6b4f;
+  --palette-indigo: #465d9e;
+  --palette-success: #3f7a55;
+  --palette-caution: #a06b00;
+  --palette-correction: #a6453a;
+  --palette-clay: #c97a50;
+  --palette-sage: #dde8db;
+  --palette-workspace: #f5f7f4;
+  --palette-technical-ink: #24332e;
+  --palette-structural: #b9c8c0;
+
+  --color-canvas: var(--palette-canvas);
+  --color-surface: var(--palette-surface);
+  --color-text: var(--palette-ink);
+  --color-text-secondary: var(--palette-secondary);
+  --color-border-decorative: var(--palette-border);
+  --color-action: var(--palette-forest);
+  --color-reference: var(--palette-indigo);
+  --color-success: var(--palette-success);
+  /* Base ochre fails 4.5:1 on canvas. Darken only the text/state role. */
+  --color-caution-text: #815600;
+  --color-correction: var(--palette-correction);
+  --color-accent-decorative: var(--palette-clay);
+  --color-selected-surface: var(--palette-sage);
+  --color-selected-text: var(--palette-technical-ink);
+  --color-workspace: var(--palette-workspace);
+  --color-technical-text: var(--palette-technical-ink);
+  --color-grid-decorative: var(--palette-structural);
+  --color-relation: var(--palette-forest);
+  --color-numerical-emphasis: var(--palette-ink);
+  /* Meaningful boundaries cannot use the pale decorative grid/border. */
+  --color-border-interactive: #65776c;
+  --color-action-hover: #285b43;
+  --color-action-pressed: #204b37;
+  --color-on-action: var(--palette-surface);
+  --color-focus: var(--palette-indigo);
+  --color-focus-separator: var(--palette-surface);
+  --color-disabled-text: var(--palette-secondary);
+  --color-disabled-surface: var(--palette-canvas);
+
+  --font-heading: "Lexend", system-ui, sans-serif;
+  --font-body: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --font-technical: "IBM Plex Mono", ui-monospace, monospace;
+  --font-weight-body: 400;
+  --font-weight-heading: 600;
+  --font-weight-strong: 700;
+  --text-title: 1.5rem;
+  --leading-title: 1.25;
+  --text-prompt: 1.25rem;
+  --leading-prompt: 1.4;
+  --text-section: 1.125rem;
+  --leading-section: 1.3334;
+  --text-body: 1rem;
+  --leading-body: 1.5;
+  --text-support: 0.875rem;
+  --leading-support: 1.4286;
+  --text-result: 1.25rem;
+  --leading-result: 1.4;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --radius-technical: 0.125rem;
+  --radius-control: 0.375rem;
+  --radius-surface: 0.5rem;
+  --border-width: 1px;
+  --border-emphasis-width: 3px;
+  --focus-width: 3px;
+  --focus-offset: 3px;
+  --workspace-max: 72rem;
+  --reading-max: 65ch;
+  --layout-gutter: var(--space-4);
+  --layout-gap: var(--space-4);
+  --elevation-flat: none;
+  --elevation-raised: 0 2px 6px rgb(38 49 40 / 10%);
+  --layer-base: 0;
+  --layer-overlay: 10;
+}

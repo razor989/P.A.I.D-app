@@ -1,4 +1,5 @@
 import { bootstrap } from "@/app/bootstrap";
+import "@/presentation/styles/base.css";
 
 const root = document.getElementById("root");
 
