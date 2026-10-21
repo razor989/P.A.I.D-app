@@ -1,0 +1,55 @@
+.shell {
+  max-inline-size: var(--workspace-max);
+  margin-inline: auto;
+  padding: var(--layout-gutter);
+}
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--layout-gap);
+  border-block-end: 1px solid var(--color-border-decorative);
+}
+.brand {
+  font-family: var(--font-heading);
+  font-weight: var(--font-weight-heading);
+}
+.header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.shell button {
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border-interactive);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-action);
+  cursor: pointer;
+  text-align: start;
+  overflow-wrap: anywhere;
+  max-inline-size: 100%;
+}
+.shell button:disabled {
+  color: var(--color-disabled-text);
+  background: var(--color-disabled-surface);
+  cursor: default;
+}
+.main {
+  padding-block: var(--space-6);
+}
+.skip {
+  position: absolute;
+  inset-inline-start: var(--layout-gutter);
+  inset-block-start: var(--space-2);
+  transform: translateY(-200%);
+  padding: var(--space-3);
+  background: var(--color-surface);
+  z-index: var(--layer-overlay);
+}
+.skip:focus {
+  transform: none;
+}

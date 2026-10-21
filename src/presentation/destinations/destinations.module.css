@@ -1,0 +1,29 @@
+.list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: var(--layout-gap);
+}
+.list li {
+  min-inline-size: 0;
+  padding-block: var(--space-4);
+  border-block-end: 1px solid var(--color-border-decorative);
+}
+.list h2,
+.list h3 {
+  margin-block: 0 var(--space-2);
+}
+.identifier {
+  color: var(--color-text-secondary);
+  font-size: var(--text-support);
+}
+@media (min-width: 40rem) {
+  .list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 64rem) {
+  .list {
+    column-gap: var(--space-8);
+  }
+}

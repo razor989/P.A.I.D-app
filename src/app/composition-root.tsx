@@ -15,6 +15,8 @@ import {
 import { createWebTestStore } from "./web-test-store";
 import { SessionProvider, useSessionSnapshot } from "./session-provider";
 import { StartupRecoveryGateway } from "./startup-recovery-gateway";
+import { AppShell } from "@/presentation/shell/public";
+import { navigate } from "@/session/navigation/public";
 
 /** Source bank metadata is not executable availability. */
 export function createApplicationCatalog() {
@@ -129,6 +131,101 @@ export type ApplicationRoot = ReturnType<typeof createApplicationRoot>;
 export function StartupShell({ root }: { root: ApplicationRoot }) {
   useSessionSnapshot();
   const view = selectSession(root.session);
+  const snapshot = root.session.getSnapshot();
+  // Pass 9 §2 canonical learner-facing labels; catalog remains ID authority.
+  const labels = {
+    C01: "Gross Income",
+    C02: "Net Pay and Statutory Deductions",
+    C03: "Overtime Pay",
+    C04: "Percentage Change",
+    C05: "Wage and Salary Representation and Conversion",
+    C06: "Commission",
+  };
+  const settled =
+    snapshot.status === "active" &&
+    snapshot.matches("session") &&
+    view.destination !== null;
+  const blocked =
+    view.technical !== "idle" ||
+    view.lifecyclePhase === "failed" ||
+    view.lifecyclePhase === "finish-clear-in-flight" ||
+    view.lifecyclePhase === "abandon-clear-in-flight" ||
+    view.decision !== "none";
+  if (settled && view.destination)
+    return (
+      <AppShell
+        destination={view.destination}
+        competencies={Object.freeze(
+          [...root.catalog.competencies.values()].map((c) =>
+            Object.freeze({
+              id: c.id,
+              label: labels[c.id],
+              available:
+                !blocked &&
+                snapshot.can({ type: "SELECT_COMPETENCY", competencyId: c.id }),
+              activities: Object.freeze(
+                c.activityIds.map((id) =>
+                  Object.freeze({
+                    id,
+                    label: root.catalog.activities.get(id)!.instructionalFamily,
+                    available:
+                      !blocked &&
+                      snapshot.can({ type: "SELECT_ACTIVITY", activityId: id }),
+                  }),
+                ),
+              ),
+            }),
+          ),
+        )}
+        blocked={blocked}
+        notice={
+          view.lifecyclePhase === "failed"
+            ? "Saved work could not be cleared. Navigation remains unavailable."
+            : view.technical === "loading" ||
+                view.lifecyclePhase.endsWith("in-flight")
+              ? "Please wait while the current operation finishes."
+              : view.technical !== "idle"
+                ? "A technical problem prevents navigation. Your current destination is preserved."
+                : null
+        }
+        canBack={
+          view.decision === "activitySwitchChoice"
+            ? snapshot.can({ type: "CANCEL_PENDING_ACTIVITY_SWITCH" })
+            : !blocked
+        }
+        canReturn={!blocked && snapshot.can({ type: "RETURN_TO_LIBRARY" })}
+        onBack={() => {
+          navigate(root.session, { type: "SYSTEM_BACK" });
+        }}
+        onReturn={() => {
+          navigate(root.session, { type: "RETURN_TO_LIBRARY" });
+        }}
+        onCompetency={(competencyId) => {
+          navigate(root.session, { type: "SELECT_COMPETENCY", competencyId });
+        }}
+        onActivity={(activityId) => {
+          navigate(root.session, { type: "SELECT_ACTIVITY", activityId });
+        }}
+        switchChoice={
+          view.decision === "activitySwitchChoice"
+            ? {
+                canReturn: snapshot.can({
+                  type: "RETURN_TO_UNFINISHED_ACTIVITY",
+                }),
+                canAbandon: snapshot.can({
+                  type: "ABANDON_AND_OPEN_SELECTED_ACTIVITY",
+                }),
+                onReturn: () =>
+                  root.session.send({ type: "RETURN_TO_UNFINISHED_ACTIVITY" }),
+                onAbandon: () =>
+                  root.session.send({
+                    type: "ABANDON_AND_OPEN_SELECTED_ACTIVITY",
+                  }),
+              }
+            : null
+        }
+      />
+    );
   return (
     <main>
       <h1>P.A.I.D.</h1>

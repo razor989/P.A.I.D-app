@@ -76,7 +76,9 @@ describe("T036 bounded Recovery gateway", () => {
       );
     expect(start).toHaveBeenCalledTimes(1);
     expect(root.session.getSnapshot().context.currentActivity).toBe(actor);
-    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe(
+      "Activity host",
+    );
     view.unmount();
     root.stop();
   });
@@ -182,7 +184,9 @@ describe("T036 bounded Recovery gateway", () => {
       resolveClear();
       await tick();
     });
-    expect(screen.getByRole("status").textContent).toBe("Library is ready.");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Learning Library",
+    );
     expect(screen.getAllByRole("main")).toHaveLength(1);
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     view.unmount();
@@ -195,7 +199,9 @@ describe("T036 bounded Recovery gateway", () => {
       </StrictMode>,
     );
     await act(tick);
-    expect(screen.getByRole("status").textContent).toBe("Library is ready.");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Learning Library",
+    );
     expect(screen.getAllByRole("main")).toHaveLength(1);
     view.unmount();
     render(
@@ -204,7 +210,9 @@ describe("T036 bounded Recovery gateway", () => {
       </StrictMode>,
     );
     await act(tick);
-    expect(screen.getByRole("status").textContent).toBe("Library is ready.");
-    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Learning Library",
+    );
+    expect(screen.getAllByRole("button")).toHaveLength(6);
   });
 });

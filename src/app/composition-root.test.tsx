@@ -1,4 +1,8 @@
+// @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { SessionProvider } from "./session-provider";
 import { ExactDecimal, quantity } from "@/core/public";
 import type { ActivityId, LearnerResponse } from "@/core/public";
 import {
@@ -37,17 +41,83 @@ import type { AppSessionActor } from "@/session/app-machine/public";
 import {
   createApplicationCatalog,
   createApplicationRoot,
+  StartupShell,
 } from "./composition-root";
 import { createWebTestStore } from "./web-test-store";
 
 const sessions: AppSessionActor[] = [];
 afterEach(() => {
+  cleanup();
   sessions.splice(0).forEach((s) => s.stop());
   vi.restoreAllMocks();
 });
 const tick = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 };
+
+describe("T039 production Session presentation handoff", () => {
+  it("renders real Session destinations, rejects unavailable activity and preserves unfinished actor across Back", async () => {
+    const root = createApplicationRoot();
+    sessions.push(root.session);
+    root.start();
+    await tick();
+    const user = userEvent.setup();
+    const view = render(
+      <SessionProvider session={root.session}>
+        <StartupShell root={root} />
+      </SessionProvider>,
+    );
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
+      "Learning Library",
+    );
+    await user.click(screen.getByRole("button", { name: "Gross Income" }));
+    expect(selectSession(root.session).destination).toEqual({
+      kind: "competency",
+      competencyId: "C01",
+    });
+    const before = selectSession(root.session).destination;
+    expect(
+      navigate(root.session, {
+        type: "SELECT_ACTIVITY",
+        activityId: "C01-A01",
+      }),
+    ).toBe("rejected");
+    expect(selectSession(root.session).destination).toBe(before);
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+    expect(
+      screen.getByRole("main").querySelectorAll("button:disabled").length,
+    ).toBe(4);
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    await user.click(screen.getByRole("button", { name: "Percentage Change" }));
+    await user.click(screen.getByRole("button", { name: "Explore and Learn" }));
+    const actor = selectSession(root.session).currentActivity;
+    expect(selectSession(root.session).destination).toEqual({
+      kind: "activity",
+      activityId: "C04-A02",
+    });
+    expect(document.title).toBe(
+      "P.A.I.D. — Percentage Change — Explore and Learn",
+    );
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(selectSession(root.session).currentActivity).toBe(actor);
+    await user.click(screen.getByRole("button", { name: "Prepare" }));
+    expect(selectSession(root.session).decision).toBe("activitySwitchChoice");
+    expect(selectSession(root.session).currentActivity).toBe(actor);
+    await user.click(screen.getByRole("button", { name: "Back" }));
+    expect(selectSession(root.session).decision).toBe("none");
+    expect(selectSession(root.session).currentActivity).toBe(actor);
+    act(() => root.session.send({ type: "TECHNICAL_STARTED" }));
+    expect(screen.getByRole("status").textContent).toContain("Please wait");
+    expect(
+      screen
+        .getAllByRole("button")
+        .every((b) => (b as HTMLButtonElement).disabled),
+    ).toBe(true);
+    expect(selectSession(root.session).currentActivity).toBe(actor);
+    view.unmount();
+    root.stop();
+  });
+});
 function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>((yes) => {

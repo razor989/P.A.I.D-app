@@ -21,7 +21,9 @@ test("T038 real entry loads local fonts and responsive light foundation", async 
     } else await route.continue();
   });
   await page.goto("/");
-  await expect(page.getByRole("status")).toHaveText("Library is ready.");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+    "Learning Library",
+  );
   const initial = await page.evaluate(async () => {
     const specs = [
       '600 24px "Lexend"',
@@ -69,6 +71,7 @@ test("T038 real entry loads local fonts and responsive light foundation", async 
   await page.evaluate(() => {
     const fixture = document.createElement("section");
     fixture.id = "t038-fixture";
+    fixture.tabIndex = -1;
     fixture.className = "paid-workspace paid-split";
     const primary = document.createElement("div");
     primary.textContent =
@@ -119,6 +122,8 @@ test("T038 real entry loads local fonts and responsive light foundation", async 
   await page.evaluate(() => {
     document.documentElement.style.removeProperty("font-size");
   });
+  // Start at the fixture, not at the application's preceding keyboard controls.
+  await page.locator("#t038-fixture").focus();
   await page.keyboard.press("Tab");
   const button = page.getByRole("button", { name: "Foundation focus probe" });
   await expect(button).toBeFocused();
