@@ -1,0 +1,113 @@
+.action,
+.decimal,
+.choice {
+  box-sizing: border-box;
+  min-inline-size: 48px;
+  min-block-size: 48px;
+  font: inherit;
+}
+
+.action {
+  max-inline-size: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-action);
+  border-radius: var(--radius-control);
+  color: var(--color-on-action);
+  background: var(--color-action);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.action:disabled {
+  color: var(--color-disabled-text);
+  background: var(--color-disabled-surface);
+  border-color: var(--color-border-interactive);
+  cursor: default;
+}
+
+.group,
+.field {
+  min-inline-size: 0;
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-interactive);
+  border-radius: var(--radius-control);
+  overflow-wrap: anywhere;
+}
+
+.choices,
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-interactive);
+  border-radius: var(--radius-control);
+  overflow-wrap: anywhere;
+}
+
+.choice input {
+  flex: 0 0 auto;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  accent-color: var(--color-action);
+}
+
+.choice:has(:checked) {
+  background: var(--color-selected-surface);
+  color: var(--color-selected-text);
+}
+
+.choice:has(:disabled) {
+  color: var(--color-disabled-text);
+  border-style: dashed;
+}
+
+.decimal {
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-interactive);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.decimal[aria-invalid="true"] {
+  border: var(--border-emphasis-width) solid var(--color-correction);
+}
+
+.action:focus-visible,
+.decimal:focus-visible,
+.choice:has(:focus-visible) {
+  outline: var(--focus-width) solid var(--color-focus);
+  outline-offset: var(--focus-offset);
+}
+
+.field p,
+.group p {
+  margin: 0;
+}
+
+@media (forced-colors: active) {
+  .action,
+  .decimal,
+  .choice {
+    border-color: ButtonText;
+  }
+
+  .action:focus-visible,
+  .decimal:focus-visible,
+  .choice:has(:focus-visible) {
+    outline-color: Highlight;
+  }
+
+  .choice:has(:checked) {
+    border: 3px double Highlight;
+  }
+}

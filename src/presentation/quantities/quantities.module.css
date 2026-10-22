@@ -1,0 +1,25 @@
+.readout {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.readout p {
+  margin-block: var(--space-2);
+}
+
+.readout dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.readout dt {
+  font-weight: var(--font-weight-strong);
+}
+
+.readout dd {
+  margin: 0 0 var(--space-2);
+}
