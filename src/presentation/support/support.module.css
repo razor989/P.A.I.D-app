@@ -1,0 +1,107 @@
+.content,
+.region,
+.system {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.region,
+.system {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-interactive);
+  border-radius: var(--radius-surface);
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.system {
+  border-inline-start: var(--border-emphasis-width) solid
+    var(--color-technical-text);
+  background: var(--color-workspace);
+}
+
+.metadata {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+}
+
+.metadata dt {
+  font-weight: var(--font-weight-strong);
+}
+
+.metadata dd {
+  margin: 0 0 var(--space-2);
+}
+
+.content ul {
+  padding-inline-start: var(--space-6);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.modal {
+  box-sizing: border-box;
+  inline-size: min(40rem, calc(100% - 2rem));
+  max-inline-size: calc(100% - 2rem);
+  max-block-size: calc(100dvh - 2rem);
+  padding: var(--space-4);
+  overflow: auto;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--color-border-interactive);
+  border-radius: var(--radius-surface);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.modal::backdrop {
+  background: rgb(38 49 40 / 45%);
+}
+
+.close {
+  min-inline-size: 48px;
+  min-block-size: 48px;
+  max-inline-size: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-action);
+  border-radius: var(--radius-control);
+  background: var(--color-action);
+  color: var(--color-on-action);
+  font: inherit;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.close:focus-visible {
+  outline: var(--focus-width) solid var(--color-focus);
+  outline-offset: var(--focus-offset);
+}
+
+@media (forced-colors: active) {
+  .modal,
+  .region,
+  .system {
+    border-color: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+
+  .close {
+    border-color: ButtonText;
+  }
+
+  .close:focus-visible {
+    outline-color: Highlight;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal {
+    animation: none;
+    transition: none;
+  }
+}

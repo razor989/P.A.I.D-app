@@ -1,0 +1,49 @@
+.surface {
+  min-inline-size: 0;
+  padding: var(--space-4);
+  border-inline-start: var(--border-emphasis-width) solid;
+  background: var(--color-surface);
+  overflow-wrap: anywhere;
+}
+
+.surface h2 {
+  margin-block-start: 0;
+}
+
+.confirmation {
+  border-color: var(--color-success);
+}
+
+.confirmation h2 {
+  color: var(--color-success);
+}
+
+.reconsideration {
+  border-color: var(--color-correction);
+  border-inline-start-style: double;
+}
+
+.reconsideration h2 {
+  color: var(--color-correction);
+}
+
+.information {
+  border-color: var(--color-caution-text);
+  border-inline-start-style: dashed;
+}
+
+.information h2 {
+  color: var(--color-caution-text);
+}
+
+@media (forced-colors: active) {
+  .surface {
+    border-color: CanvasText;
+    color: CanvasText;
+    background: Canvas;
+  }
+
+  .surface h2 {
+    color: CanvasText;
+  }
+}
