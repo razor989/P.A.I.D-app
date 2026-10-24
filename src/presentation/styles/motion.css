@@ -1,0 +1,34 @@
+/* Static first: never interpolate visibility, focus, geometry, or answer exposure. */
+.paid-loading {
+  color: var(--color-technical-text);
+  padding-block: var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .motion-fast,
+  .motion-standard,
+  .motion-model {
+    transition-property: background-color, border-color;
+    transition-timing-function: var(--motion-easing);
+  }
+
+  .motion-fast {
+    transition-duration: var(--motion-fast);
+  }
+  .motion-standard {
+    transition-duration: var(--motion-standard);
+  }
+  .motion-model {
+    transition-duration: var(--motion-model);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-fast,
+  .motion-standard,
+  .motion-model {
+    transition: none;
+    animation: none;
+  }
+}

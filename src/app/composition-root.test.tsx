@@ -1,6 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { StrictMode } from "react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SessionProvider } from "./session-provider";
 import { ExactDecimal, quantity } from "@/core/public";
@@ -50,6 +57,7 @@ afterEach(() => {
   cleanup();
   sessions.splice(0).forEach((s) => s.stop());
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 const tick = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
@@ -107,7 +115,8 @@ describe("T039 production Session presentation handoff", () => {
     expect(selectSession(root.session).decision).toBe("none");
     expect(selectSession(root.session).currentActivity).toBe(actor);
     act(() => root.session.send({ type: "TECHNICAL_STARTED" }));
-    expect(screen.getByRole("status").textContent).toContain("Please wait");
+    // T043/S1 supersedes the original immediate Please wait expectation (archived).
+    expect(screen.queryByText(/Please wait/)).toBeNull();
     expect(
       screen
         .getAllByRole("button")
@@ -116,6 +125,97 @@ describe("T039 production Session presentation handoff", () => {
     expect(selectSession(root.session).currentActivity).toBe(actor);
     view.unmount();
     root.stop();
+  });
+});
+describe("T043 actual settled Session Loading", () => {
+  it.each([299, 300, 301])(
+    "authentic Session operation at %s ms with immediate settlement and blocking",
+    async (duration) => {
+      vi.useFakeTimers();
+      const root = createApplicationRoot();
+      sessions.push(root.session);
+      root.start();
+      await tick();
+      const view = render(
+        <StrictMode>
+          <SessionProvider session={root.session}>
+            <StartupShell root={root} />
+          </SessionProvider>
+        </StrictMode>,
+      );
+      const heading = screen.getByRole("heading", { level: 1 });
+      heading.focus();
+      const destination = selectSession(root.session).destination;
+      act(() => root.session.send({ type: "TECHNICAL_STARTED" }));
+      expect(selectSession(root.session).technical).toBe("loading");
+      expect(screen.queryByText(/Please wait/)).toBeNull();
+      expect(
+        screen
+          .getAllByRole("button")
+          .every((b) => (b as HTMLButtonElement).disabled),
+      ).toBe(true);
+      fireEvent.click(
+        screen.getByRole("button", { name: "Percentage Change" }),
+      );
+      void act(() => vi.advanceTimersByTime(duration));
+      expect(screen.queryAllByText(/Please wait/)).toHaveLength(
+        duration < 300 ? 0 : 1,
+      );
+      if (duration >= 300) {
+        const status = screen.getByText(/Please wait/);
+        expect(status.getAttribute("role")).toBe("status");
+        void act(() => vi.advanceTimersByTime(1000));
+        expect(screen.getByText(/Please wait/)).toBe(status);
+      }
+      expect(document.activeElement).toBe(heading);
+      act(() => root.session.send({ type: "TECHNICAL_SUCCEEDED" }));
+      expect(screen.queryByText(/Please wait/)).toBeNull();
+      expect(selectSession(root.session).technical).toBe("idle");
+      expect(selectSession(root.session).destination).toBe(destination);
+      view.unmount();
+      root.stop();
+      void act(() => vi.advanceTimersByTime(1000));
+      expect(screen.queryByText(/Please wait/)).toBeNull();
+      console.log(
+        `T043 real Session ${duration}ms: threshold=${duration >= 300}, immediate settlement, destination/focus preserved`,
+      );
+    },
+  );
+  it("repeated STARTED does not reset a pending operation; failures are immediate and retry gets a fresh gate", async () => {
+    vi.useFakeTimers();
+    const root = createApplicationRoot();
+    sessions.push(root.session);
+    root.start();
+    await tick();
+    const view = render(
+      <SessionProvider session={root.session}>
+        <StartupShell root={root} />
+      </SessionProvider>,
+    );
+    for (let attempt = 0; attempt < 3; attempt++) {
+      act(() => root.session.send({ type: "TECHNICAL_STARTED" }));
+      void act(() => vi.advanceTimersByTime(299));
+      expect(screen.queryByText(/Please wait/)).toBeNull();
+      act(() => root.session.send({ type: "TECHNICAL_STARTED" }));
+      void act(() => vi.advanceTimersByTime(1));
+      expect(screen.getAllByText(/Please wait/)).toHaveLength(1);
+      act(() =>
+        root.session.send({
+          type: "TECHNICAL_FAILED",
+          recoverable: true,
+          error: { kind: "RECOVERABLE", code: "STORAGE_UNAVAILABLE" },
+        }),
+      );
+      expect(screen.queryByText(/Please wait/)).toBeNull();
+      expect(
+        screen.getByText(/A technical problem prevents navigation/),
+      ).toBeDefined();
+    }
+    act(() => root.session.send({ type: "TECHNICAL_STARTED" }));
+    void act(() => vi.advanceTimersByTime(299));
+    view.unmount();
+    root.stop();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 function deferred() {

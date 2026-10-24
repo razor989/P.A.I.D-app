@@ -11,6 +11,7 @@ export type StartupRecoveryGatewayProps = Readonly<{
     | "clear-failed"
     | "resumed";
   active: boolean;
+  clearingVisible?: boolean;
   canRetryClear: boolean;
   canConfirmClear: boolean;
   onContinue: () => void;
@@ -24,9 +25,20 @@ export type StartupRecoveryGatewayProps = Readonly<{
 /** Display only: Session supplies every semantic state and permitted action. */
 export function StartupRecoveryGateway(props: StartupRecoveryGatewayProps) {
   const status = useRef<HTMLParagraphElement>(null);
+  const region = useRef<HTMLElement>(null);
   const previous = useRef(props.state);
   useEffect(() => {
-    if (previous.current !== props.state) status.current?.focus();
+    if (previous.current !== props.state) {
+      if (props.state !== "clear-pending") status.current?.focus();
+      else if (
+        !document.querySelector(
+          'dialog[open], [role="dialog"][aria-modal="true"]',
+        )
+      ) {
+        // Only clearing needs a fallback when its action and status are absent.
+        (status.current ?? region.current)?.focus();
+      }
+    }
     previous.current = props.state;
   }, [props.state]);
   const messages = {
@@ -57,10 +69,12 @@ export function StartupRecoveryGateway(props: StartupRecoveryGatewayProps) {
     </button>
   );
   return (
-    <section aria-label="Startup and saved work">
-      <p role="status" tabIndex={-1} ref={status}>
-        {messages[props.state]}
-      </p>
+    <section aria-label="Startup and saved work" ref={region} tabIndex={-1}>
+      {(props.state !== "clear-pending" || props.clearingVisible === true) && (
+        <p role="status" tabIndex={-1} ref={status}>
+          {messages[props.state]}
+        </p>
+      )}
       {props.state === "recovery-choice" && (
         <>
           {button("Continue unfinished activity", props.onContinue)}

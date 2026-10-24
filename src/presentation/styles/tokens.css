@@ -86,4 +86,8 @@
   --elevation-raised: 0 2px 6px rgb(38 49 40 / 10%);
   --layer-base: 0;
   --layer-overlay: 10;
+  --motion-fast: 120ms;
+  --motion-standard: 180ms;
+  --motion-model: 240ms;
+  --motion-easing: cubic-bezier(0.2, 0, 0, 1);
 }

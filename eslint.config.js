@@ -421,6 +421,7 @@ export default tseslint.config(
         "recovery/rehydration/public",
         "session/app-machine/public",
         "presentation/shell/public",
+        "presentation/technical/public",
         "session/navigation/public",
       ],
     ],
