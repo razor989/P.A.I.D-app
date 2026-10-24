@@ -8,6 +8,40 @@ import { ActivityHost } from "./ActivityHost";
 import type { CompetencySummary } from "../shell/public";
 
 afterEach(cleanup);
+
+it("T044 renders only matching C04 projections and discloses the partial-feature boundary", () => {
+  const presentation = {
+    frame: {
+      activityId: "C04-A01" as const,
+      stateId: "ENTRY",
+      contentReferences: [],
+      exposedModelFacts: [],
+      exposedDerivedFacts: [],
+      allowedLearnerIntents: [],
+    },
+    blocked: false,
+    onIntent: vi.fn(),
+    onSelect: vi.fn(),
+  };
+  const view = render(
+    <ActivityHost activityId="C04-A01" c04Presentation={presentation} />,
+  );
+  expect(
+    screen.getByRole("heading", { name: "Anchored Change Track" }),
+  ).toBeDefined();
+  expect(screen.getByRole("note").textContent).toContain("track model only");
+  expect(screen.queryByRole("button", { name: /check|finish/i })).toBeNull();
+  view.rerender(
+    <ActivityHost activityId="C04-A03" c04Presentation={presentation} />,
+  );
+  expect(
+    screen.queryByRole("heading", { name: "Anchored Change Track" }),
+  ).toBeNull();
+  view.rerender(
+    <ActivityHost activityId="C01-A01" c04Presentation={presentation} />,
+  );
+  expect(screen.getByRole("heading", { name: "Activity host" })).toBeDefined();
+});
 const competency: CompetencySummary = {
   id: "C04",
   label: "Percentage Change",

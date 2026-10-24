@@ -1,8 +1,11 @@
 import { isProviderRecordId } from "@/core/public";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { actualContentBank, validateContent } from "@/study/validation/public";
 import { composeStudyCatalog } from "@/study/catalog/public";
-import { createCanonicalC04Runtime } from "@/engine/c04-activity-binding/public";
+import {
+  createCanonicalC04Runtime,
+  composeC04ActivityFrame,
+} from "@/engine/c04-activity-binding/public";
 import { createRecoveryCheckpointQueue } from "@/recovery/store/public";
 import type { RecoveryCheckpointStore } from "@/recovery/store/public";
 import { recoverCheckpoint } from "@/recovery/rehydration/public";
@@ -16,6 +19,7 @@ import { createWebTestStore } from "./web-test-store";
 import { SessionProvider, useSessionSnapshot } from "./session-provider";
 import { StartupRecoveryGateway } from "./startup-recovery-gateway";
 import { AppShell } from "@/presentation/shell/public";
+import type { C04Presentation } from "@/presentation/shell/public";
 import {
   LoadingPresentation,
   useDelayedLoading,
@@ -135,6 +139,27 @@ export type ApplicationRoot = ReturnType<typeof createApplicationRoot>;
 export function StartupShell({ root }: { root: ApplicationRoot }) {
   useSessionSnapshot();
   const view = selectSession(root.session);
+  const actor =
+    view.destination?.kind === "activity" &&
+    view.destination.activityId.startsWith("C04-")
+      ? view.currentActivity
+      : null;
+  const subscribeActivity = useCallback(
+    (notify: () => void) => {
+      const subscription = actor?.subscribe(notify);
+      return () => subscription?.unsubscribe();
+    },
+    [actor],
+  );
+  const getActivitySnapshot = useCallback(
+    () => actor?.getSnapshot() ?? null,
+    [actor],
+  );
+  useSyncExternalStore(
+    subscribeActivity,
+    getActivitySnapshot,
+    getActivitySnapshot,
+  );
   const snapshot = root.session.getSnapshot();
   // Pass 9 §2 canonical learner-facing labels; catalog remains ID authority.
   const labels = {
@@ -163,10 +188,72 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
     view.lifecyclePhase !== "failed" &&
     (view.technical === "idle" || view.technical === "loading") &&
     (view.technical === "loading" || view.lifecyclePhase.endsWith("in-flight"));
+  const frame =
+    actor &&
+    actor.getSnapshot().status === "active" &&
+    view.destination?.kind === "activity" &&
+    view.destination.activityId.startsWith("C04-") &&
+    actor.getSnapshot().context.activityId === view.destination.activityId
+      ? composeC04ActivityFrame(actor)
+      : null;
+  function currentFrame() {
+    const live = selectSession(root.session);
+    const liveSnapshot = root.session.getSnapshot();
+    if (
+      !actor ||
+      !frame ||
+      root.session.getSnapshot().status !== "active" ||
+      live.currentActivity !== actor ||
+      actor.getSnapshot().status !== "active" ||
+      live.destination?.kind !== "activity" ||
+      live.destination.activityId !== frame.activityId ||
+      live.technical !== "idle" ||
+      live.lifecyclePhase !== "idle" ||
+      live.decision !== "none" ||
+      !liveSnapshot.matches("session")
+    )
+      return null;
+    const latest = composeC04ActivityFrame(actor);
+    if (
+      latest.stateId !== frame.stateId ||
+      latest.modelSelectionControl?.revision !==
+        frame.modelSelectionControl?.revision
+    )
+      return null;
+    return latest;
+  }
+  const c04Presentation: C04Presentation | undefined = frame
+    ? {
+        frame,
+        blocked,
+        onIntent: (intent) => {
+          const latest = currentFrame();
+          if (latest?.allowedLearnerIntents.includes(intent))
+            actor?.send({ type: intent });
+        },
+        onSelect: (selectionId) => {
+          const latest = currentFrame();
+          const control = latest?.modelSelectionControl;
+          if (
+            !latest?.allowedLearnerIntents.includes("SELECT_MODEL_CHILD") ||
+            !control?.options.some((option) => option.id === selectionId)
+          )
+            return;
+          actor?.send({
+            type: "SELECT_MODEL_CHILD",
+            modelId: control.modelId,
+            revision: control.revision,
+            position: control.position,
+            selectionId,
+          });
+        },
+      }
+    : undefined;
   if (settled && view.destination)
     return (
       <>
         <AppShell
+          c04Presentation={c04Presentation}
           destination={view.destination}
           competencies={Object.freeze(
             [...root.catalog.competencies.values()].map((c) =>

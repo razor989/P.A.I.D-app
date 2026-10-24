@@ -1,0 +1,95 @@
+.workspace {
+  color: var(--color-text);
+  background: var(--color-workspace);
+  border: 1px solid var(--color-border-interactive);
+  border-radius: var(--radius-surface);
+  padding: var(--space-4);
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.workspace p {
+  max-inline-size: var(--reading-max);
+}
+.phase {
+  font-family: var(--font-technical);
+}
+.figure {
+  margin: var(--space-4) 0;
+}
+.diagram {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 36rem;
+  block-size: auto;
+}
+.diagram text {
+  fill: currentColor;
+  font-family: var(--font-body);
+  font-size: 14px;
+}
+.track {
+  stroke: var(--color-border-interactive);
+  stroke-width: 2;
+}
+.anchor {
+  stroke: var(--color-reference);
+  stroke-width: 4;
+}
+.span {
+  stroke: var(--color-relation);
+  stroke-width: 5;
+  fill: none;
+}
+.marker {
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: var(--color-surface);
+}
+.facts {
+  display: grid;
+  gap: var(--space-3);
+}
+.facts dt {
+  font-weight: var(--font-weight-strong);
+}
+.facts dd {
+  margin-inline-start: 0;
+}
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-block: var(--space-4);
+  min-inline-size: 0;
+}
+.controls button {
+  min-block-size: 2.75rem;
+  max-inline-size: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.controls button[aria-pressed="true"] {
+  border-width: 3px;
+  background: var(--color-selected-surface);
+  color: var(--color-selected-text);
+}
+.controls button:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+@media (forced-colors: active) {
+  .track,
+  .anchor,
+  .span {
+    stroke: CanvasText;
+  }
+  .marker {
+    stroke: CanvasText;
+    fill: Canvas;
+  }
+  .controls button[aria-pressed="true"] {
+    border-color: Highlight;
+  }
+}
+/* Static-first in both motion modes: no animation or delayed semantics. */

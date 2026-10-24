@@ -6,6 +6,35 @@ import { AppShell } from "./AppShell";
 import type { ShellProps } from "./public";
 
 afterEach(cleanup);
+
+it("T044 forwards a matching optional projection only through the activity route", () => {
+  const p = props();
+  const view = render(
+    <AppShell
+      {...p}
+      destination={{ kind: "activity", activityId: "C04-A02" }}
+      c04Presentation={{
+        frame: {
+          activityId: "C04-A02",
+          stateId: "EXP-01",
+          contentReferences: [{ id: "authorized", text: "Issued stage prose" }],
+          exposedModelFacts: [],
+          exposedDerivedFacts: [],
+          allowedLearnerIntents: [],
+        },
+        blocked: false,
+        onIntent: vi.fn(),
+        onSelect: vi.fn(),
+      }}
+    />,
+  );
+  expect(screen.getByText("Issued stage prose")).toBeDefined();
+  expect(
+    screen.getByRole("heading", { name: "Anchored Change Track" }),
+  ).toBeDefined();
+  view.rerender(<AppShell {...p} />);
+  expect(screen.queryByText("Issued stage prose")).toBeNull();
+});
 function props(): ShellProps {
   return {
     destination: { kind: "library" },
@@ -94,7 +123,11 @@ it("keeps technical barriers and switch decisions separate from the destination"
   expect(p.onActivity).not.toHaveBeenCalled();
   await user.click(screen.getByRole("button", { name: "Back" }));
   expect(onCancel).toHaveBeenCalledOnce();
-  expect(screen.getByRole("status").textContent).toBe("Please wait.");
+  expect(
+    screen
+      .getAllByRole("status")
+      .filter((status) => status.textContent === "Please wait."),
+  ).toHaveLength(1);
   expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
     "Percentage Change",
   );

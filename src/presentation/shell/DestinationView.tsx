@@ -27,6 +27,11 @@ export function DestinationView(props: ShellProps) {
       );
     }
     case "activity":
-      return <ActivityShell activityId={props.destination.activityId} />;
+      return (
+        <ActivityShell
+          activityId={props.destination.activityId}
+          c04Presentation={props.c04Presentation}
+        />
+      );
   }
 }

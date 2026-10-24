@@ -1,4 +1,7 @@
 import type { ActivityId, CompetencyId } from "@/core/public";
+import type { C04Presentation } from "../models/c04-anchored-change-track/public";
+
+export type { C04Presentation } from "../models/c04-anchored-change-track/public";
 
 export { AppShell } from "./AppShell";
 export type ActivitySummary = Readonly<{
@@ -17,6 +20,7 @@ export type Destination =
   | Readonly<{ kind: "competency"; competencyId: CompetencyId }>
   | Readonly<{ kind: "activity"; activityId: ActivityId }>;
 export type ShellProps = Readonly<{
+  c04Presentation?: C04Presentation | undefined;
   destination: Destination;
   competencies: readonly CompetencySummary[];
   blocked: boolean;

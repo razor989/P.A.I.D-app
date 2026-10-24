@@ -63,6 +63,48 @@ const tick = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 };
 
+it("T044 mounts the production frame, reprojects actor stages/selections and releases its subscription", async () => {
+  const root = createApplicationRoot();
+  sessions.push(root.session);
+  root.start();
+  await tick();
+  const user = userEvent.setup();
+  const rendered = render(
+    <SessionProvider session={root.session}>
+      <StartupShell root={root} />
+    </SessionProvider>,
+  );
+  await user.click(screen.getByRole("button", { name: "Percentage Change" }));
+  await user.click(screen.getByRole("button", { name: "Explore and Learn" }));
+  const actor = selectSession(root.session).currentActivity!;
+  expect(
+    screen.getByRole("heading", { name: "Anchored Change Track" }),
+  ).toBeDefined();
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  expect(screen.getByText("Stage: EXP-01")).toBeDefined();
+  await user.click(screen.getByRole("button", { name: "Continue" }));
+  const frame = composeC04ActivityFrame(actor);
+  const option = frame.modelSelectionControl!.options[0]!;
+  await user.click(screen.getByRole("button", { name: option.text }));
+  expect(actor.getSnapshot().context.model!.revision).toBe(1);
+  expect(screen.getAllByText(/10%/).length).toBeGreaterThan(0);
+  act(() => root.session.send({ type: "TECHNICAL_STARTED" }));
+  await user.click(screen.getByRole("button", { name: option.text }));
+  expect(actor.getSnapshot().context.model!.revision).toBe(1);
+  act(() => root.session.send({ type: "TECHNICAL_SUCCEEDED" }));
+  for (let i = 0; i < 4; i++) {
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+  }
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  expect(
+    screen.queryByRole("heading", { name: "Anchored Change Track" }),
+  ).toBeNull();
+  act(() => actor.send({ type: "CONTINUE" }));
+  expect(screen.queryByText("Stage: EXP-03")).toBeNull();
+  rendered.unmount();
+  root.stop();
+});
+
 describe("T039 production Session presentation handoff", () => {
   it("renders real Session destinations, rejects unavailable activity and preserves unfinished actor across Back", async () => {
     const root = createApplicationRoot();

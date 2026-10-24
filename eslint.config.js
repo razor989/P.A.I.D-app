@@ -445,4 +445,20 @@ export default tseslint.config(
     ...restriction("app", targets),
     files: [`src/app/${file}`],
   })),
+  // P10-T044 D226-S1: exact importer/public-target pairs, not an owner grant.
+  {
+    ...restriction("presentation/models/c04-anchored-change-track", [
+      "engine/semantic-frame/public",
+    ]),
+    files: ["src/presentation/models/c04-anchored-change-track/public.tsx"],
+  },
+  {
+    ...restriction("presentation/models/c04-anchored-change-track", [
+      "engine/semantic-frame/public",
+      "engine/c04-activity-binding/public",
+    ]),
+    files: [
+      "src/presentation/models/c04-anchored-change-track/semantic-projection.test.tsx",
+    ],
+  },
 );
