@@ -1,9 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
+import { AccessibilityCoordinator } from "@/presentation/accessibility/public";
 import type { ShellProps } from "./public";
 import { DestinationView } from "./DestinationView";
 import styles from "./shell.module.css";
 
 export function AppShell(props: ShellProps) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const destinationIdentity = JSON.stringify([
+    props.destination.kind,
+    props.destination.kind === "competency"
+      ? props.destination.competencyId
+      : props.destination.kind === "activity"
+        ? props.destination.activityId
+        : null,
+  ]);
   const competency = props.competencies.find((c) =>
     props.destination.kind === "competency"
       ? c.id === props.destination.competencyId
@@ -64,7 +74,9 @@ export function AppShell(props: ShellProps) {
         </nav>
       </header>
       <main id="paid-main" tabIndex={-1} className={styles.main}>
-        <h1>{heading}</h1>
+        <h1 ref={headingRef} tabIndex={-1}>
+          {heading}
+        </h1>
         {props.notice && <p role="status">{props.notice}</p>}
         {props.switchChoice && (
           <section aria-labelledby="switch-heading">
@@ -91,6 +103,14 @@ export function AppShell(props: ShellProps) {
         )}
         <DestinationView {...props} />
       </main>
+      <AccessibilityCoordinator
+        event={{
+          kind: "destination",
+          identity: destinationIdentity,
+          target: headingRef,
+        }}
+        blocked={props.blocked}
+      />
     </div>
   );
 }
