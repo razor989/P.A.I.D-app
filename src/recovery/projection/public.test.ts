@@ -14,11 +14,106 @@ import {
 } from "../checkpoint/public";
 import {
   composeC04ActivityFrame,
-  createC04ActivityActor,
+  createC04ActivityActor as createFreshC04ActivityActor,
+  createC04RestoredActivityActor,
   createC04ActivityBindings,
   createC04ActivityRegistry,
   projectC04CheckpointModelV1,
 } from "@/engine/c04-activity-binding/public";
+
+// These existing numeric-evidence cases remain legacy compatibility regressions.
+function createC04ActivityActor(id: unknown) {
+  const actor = createFreshC04ActivityActor(id, "C04-A01-interpretation-v1");
+  if (id !== "C04-A01") return actor;
+  const { model, ...context } = actor.getSnapshot().context;
+  void model;
+  actor.stop();
+  return createC04RestoredActivityActor({ scenarioId: "C04-S01", context });
+}
+
+it("A01-GUIDED-01 rejects missing, mismatched, foreign and extra contract markers", () => {
+  const actor = createFreshC04ActivityActor(
+    "C04-A01",
+    "C04-A01-guided-prepare-v3",
+  ).start();
+  const legacy = createC04ActivityActor("C04-A01").start();
+  try {
+    actor.send({ type: "CONTINUE" });
+    actor.send({
+      type: "RESPONSE_CHANGED",
+      response: {
+        kind: "COMPOSITE",
+        parts: [
+          {
+            key: "original",
+            response: {
+              kind: "SINGLE_SELECTION",
+              selectionId: "c04-a01-v3-original-before",
+            },
+          },
+        ],
+      },
+    });
+    const marked = projectC04CheckpointV1(actor);
+    const { responseContract, ...unmarked } = marked;
+    void responseContract;
+    expect(() => validateC04CheckpointV1(unmarked)).toThrow();
+    for (const marker of [
+      null,
+      { id: "C04-A01-guided-prepare-v3", version: 2 },
+      { id: "unknown", version: 3 },
+      { id: "C04-A01-guided-prepare-v3", version: 3, extra: true },
+    ])
+      expect(() =>
+        validateC04CheckpointV1({ ...marked, responseContract: marker }),
+      ).toThrow();
+    legacy.send({ type: "CONTINUE" });
+    legacy.send({
+      type: "RESPONSE_CHANGED",
+      response: {
+        kind: "COMPOSITE",
+        parts: [
+          {
+            key: "original",
+            response: {
+              kind: "EXACT_QUANTITY",
+              value: quantity(
+                ExactDecimal.from("18000"),
+                "MONETARY_AMOUNT",
+                "PHP",
+                "per month",
+              ),
+            },
+          },
+        ],
+      },
+    });
+    const old = projectC04CheckpointV1(legacy);
+    expect(old.responseContract).toBeUndefined();
+    expect(() =>
+      validateC04CheckpointV1({
+        ...old,
+        responseContract: marked.responseContract,
+      }),
+    ).toThrow();
+    for (const id of ["C04-A02", "C04-A03", "C04-A04"]) {
+      const other = createFreshC04ActivityActor(id).start();
+      try {
+        expect(() =>
+          validateC04CheckpointV1({
+            ...projectC04CheckpointV1(other),
+            responseContract: marked.responseContract,
+          }),
+        ).toThrow();
+      } finally {
+        other.stop();
+      }
+    }
+  } finally {
+    actor.stop();
+    legacy.stop();
+  }
+});
 
 // D5 bounded SOURCE-CONFORMANCE fixtures only. No production issuer/Store route.
 // Context 56b52bdf: final Amendment C C01 §§23–27, C03 §§30–36,
@@ -366,7 +461,7 @@ describe("T029 full semantic checkpoint projection", () => {
     const controls = composeC04ActivityFrame(actor).responseControls!;
     const role =
       id === "C04-A02"
-        ? "comparison"
+        ? "PESO_COMPARISON"
         : id === "C04-A04"
           ? "explanation"
           : "interpretation";
@@ -386,11 +481,7 @@ describe("T029 full semantic checkpoint projection", () => {
           }
         : id === "C04-A02"
           ? {
-              differenceA: money("2000"),
-              differenceB: money("2000"),
-              percentageA: percent(wrong ? "20" : "10"),
-              percentageB: percent("20"),
-              comparison: selection,
+              PESO_COMPARISON: selection,
             }
           : id === "C04-A03"
             ? {
@@ -440,7 +531,22 @@ describe("T029 full semantic checkpoint projection", () => {
     (id) => {
       const actor = active(id);
       try {
-        const key = id === "C04-A02" ? "differenceA" : "difference";
+        if (id === "C04-A02") {
+          actor.send({
+            type: "RESPONSE_CHANGED",
+            response: composite({
+              differenceA: money("9007199254740993.1234567890123456789"),
+            }),
+          });
+          expect(roundTrip(actor).response).toBeNull();
+          submit(actor, true);
+          expect(roundTrip(actor).response?.parts[0]?.response).toEqual({
+            kind: "SINGLE_SELECTION",
+            selectionId: "c04-a02-v2-q1-option2",
+          });
+          return;
+        }
+        const key = "difference";
         actor.send({
           type: "RESPONSE_CHANGED",
           response: composite({
@@ -490,7 +596,11 @@ describe("T029 full semantic checkpoint projection", () => {
           wrong ? "RECONSIDERATION" : "CONFIRMED",
         );
         const revision = checked.responseRevision;
-        actor.send({ type: "FEEDBACK_DELIVERED", revision });
+        actor.send({
+          type: "FEEDBACK_DELIVERED",
+          revision,
+          ...(id === "C04-A02" ? { stage: "PESO_COMPARISON" as const } : {}),
+        });
         expect(roundTrip(actor).feedbackRevision).toBe(revision);
         actor.send({ type: "REVISE" });
         expect(roundTrip(actor).position).toBe("REVISION");
@@ -500,6 +610,7 @@ describe("T029 full semantic checkpoint projection", () => {
         actor.send({
           type: "FEEDBACK_DELIVERED",
           revision: actor.getSnapshot().context.responseRevision,
+          ...(id === "C04-A02" ? { stage: "PESO_COMPARISON" as const } : {}),
         });
         if (id === "C04-A04") {
           actor.send({ type: "CONTINUE" });
@@ -827,7 +938,9 @@ describe("T029 partial-response authority dependency check", () => {
       const actor = createC04ActivityActor(id).start();
       try {
         actor.send({ type: "CONTINUE" });
-        const binding = createC04ActivityRegistry().resolve(id);
+        const binding = createC04ActivityRegistry(
+          "C04-A01-interpretation-v1",
+        ).resolve(id);
         const partial = {
           kind: "COMPOSITE" as const,
           parts: [
@@ -1018,7 +1131,9 @@ describe("D044/S1 real source actor evidence and remaining identity boundary", (
     (id) => {
       const a = createC04ActivityActor(id).start();
       try {
-        const binding = createC04ActivityRegistry().resolve(id);
+        const binding = createC04ActivityRegistry(
+          "C04-A01-interpretation-v1",
+        ).resolve(id);
         expect(Object.keys(binding).sort()).toEqual([
           "activityId",
           "definition",

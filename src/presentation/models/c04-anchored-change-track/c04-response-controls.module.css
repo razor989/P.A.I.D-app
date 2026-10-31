@@ -1,0 +1,21 @@
+.responses {
+  display: grid;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.actions button {
+  min-block-size: 2.75rem;
+  max-inline-size: 100%;
+  white-space: normal;
+}
+.responses input:focus-visible,
+.responses button:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}

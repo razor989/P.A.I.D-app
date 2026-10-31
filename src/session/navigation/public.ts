@@ -8,7 +8,13 @@ type ActivityActor = NonNullable<
 export type NavigationIntent =
   | Extract<
       SessionEvent,
-      { type: "SELECT_COMPETENCY" | "SELECT_ACTIVITY" | "RETURN_TO_LIBRARY" }
+      {
+        type:
+          | "SELECT_COMPETENCY"
+          | "SELECT_ACTIVITY"
+          | "RETURN_TO_LIBRARY"
+          | "REVIEW_COMPLETED_ACTIVITY";
+      }
     >
   | Readonly<{ type: "SYSTEM_BACK" }>;
 export type NavigationOutcome =
@@ -23,6 +29,7 @@ export function isNavigationIntent(value: unknown): value is NavigationIntent {
     return (
       value.type === "SELECT_COMPETENCY" ||
       value.type === "SELECT_ACTIVITY" ||
+      value.type === "REVIEW_COMPLETED_ACTIVITY" ||
       value.type === "RETURN_TO_LIBRARY"
     );
   if (
@@ -114,7 +121,9 @@ export function navigate(
         activity.getSnapshot().context.activityId !== id
       )
         return "rejected";
-      const local = resolveActivityBack(activity);
+      const local = state.completedReview
+        ? "unavailable"
+        : resolveActivityBack(activity);
       if (local !== "unavailable") return local;
       const competencyId = id.split("-")[0];
       if (!isCompetencyId(competencyId)) return "rejected";

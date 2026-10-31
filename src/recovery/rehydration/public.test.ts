@@ -24,7 +24,7 @@ import {
 import { createRecoveryCheckpointQueue } from "../store/public";
 import {
   composeC04ActivityFrame,
-  createC04ActivityActor,
+  createC04ActivityActor as createFreshC04ActivityActor,
   createC04ActivityBindings,
   createC04RestoredActivityActor,
   projectC04CheckpointModelV1,
@@ -32,7 +32,110 @@ import {
 import type { C04Restoration } from "@/engine/c04-activity-binding/public";
 import { ExactDecimal, quantity } from "@/core/public";
 
+// Retain all prior numeric-checkpoint cases as explicit legacy-v1 coverage.
+function createC04ActivityActor(id: unknown) {
+  const actor = createFreshC04ActivityActor(id, "C04-A01-interpretation-v1");
+  if (id !== "C04-A01") return actor;
+  const { model, ...context } = actor.getSnapshot().context;
+  void model;
+  actor.stop();
+  return createC04RestoredActivityActor({ scenarioId: "C04-S01", context });
+}
+
 type Actor = ReturnType<typeof createC04ActivityActor>;
+
+it("A01-GUIDED-01 round-trips every nonempty partial selection set and checked outcomes", async () => {
+  for (let mask = 1; mask < 16; mask++) {
+    const actor = createFreshC04ActivityActor(
+      "C04-A01",
+      "C04-A01-guided-prepare-v3",
+    ).start();
+    actor.send({ type: "CONTINUE" });
+    const contract = createC04ActivityBindings("C04-A01-guided-prepare-v3")[0]!;
+    const controls = composeC04ActivityFrame(actor).responseControls!;
+    const response = {
+      kind: "COMPOSITE" as const,
+      parts: controls.flatMap((control, index) =>
+        mask & (1 << index)
+          ? [
+              {
+                key: control.role,
+                response: {
+                  kind: "SINGLE_SELECTION" as const,
+                  selectionId:
+                    control.options![index === 1 || index === 2 ? 1 : 0]!.id,
+                },
+              },
+            ]
+          : [],
+      ),
+    };
+    actor.send({ type: "RESPONSE_CHANGED", response });
+    expect(contract.ports.ready(response)).toBe(mask === 15);
+    const data = projectC04CheckpointV1(actor);
+    expect(data.responseContract).toEqual({
+      id: "C04-A01-guided-prepare-v3",
+      version: 3,
+    });
+    const raw = serializeRecoveryCheckpointV1(createRecoveryCheckpointV1(data));
+    const queue = createRecoveryCheckpointQueue({
+      load: () => Promise.resolve(raw),
+      replace: vi.fn(),
+      clear: vi.fn(),
+    });
+    const result = await recoverCheckpoint(queue);
+    expect(result.status).toBe("VALID_CHECKPOINT");
+    if (result.status === "VALID_CHECKPOINT") {
+      result.actor.start();
+      expect(projectC04CheckpointV1(result.actor)).toEqual(data);
+      result.actor.stop();
+    }
+    actor.stop();
+  }
+  for (const wrong of [false, true]) {
+    const actor = createFreshC04ActivityActor(
+      "C04-A01",
+      "C04-A01-guided-prepare-v3",
+    ).start();
+    actor.send({ type: "CONTINUE" });
+    const controls = composeC04ActivityFrame(actor).responseControls!;
+    actor.send({
+      type: "RESPONSE_CHANGED",
+      response: {
+        kind: "COMPOSITE",
+        parts: controls.map((control, index) => ({
+          key: control.role,
+          response: {
+            kind: "SINGLE_SELECTION",
+            selectionId:
+              control.options![index === 1 || index === 2 ? 1 : wrong ? 2 : 0]!
+                .id,
+          },
+        })),
+      },
+    });
+    actor.send({ type: "CHECK_RESPONSE" });
+    const data = projectC04CheckpointV1(actor);
+    expect(data.evaluation?.outcome).toBe(
+      wrong ? "RECONSIDERATION" : "CONFIRMED",
+    );
+    const raw = serializeRecoveryCheckpointV1(createRecoveryCheckpointV1(data));
+    const result = await recoverCheckpoint(
+      createRecoveryCheckpointQueue({
+        load: () => Promise.resolve(raw),
+        replace: vi.fn(),
+        clear: vi.fn(),
+      }),
+    );
+    expect(result.status).toBe("VALID_CHECKPOINT");
+    if (result.status === "VALID_CHECKPOINT") {
+      result.actor.start();
+      expect(projectC04CheckpointV1(result.actor)).toEqual(data);
+      result.actor.stop();
+    }
+    actor.stop();
+  }
+});
 
 type ReferenceActor = ReturnType<typeof createC02ReferenceActivityActor>;
 function annaReferenceResponse(
@@ -671,7 +774,7 @@ function submit(actor: Actor, wrong: boolean) {
   }
   const role =
     id === "C04-A02"
-      ? "comparison"
+      ? "PESO_COMPARISON"
       : id === "C04-A04"
         ? "explanation"
         : "interpretation";
@@ -692,13 +795,7 @@ function submit(actor: Actor, wrong: boolean) {
         })
       : id === "C04-A02"
         ? composite({
-            originalA: money("20000"),
-            originalB: money("10000"),
-            differenceA: money("2000"),
-            differenceB: money("2000"),
-            percentageA: percent("10"),
-            percentageB: percent("20"),
-            comparison: selection,
+            PESO_COMPARISON: selection,
           })
         : id === "C04-A03"
           ? composite({
@@ -828,6 +925,19 @@ describe("T031 authentic semantic recovery", () => {
         }),
       });
       restored = await roundTrip(actor);
+      if (id === "C04-A02") {
+        expect(restored.getSnapshot().context.responseRevision).toBe(0);
+        expect(restored.getSnapshot().context.response).toBeNull();
+        restored.stop();
+        submit(actor, false);
+        restored = await roundTrip(actor);
+        expect(restored.getSnapshot().context.response).toEqual(
+          actor.getSnapshot().context.response,
+        );
+        restored.stop();
+        actor.stop();
+        return;
+      }
       expect(restored.getSnapshot().context.responseRevision).toBe(1);
       restored.send({ type: "CHECK_RESPONSE" });
       expect(restored.getSnapshot().context.evaluation).toBeNull();
@@ -851,7 +961,11 @@ describe("T031 authentic semantic recovery", () => {
       restored = await roundTrip(actor);
       restored.stop();
       const revision = actor.getSnapshot().context.responseRevision;
-      actor.send({ type: "FEEDBACK_DELIVERED", revision });
+      actor.send({
+        type: "FEEDBACK_DELIVERED",
+        revision,
+        ...(id === "C04-A02" ? { stage: "PESO_COMPARISON" as const } : {}),
+      });
       restored = await roundTrip(actor);
       restored.stop();
       actor.send({ type: "REVISE" });

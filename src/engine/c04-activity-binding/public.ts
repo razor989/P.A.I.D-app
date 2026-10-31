@@ -5,7 +5,10 @@ import {
   c04Boundary,
   c04Competency,
   c04Copy,
+  c04PrepareDiagnosticPrompts,
   c04ResponseContracts,
+  c04A01LegacyContract,
+  c04A01V3Contract,
   c04Scenarios,
   validateC04Local,
   validateC04ResponseContracts,
@@ -53,6 +56,34 @@ import type {
 import type { SafeText } from "../review/public";
 
 export type C04BindingActivityId = C04ModelDefinition["activityId"];
+const a01Contracts = new WeakMap<ActivityActor, C04ResponseContract>();
+const freshPrepareId = "C04-A01-elicit-engage-v4";
+function prepareContract(id: unknown): C04ResponseContract {
+  if (id === freshPrepareId) return c04ResponseContracts[0]!;
+  if (id === c04A01V3Contract.contractId) return c04A01V3Contract;
+  if (id === c04A01LegacyContract.contractId) return c04A01LegacyContract;
+  throw new TypeError("Unknown A01 response contract");
+}
+/** Identity only; an unissued A01 actor must never silently become a fresh attempt. */
+export function projectC04ActorContractId(actor: ActivityActor): string {
+  const id = actor.getSnapshot().context.activityId;
+  if (id === "C04-A01") {
+    const contract = a01Contracts.get(actor);
+    if (!contract) throw new TypeError("Unissued A01 actor contract");
+    return contract.contractId;
+  }
+  const contract = c04ResponseContracts.find((item) => item.activityId === id);
+  if (!contract) throw new TypeError("Unknown C04 actor");
+  return contract.contractId;
+}
+function issuePrepare(
+  actor: ActivityActor,
+  contract: C04ResponseContract,
+): ActivityActor {
+  if (actor.getSnapshot().context.activityId === "C04-A01")
+    a01Contracts.set(actor, contract);
+  return actor;
+}
 type Source = Readonly<{
   competency: typeof c04Competency;
   activities: typeof c04Activities;
@@ -171,12 +202,14 @@ export function validateC04PartialResponseV1(
   activityId: unknown,
   response: unknown,
   stage: unknown,
+  a01ContractId: unknown = c04A01LegacyContract.contractId,
 ): boolean {
   try {
     authenticateC04BindingSource();
-    const contract = c04ResponseContracts.find(
-      (item) => item.activityId === activityId,
-    );
+    const contract =
+      activityId === "C04-A01"
+        ? prepareContract(a01ContractId)
+        : c04ResponseContracts.find((item) => item.activityId === activityId);
     const policy = contract?.stages.find((item) => item.id === stage);
     if (
       !contract ||
@@ -262,10 +295,12 @@ function ready(
   if (!isLearnerResponse(response) || response.kind !== "COMPOSITE")
     return false;
   return (
-    contract.fields.every(
-      (field) =>
-        !field.required || response.parts.some((p) => p.key === field.role),
-    ) &&
+    (contract.version === 2 || contract.version === 4
+      ? response.parts.length === 1
+      : contract.fields.every(
+          (field) =>
+            !field.required || response.parts.some((p) => p.key === field.role),
+        )) &&
     response.parts.every(({ key, response: part }) => {
       const field = contract.fields.find((field) => field.role === key);
       if (!field || !field.acceptedKinds.includes(part.kind)) return false;
@@ -291,9 +326,36 @@ function definition(
   contract: C04ResponseContract,
 ): ActivityDefinition {
   const activityId = c04Activities[index]!.id as C04BindingActivityId;
+  if (index === 0 && contract.version === 4)
+    return {
+      activityId,
+      guidedPractice: {
+        contractId: "C04-A01-elicit-engage-v4",
+        version: 4,
+        stages: contract.stages.map((stage) => ({
+          id: stage.id as "ORIGINAL" | "NEW" | "DIFFERENCE" | "INTERPRETATION",
+          optionIds: contract.choices
+            .find((choice) => choice.role === stage.editableFields[0])!
+            .options.map((option) => option.id),
+        })),
+      },
+      edges: { ENTRY: { CONTINUE: "ACTIVE" } },
+      support: {},
+    };
   if (index === 1)
     return {
       activityId,
+      guidedPractice: {
+        contractId: "C04-A02-guided-practice-v2",
+        version: 2,
+        stages: contract.stages.map((stage) => ({
+          id: stage.id as
+            "PESO_COMPARISON" | "REFERENCE_PAIR" | "PERCENTAGE_COMPARISON",
+          optionIds: contract.choices
+            .find((c) => c.role === stage.id)!
+            .options.map((o) => o.id),
+        })),
+      },
       edges: {
         ENTRY: { CONTINUE: "EXP-01" },
         "EXP-01": { CONTINUE: "EXP-02" },
@@ -362,10 +424,16 @@ function definition(
 }
 
 /** Exactly four authenticated executable bindings; callbacks retain no mutable actor state. */
-export function createC04ActivityBindings(): readonly ExecutableActivityBinding[] {
+export function createC04ActivityBindings(
+  a01ContractId: unknown = freshPrepareId,
+): readonly ExecutableActivityBinding[] {
   authenticateC04BindingSource();
+  const contracts = [
+    prepareContract(a01ContractId),
+    ...c04ResponseContracts.slice(1),
+  ];
   return Object.freeze(
-    c04ResponseContracts.map((contract, index) => {
+    contracts.map((contract, index) => {
       const modelDefinition = sourceModel(index);
       const seed = createC04ModelState(modelDefinition);
       const ports: ActivityPorts = {
@@ -373,17 +441,29 @@ export function createC04ActivityBindings(): readonly ExecutableActivityBinding[
         evaluate: (response) => {
           if (!ready(contract, response) || response.kind !== "COMPOSITE")
             throw new TypeError("Unauthorized C04 response");
+          // V4 confirms recording only. No correctness comparison or arithmetic.
+          if (contract.version === 4)
+            return Object.freeze({
+              outcome: "CONFIRMED" as const,
+              diagnostic: null,
+            });
           return evaluateC04Response(
             {
               state: seed,
               fields: response.parts.map(
                 (p) => p.key,
               ) as C04EvaluationDefinition["fields"],
-              choices: contract.choices.map((choice) => ({
-                key: choice.role as C04EvaluationDefinition["choices"][number]["key"],
-                options: choice.options.map((o) => o.id),
-                correctId: choice.correctId,
-              })),
+              choices: contract.choices
+                .filter(
+                  (choice) =>
+                    contract.version !== 2 ||
+                    response.parts.some((p) => p.key === choice.role),
+                )
+                .map((choice) => ({
+                  key: choice.role as C04EvaluationDefinition["choices"][number]["key"],
+                  options: choice.options.map((o) => o.id),
+                  correctId: choice.correctId,
+                })),
             },
             response,
           );
@@ -432,13 +512,21 @@ export function createC04ActivityBindings(): readonly ExecutableActivityBinding[
   );
 }
 
-export function createC04ActivityRegistry(): ActivityRegistry {
-  return new ActivityRegistry(createC04ActivityBindings());
+export function createC04ActivityRegistry(
+  a01ContractId: unknown = freshPrepareId,
+): ActivityRegistry {
+  return new ActivityRegistry(createC04ActivityBindings(a01ContractId));
 }
 
 /** Returns a fresh unstarted T025 actor; start/stop and delivery remain caller-owned. */
-export function createC04ActivityActor(id: unknown): ActivityActor {
-  return createActivityActor(createC04ActivityRegistry(), id);
+export function createC04ActivityActor(
+  id: unknown,
+  a01ContractId: unknown = freshPrepareId,
+): ActivityActor {
+  return issuePrepare(
+    createActivityActor(createC04ActivityRegistry(a01ContractId), id),
+    prepareContract(a01ContractId),
+  );
 }
 
 export type CanonicalC04Runtime = Readonly<{
@@ -456,11 +544,15 @@ export function isCanonicalC04Runtime(
 }
 
 /** One authenticated registry per capability; every actor remains caller-owned. */
-export function createCanonicalC04Runtime(): CanonicalC04Runtime {
-  const registry = createC04ActivityRegistry();
+export function createCanonicalC04Runtime(
+  a01ContractId: unknown = freshPrepareId,
+): CanonicalC04Runtime {
+  const contract = prepareContract(a01ContractId);
+  const registry = createC04ActivityRegistry(contract.contractId);
   const runtime = Object.freeze({
     registry,
-    createActivityActor: (id: unknown) => createActivityActor(registry, id),
+    createActivityActor: (id: unknown) =>
+      issuePrepare(createActivityActor(registry, id), contract),
   });
   issuedRuntimes.add(runtime);
   return runtime;
@@ -468,6 +560,7 @@ export function createCanonicalC04Runtime(): CanonicalC04Runtime {
 
 export type C04Restoration = Readonly<{
   scenarioId: string;
+  a01ContractId?: "C04-A01-guided-prepare-v3" | "C04-A01-elicit-engage-v4";
   context: Omit<ActivityContext, "model"> &
     Readonly<{
       model?: Readonly<{
@@ -503,6 +596,9 @@ export function createC04RestoredActivityActor(
     !exact(input, [
       "scenarioId",
       "context",
+      ...(Object.prototype.hasOwnProperty.call(input, "a01ContractId")
+        ? ["a01ContractId"]
+        : []),
       ...(Object.prototype.hasOwnProperty.call(input, "modelEvidence")
         ? ["modelEvidence"]
         : []),
@@ -563,14 +659,29 @@ export function createC04RestoredActivityActor(
   const identity = projectC04CheckpointIdentity(input.context.activityId);
   if (identity.scenarioId !== input.scenarioId)
     throw new TypeError("Invalid C04 restoration scenario");
-  const registry = createC04ActivityRegistry();
+  if (input.a01ContractId !== undefined && identity.activityId !== "C04-A01")
+    throw new TypeError("A01 contract on another activity");
+  if (
+    input.a01ContractId !== undefined &&
+    input.a01ContractId !== freshPrepareId &&
+    input.a01ContractId !== c04A01V3Contract.contractId
+  )
+    throw new TypeError("Unknown A01 restoration contract");
+  const a01Contract = prepareContract(
+    input.a01ContractId ?? c04A01LegacyContract.contractId,
+  );
+  const registry = createC04ActivityRegistry(a01Contract.contractId);
   const binding = registry.resolve(identity.activityId);
   const stage = input.context.responseStage ?? "RESPONSE";
   for (const [response, responseStage] of [
     [input.context.response, stage],
     [
       input.context.checkedResponse,
-      binding.definition.responseStages ? "REASONING" : "RESPONSE",
+      binding.definition.guidedPractice
+        ? stage
+        : binding.definition.responseStages
+          ? "REASONING"
+          : "RESPONSE",
     ],
   ] as const)
     if (
@@ -579,6 +690,7 @@ export function createC04RestoredActivityActor(
         identity.activityId,
         response,
         responseStage,
+        a01Contract.contractId,
       )
     )
       throw new TypeError("Invalid restoration response");
@@ -634,7 +746,10 @@ export function createC04RestoredActivityActor(
     context,
     binding.modelAdapter,
   );
-  return createActivityActor(registry, identity.activityId, restoration);
+  return issuePrepare(
+    createActivityActor(registry, identity.activityId, restoration),
+    a01Contract,
+  );
 }
 
 const text = (id: keyof typeof c04Copy): SafeText => ({
@@ -658,6 +773,30 @@ const factText = (
   id: `${prefix}/${role}`,
   text: `${view[role].role}: ${view[role].value.magnitude.toString()} PHP per month`,
 });
+/** Fixed-model values, exposed through current semantic permissions, never parsed copy. */
+export function projectC04PrepareValues(actor: ActivityActor) {
+  if (actor.getSnapshot().context.activityId !== "C04-A01") return undefined;
+  const frame = composeC04ActivityFrame(actor);
+  const view = deriveC04ModelState(createC04ModelState(sourceModel(0)));
+  const has = (role: string) =>
+    frame.exposedDerivedFacts.some(
+      (fact) => fact.id === `c04/S01/checked/${role}`,
+    );
+  const difference = view.change.difference.resolution;
+  const percentage = view.change.percentageChange.resolution;
+  return {
+    original: view.original.value.magnitude.toString(),
+    next: view.newValue.value.magnitude.toString(),
+    difference:
+      has("difference") && difference.kind === "KNOWN"
+        ? difference.value.magnitude.toString()
+        : null,
+    percentage:
+      has("percentage") && percentage.kind === "KNOWN"
+        ? percentage.value.magnitude.toString()
+        : null,
+  };
+}
 function derived(
   view: C04ModelSnapshot,
   prefix: string,
@@ -708,8 +847,14 @@ export function composeC04ActivityFrame(
   const c = snapshot.context;
   const index = c04Activities.findIndex((a) => a.id === c.activityId);
   if (index < 0) throw new TypeError("Unbound C04 actor");
-  const binding = createC04ActivityRegistry().resolve(c.activityId);
-  const contract = c04ResponseContracts[index]!;
+  const actorContractId = projectC04ActorContractId(actor);
+  const contract =
+    index === 0
+      ? prepareContract(actorContractId)
+      : c04ResponseContracts[index]!;
+  const binding = createC04ActivityBindings(
+    index === 0 ? actorContractId : freshPrepareId,
+  ).find((item) => item.activityId === c.activityId)!;
   const phase = c.position;
   const support: SupportPhase = snapshot.matches({ support: "review" })
     ? "REVIEW"
@@ -721,10 +866,16 @@ export function composeC04ActivityFrame(
   const prefix = `c04/S0${index + 1}`;
   const copy = (role: string) =>
     text(`${prefix}/${role}` as keyof typeof c04Copy);
+  const diagnosticPrepare = index === 0 && contract.version === 4;
   const references: Exposure[] = [
     exposure(copy("scenario"), phase),
     exposure(copy("task"), phase),
   ];
+  if (index === 0 && contract.version === 3) {
+    for (let q = 1; q <= 4; q++)
+      for (const role of ["title", "prompt"])
+        references.push(exposure(copy(`guided-q${q}-${role}`), phase));
+  }
   const modelFacts: Exposure[] = [];
   const derivedFacts: Exposure[] = [];
   const seed = createC04ModelState(sourceModel(index));
@@ -822,9 +973,24 @@ export function composeC04ActivityFrame(
         );
     }
   }
+  if (diagnosticPrepare) {
+    const q = contract.stages.findIndex(
+      (stage) => stage.id === c.responseStage,
+    );
+    for (const role of ["title", "prompt"] as const)
+      references.push(
+        exposure(
+          {
+            id: `c04/S01/diagnostic-q${q + 1}-${role}`,
+            text: c04PrepareDiagnosticPrompts[q]![role],
+          },
+          phase,
+        ),
+      );
+  }
   const checked =
     c.checkedRevision === c.responseRevision && c.evaluation !== null;
-  if (checked && index !== 1 && phase !== "REVISION")
+  if (checked && index !== 1 && !diagnosticPrepare && phase !== "REVISION")
     derivedFacts.push(
       ...derived(selected, `${prefix}/checked`, true).map((fact) =>
         exposure(fact, phase, "CURRENT_CHECK"),
@@ -834,25 +1000,36 @@ export function composeC04ActivityFrame(
     references.push(
       exposure(copy("undefined-result"), phase, "CURRENT_FEEDBACK"),
     );
-  if (phase === "COMPLETE")
+  if (phase === "COMPLETE" && !diagnosticPrepare)
     references.push(exposure(copy("completion"), phase, "CURRENT_FEEDBACK"));
-  const responseControls: ChoiceExposure[] = contract.stages.map((stage) => ({
-    activityId: c.activityId,
-    contractId: contract.contractId,
-    version: contract.version,
-    stage: stage.id,
-    controls: stage.editableFields.map((role) => {
-      const field = contract.fields.find((f) => f.role === role)!;
-      const choice = contract.choices.find((choice) => choice.role === role);
-      return {
-        role,
-        acceptedKinds: field.acceptedKinds,
-        ...(choice
-          ? { options: choice.options.map((o) => ({ id: o.id, text: o.text })) }
-          : {}),
-      };
-    }),
-  }));
+  const responseControls: ChoiceExposure[] = contract.stages
+    .filter(
+      (stage) =>
+        (contract.version !== 2 && contract.version !== 4) ||
+        stage.id === c.responseStage,
+    )
+    .map((stage) => ({
+      activityId: c.activityId,
+      contractId: contract.contractId,
+      version: contract.version,
+      stage: stage.id,
+      controls: stage.editableFields.map((role) => {
+        const field = contract.fields.find((f) => f.role === role)!;
+        const choice = contract.choices.find((choice) => choice.role === role);
+        return {
+          role,
+          acceptedKinds: field.acceptedKinds,
+          ...(choice
+            ? {
+                options: choice.options.map((o) => ({
+                  id: o.id,
+                  text: o.text,
+                })),
+              }
+            : {}),
+        };
+      }),
+    }));
   const diagnostic = c.evaluation?.diagnostic;
   const diagnosticRole =
     index === 0 && diagnostic === "RECONSIDER_QUANTITY"
@@ -862,12 +1039,48 @@ export function composeC04ActivityFrame(
         : index === 2 && diagnostic === "RECONSIDER_REPRESENTATION"
           ? "reconsider-reference"
           : null;
-  const feedbackRef =
+  let feedbackRef =
     c.evaluation?.outcome === "CONFIRMED"
       ? contract.confirmationFeedbackRef
       : diagnosticRole
         ? `${prefix}/${diagnosticRole}`
         : contract.choices[0]!.incorrectFeedbackRef;
+  if (
+    index === 0 &&
+    contract.version === 3 &&
+    c.evaluation?.outcome === "RECONSIDERATION"
+  )
+    feedbackRef = "c04/S01/guided-reconsider";
+  if (contract.version === 2) {
+    const q =
+      contract.stages.findIndex((stage) => stage.id === c.responseStage) + 1;
+    const special =
+      diagnostic === "GUIDED_Q1_OPTION3"
+        ? "total"
+        : diagnostic === "GUIDED_Q2_OPTION1"
+          ? "new"
+          : diagnostic === "GUIDED_Q3_OPTION1"
+            ? "equal"
+            : "reconsider";
+    feedbackRef = `${prefix}/q${q}-${c.evaluation?.outcome === "CONFIRMED" ? "success" : special}`;
+    for (const role of ["title", "prompt", "hint"])
+      references.push(exposure(copy(`q${q}-${role}`), phase));
+  }
+  const diagnosticPart =
+    c.checkedResponse?.kind === "COMPOSITE"
+      ? c.checkedResponse.parts[0]
+      : undefined;
+  const diagnosticId =
+    diagnosticPart?.response.kind === "SINGLE_SELECTION"
+      ? diagnosticPart.response.selectionId
+      : undefined;
+  const diagnosticSelection = diagnosticId
+    ? contract.choices
+        .find((choice) => choice.role === diagnosticPart!.key)
+        ?.options.find((option) => option.id === diagnosticId)
+    : undefined;
+  if (diagnosticPrepare && c.evaluation && !diagnosticSelection)
+    throw new TypeError("Missing recorded diagnostic selection");
   return projectSemanticActivityFrame({
     context: c,
     phase,
@@ -893,7 +1106,12 @@ export function composeC04ActivityFrame(
             feedback: {
               outcome: c.evaluation.outcome,
               revision: c.responseRevision,
-              content: text(feedbackRef as keyof typeof c04Copy),
+              content: diagnosticPrepare
+                ? {
+                    id: `${prefix}/recorded/${c.responseStage}/${c.responseRevision}`,
+                    text: `You chose: “${diagnosticSelection!.text}” Let’s keep that idea in mind as we explore salary changes.`,
+                  }
+                : text(feedbackRef as keyof typeof c04Copy),
             },
           }
         : {}),

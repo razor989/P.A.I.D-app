@@ -6,12 +6,14 @@ import {
   primaryResponseReady,
   stagedResponseReady,
   validateC04A02StageEngagementV1,
+  validateGuidedPracticeContext,
 } from "@/engine/activity-machine/public";
 import type { ActivityContext } from "@/engine/activity-machine/public";
 import type { ActivityActor } from "@/engine/activity-runtime/public";
 import { inspectC02ReferenceActivityActor } from "@/engine/activity-runtime/public";
 import {
   createC04ActivityBindings,
+  projectC04ActorContractId,
   projectC04CheckpointIdentity,
   projectC04CheckpointModelV1,
   validateC04CheckpointModelV1,
@@ -167,6 +169,59 @@ const activitySchema = z.strictObject({
       terminalEntryRevision: revision.nullable(),
       terminalTeachingRevision: revision.nullable(),
     })
+    .optional(),
+  guidedPractice: z
+    .strictObject({
+      contractId: z.enum([
+        "C04-A02-guided-practice-v2",
+        "C04-A01-elicit-engage-v4",
+      ]),
+      version: z.union([z.literal(2), z.literal(4)]),
+      stage: z.enum([
+        "PESO_COMPARISON",
+        "REFERENCE_PAIR",
+        "PERCENTAGE_COMPARISON",
+        "ORIGINAL",
+        "NEW",
+        "DIFFERENCE",
+        "INTERPRETATION",
+      ]),
+      records: z
+        .array(
+          z.strictObject({
+            stage: z.enum([
+              "PESO_COMPARISON",
+              "REFERENCE_PAIR",
+              "PERCENTAGE_COMPARISON",
+              "ORIGINAL",
+              "NEW",
+              "DIFFERENCE",
+              "INTERPRETATION",
+            ]),
+            response: responseSchema,
+            responseRevision: revision,
+            checkedRevision: revision,
+            feedbackRevision: revision,
+            evaluation: z.strictObject({
+              outcome: z.literal("CONFIRMED"),
+              diagnostic: z.null(),
+            }),
+          }),
+        )
+        .max(3),
+    })
+    .optional(),
+  responseContract: z
+    .union([
+      z.strictObject({
+        id: z.literal("C04-A01-guided-prepare-v3"),
+        version: z.literal(3),
+      }),
+      z.strictObject({
+        id: z.literal("C04-A01-elicit-engage-v4"),
+        version: z.literal(4),
+      }),
+    ])
     .optional(),
 });
 export type C04CheckpointV1 = z.infer<typeof activitySchema>;
@@ -409,7 +464,6 @@ export function projectC02RecoveryObligations(actor: ActivityActor) {
 
 // Trusted fixed composition, not checkpoint-driven issuance. Detached validation
 // never constructs a model from persisted evidence or starts an actor.
-const bindings = createC04ActivityBindings();
 
 function fail(message: string): never {
   throw new TypeError(message);
@@ -473,13 +527,31 @@ function frozen<T>(value: T): T {
 export function validateC04CheckpointV1(value: unknown): C04CheckpointV1 {
   assertCheckpointData(value);
   const data = activitySchema.parse(value);
+  if (data.responseContract && data.activityId !== "C04-A01")
+    fail("A01 contract on another activity");
+  const a01ContractId =
+    data.responseContract?.id ?? "C04-A01-interpretation-v1";
   const identity = projectC04CheckpointIdentity(data.activityId);
   if (identity.scenarioId !== data.scenarioId)
     fail("Checkpoint scenario mismatch");
   const binding =
-    bindings.find((item) => item.activityId === data.activityId) ??
-    fail("Unknown C04 binding");
+    createC04ActivityBindings(a01ContractId).find(
+      (item) => item.activityId === data.activityId,
+    ) ?? fail("Unknown C04 binding");
   const definition = binding.definition;
+  if (
+    data.guidedPractice &&
+    (!definition.guidedPractice ||
+      data.guidedPractice.contractId !== definition.guidedPractice.contractId ||
+      data.guidedPractice.version !== definition.guidedPractice.version)
+  )
+    fail("Guided contract mismatch");
+  if (definition.guidedPractice && !data.guidedPractice)
+    fail(
+      "Incompatible C04-A02 v1 checkpoint: guided-practice-v2 requires explicit discard and restart",
+    );
+  if (!definition.guidedPractice && data.guidedPractice)
+    fail("Guided evidence on another activity");
   const graphPositions = new Set([
     "ENTRY",
     "ACTIVE",
@@ -497,12 +569,18 @@ export function validateC04CheckpointV1(value: unknown): C04CheckpointV1 {
     data.response === null ? null : decodeResponse(data.response);
   const checkedResponse =
     data.checkedResponse === null ? null : decodeResponse(data.checkedResponse);
-  const stage = data.staging?.responseStage ?? "RESPONSE";
+  const stage =
+    data.guidedPractice?.stage ?? data.staging?.responseStage ?? "RESPONSE";
   data.response = encodeResponse(response);
   data.checkedResponse = encodeResponse(checkedResponse);
   if (
     response !== null &&
-    !validateC04PartialResponseV1(data.activityId, response, stage)
+    !validateC04PartialResponseV1(
+      data.activityId,
+      response,
+      stage,
+      a01ContractId,
+    )
   )
     fail("Invalid source response");
   if (
@@ -510,13 +588,23 @@ export function validateC04CheckpointV1(value: unknown): C04CheckpointV1 {
     (!validateC04PartialResponseV1(
       data.activityId,
       checkedResponse,
-      definition.responseStages ? "REASONING" : "RESPONSE",
+      definition.guidedPractice
+        ? stage
+        : definition.responseStages
+          ? "REASONING"
+          : "RESPONSE",
+      a01ContractId,
     ) ||
       !binding.ports.ready(checkedResponse))
   )
     fail("Invalid checked response");
   if (
-    (data.responseRevision === 0) !== (response === null) ||
+    ((data.responseRevision === 0) !== (response === null) &&
+      !(
+        data.guidedPractice &&
+        response === null &&
+        data.guidedPractice.records.length > 0
+      )) ||
     (!data.hasChecked &&
       (checkedResponse !== null ||
         data.checkedRevision !== null ||
@@ -731,6 +819,29 @@ export function validateC04CheckpointV1(value: unknown): C04CheckpointV1 {
     )
       fail("Premature terminal acknowledgment");
   } else if (data.staging !== undefined) fail("Staging on non-staged activity");
+  if (definition.guidedPractice && data.guidedPractice)
+    validateGuidedPracticeContext(
+      {
+        activityId: binding.activityId,
+        position: data.position,
+        origin: null,
+        infoOrigin: null,
+        response,
+        checkedResponse,
+        responseRevision: data.responseRevision,
+        hasChecked: data.hasChecked,
+        checkedRevision: data.checkedRevision,
+        feedbackRevision: data.feedbackRevision,
+        evaluation: data.evaluation,
+        responseStage: data.guidedPractice.stage,
+        guidedRecords: data.guidedPractice.records.map((r) => ({
+          ...r,
+          response: decodeResponse(r.response),
+        })),
+      },
+      definition.guidedPractice,
+      binding.ports,
+    );
   const normalize = (item: ResponseV1 | null) =>
     item === null ? null : encodeResponse(decodeResponse(item));
   data.response = normalize(data.response);
@@ -781,9 +892,9 @@ export function projectC04CheckpointV1(actor: ActivityActor): C04CheckpointV1 {
     fail("Non-data actor context");
   if (c.infoOrigin !== null) fail("Unsupported C04 provider context");
   const identity = projectC04CheckpointIdentity(c.activityId);
-  const definition = bindings.find(
-    (item) => item.activityId === c.activityId,
-  )!.definition;
+  const definition = createC04ActivityBindings(
+    c.activityId === "C04-A01" ? projectC04ActorContractId(actor) : undefined,
+  ).find((item) => item.activityId === c.activityId)!.definition;
   if (c.origin !== null && c.origin !== c.position)
     fail("Ambiguous support origin");
   if (definition.modelSelection) {
@@ -804,6 +915,31 @@ export function projectC04CheckpointV1(actor: ActivityActor): C04CheckpointV1 {
   return validateC04CheckpointV1({
     competencyId: "C04",
     ...identity,
+    ...(c.activityId === "C04-A01" &&
+    projectC04ActorContractId(actor) !== "C04-A01-interpretation-v1"
+      ? {
+          responseContract: {
+            id: projectC04ActorContractId(actor),
+            version:
+              projectC04ActorContractId(actor) === "C04-A01-elicit-engage-v4"
+                ? 4
+                : 3,
+          },
+        }
+      : {}),
+    ...(definition.guidedPractice
+      ? {
+          guidedPractice: {
+            contractId: definition.guidedPractice.contractId,
+            version: definition.guidedPractice.version,
+            stage: c.responseStage,
+            records: c.guidedRecords!.map((r) => ({
+              ...r,
+              response: encodeResponse(r.response),
+            })),
+          },
+        }
+      : {}),
     position: c.origin ?? c.position,
     response: encodeResponse(c.response),
     responseRevision: c.responseRevision,

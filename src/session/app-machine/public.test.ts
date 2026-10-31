@@ -18,6 +18,31 @@ import {
 import type { AppSessionActor, CompletionKnowledge } from "./public";
 
 describe("T035 optional trusted runtime input", () => {
+  it("validates the completed-review intent without accepting identity or result payloads", () => {
+    const type = "REVIEW_COMPLETED_ACTIVITY";
+    expect(isSessionEvent({ type })).toBe(true);
+    for (const event of [
+      { type, activityId: "C04-A02" },
+      { type, [Symbol()]: true },
+      Object.assign(Object.create({}), { type }),
+      Object.defineProperty({}, "type", {
+        get() {
+          throw Error("accessor");
+        },
+      }),
+    ])
+      expect(isSessionEvent(event)).toBe(false);
+    const s = session({ kind: "known", activityIds: ["C04-A02"] });
+    expect(s.getSnapshot().can({ type })).toBe(false);
+    s.send({ type: "SELECT_COMPETENCY", competencyId: "C04" });
+    expect(s.getSnapshot().can({ type })).toBe(false);
+    open(s, "C04-A02");
+    s.send({ type: "SELECT_COMPETENCY", competencyId: "C04" });
+    expect(s.getSnapshot().can({ type })).toBe(false);
+    expect(selectSession(s).completedReview).toBe(false);
+    s.stop();
+    expect(selectSession(s).completedReview).toBe(false);
+  });
   it("T036 public intents strictly reject payload and classification smuggling", () => {
     for (const type of [
       "CONTINUE_RECOVERED_ACTIVITY",
@@ -125,6 +150,7 @@ afterEach(() => {
 function session(completion?: CompletionKnowledge) {
   const actor = createAppSessionActor({
     catalog: catalog(),
+    c04Runtime: createCanonicalC04Runtime("C04-A01-interpretation-v1"),
     recovery: { status: "NO_CHECKPOINT" },
     ...(completion ? { completion } : {}),
   });
@@ -538,6 +564,7 @@ describe("T032 authoritative headless Session core", () => {
       expect(() =>
         createAppSessionActor({
           catalog: catalog(),
+          c04Runtime: createCanonicalC04Runtime("C04-A01-interpretation-v1"),
           completion: {
             kind: "known",
             activityIds: activityIds as ActivityId[],
@@ -577,6 +604,7 @@ describe("T032 externally composed T031 outcomes (no startup read orchestration)
       const error = new Error("load unavailable");
       const actor = createAppSessionActor({
         catalog: catalog(),
+        c04Runtime: createCanonicalC04Runtime("C04-A01-interpretation-v1"),
         recovery:
           status === "technical-failure" ? { status, error } : { status },
       });
@@ -638,6 +666,7 @@ describe("T032 externally composed T031 outcomes (no startup read orchestration)
     const before = outcome.actor.getSnapshot();
     const actor = createAppSessionActor({
       catalog: catalog(),
+      c04Runtime: createCanonicalC04Runtime("C04-A01-interpretation-v1"),
       recovery: outcome,
     });
     sessions.push(actor);
@@ -664,6 +693,7 @@ describe("T032 externally composed T031 outcomes (no startup read orchestration)
     expect(() =>
       createAppSessionActor({
         catalog: catalog(),
+        c04Runtime: createCanonicalC04Runtime("C04-A01-interpretation-v1"),
         recovery: { ...outcome, actor: wrong },
       }),
     ).toThrow("recovered actor identity");
@@ -768,6 +798,7 @@ describe("T032 externally composed T031 outcomes (no startup read orchestration)
     ]) {
       const blocked = createAppSessionActor({
         catalog: catalog(),
+        c04Runtime: createCanonicalC04Runtime("C04-A01-interpretation-v1"),
         ...(recovery ? { recovery } : {}),
       });
       sessions.push(blocked);
@@ -786,6 +817,7 @@ describe("T032 externally composed T031 outcomes (no startup read orchestration)
     expect(() =>
       createAppSessionActor({
         catalog: catalog(),
+        c04Runtime: createCanonicalC04Runtime("C04-A01-interpretation-v1"),
         recovery: { status: "absent" } as never,
       }),
     ).toThrow("classification");

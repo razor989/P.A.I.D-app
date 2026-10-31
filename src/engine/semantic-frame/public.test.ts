@@ -4425,6 +4425,125 @@ function input(
     },
   };
 }
+describe("T045 D226-S1 current feedback bridge", () => {
+  it.each(["C04-A01", "C04-A02", "C04-A03", "C04-A04"] as const)(
+    "%s permits only current checked feedback before receipt",
+    (activityId) => {
+      for (const outcome of ["CONFIRMED", "RECONSIDERATION"] as const) {
+        const phase =
+          outcome === "CONFIRMED" ? "CONFIRMATION" : "RECONSIDERATION";
+        const source = {
+          ...content,
+          feedback: { ...content.feedback!, outcome },
+        };
+        const base = input(
+          {
+            activityId,
+            hasChecked: true,
+            checkedRevision: 3,
+            evaluation: { outcome, diagnostic: null },
+          },
+          phase,
+          "NONE",
+          source,
+        );
+        const valid = {
+          ...base,
+          definition: { ...base.definition, activityId },
+        };
+        const before = JSON.stringify(valid.context);
+        for (let i = 0; i < 2; i++) {
+          const frame = projectSemanticActivityFrame(valid);
+          expect(frame.feedbackState).toEqual({
+            outcome,
+            content: source.feedback.content,
+          });
+          expect(Object.isFrozen(frame.feedbackState)).toBe(true);
+          expect(frame.completionActionAvailability).toBe(false);
+          expect(frame.allowedLearnerIntents).not.toContain("FINISH_ACTIVITY");
+        }
+        expect(JSON.stringify(valid.context)).toBe(before);
+        expect(valid.context.feedbackRevision).toBeNull();
+        for (const change of [
+          { hasChecked: false },
+          { checkedRevision: 2 },
+          { responseRevision: 4 },
+          { response: null },
+          { evaluation: null },
+          { feedbackRevision: 2 },
+        ]) {
+          expect(
+            projectSemanticActivityFrame({
+              ...valid,
+              context: { ...valid.context, ...change },
+            }).feedbackState,
+          ).toBeUndefined();
+        }
+        for (const revision of [2, 4])
+          expect(
+            projectSemanticActivityFrame({
+              ...valid,
+              content: {
+                ...source,
+                feedback: { ...source.feedback, revision },
+              },
+            }).feedbackState,
+          ).toBeUndefined();
+        expect(
+          projectSemanticActivityFrame({
+            ...valid,
+            content: {
+              ...source,
+              feedback: {
+                ...source.feedback,
+                outcome:
+                  outcome === "CONFIRMED" ? "RECONSIDERATION" : "CONFIRMED",
+              },
+            },
+          }).feedbackState,
+        ).toBeUndefined();
+        for (const otherPhase of [
+          "ENTRY",
+          "EXP-01",
+          "ACTIVE",
+          "REVISION",
+          "INFO_NEEDED",
+        ] as const) {
+          expect(
+            projectSemanticActivityFrame({
+              ...valid,
+              phase: otherPhase,
+              context: { ...valid.context, position: otherPhase },
+            }).feedbackState,
+          ).toBeUndefined();
+        }
+      }
+    },
+  );
+  it("leaves ordinary non-C04 feedback receipt gated", () => {
+    const base = input(
+      {
+        activityId: "C01-A01",
+        hasChecked: true,
+        checkedRevision: 3,
+        evaluation: { outcome: "CONFIRMED", diagnostic: null },
+      },
+      "CONFIRMATION",
+    );
+    const valid = {
+      ...base,
+      definition: { ...base.definition, activityId: "C01-A01" as const },
+    };
+    expect(projectSemanticActivityFrame(valid).feedbackState).toBeUndefined();
+    expect(
+      projectSemanticActivityFrame({
+        ...valid,
+        context: { ...valid.context, feedbackRevision: 3 },
+      }).feedbackState?.content.id,
+    ).toBe("feedback");
+  });
+});
+
 describe("synthetic semantic exposure enforcement", () => {
   it("omits model controls on absent or invalid evidence and rejects unsafe option labels", () => {
     const base = input();

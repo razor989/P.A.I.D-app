@@ -17,6 +17,21 @@ const evidence = (
   evaluation,
 });
 describe("C04 completion currency", () => {
+  it("requires confirmation for A03 without changing exploratory completion elsewhere", () => {
+    expect(
+      c04CompletionEligible({
+        ...evidence(reconsideration),
+        activityId: "C04-A03",
+      }),
+    ).toBe(false);
+    expect(
+      c04CompletionEligible({ ...evidence(), activityId: "C04-A03" }),
+    ).toBe(true);
+    for (const activityId of ["C04-A01", "C04-A02", "C04-A04"] as const)
+      expect(
+        c04CompletionEligible({ ...evidence(reconsideration), activityId }),
+      ).toBe(true);
+  });
   it("allows confirmed and reconsideration only after applicable feedback", () => {
     expect(c04CompletionEligible(evidence())).toBe(true);
     expect(c04CompletionEligible(evidence(reconsideration))).toBe(true);

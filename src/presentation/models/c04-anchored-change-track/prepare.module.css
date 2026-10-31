@@ -1,0 +1,155 @@
+/* A01 geometry; shared button roles come from the unchanged A02 layers. */
+.documents {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.documents text {
+  fill: #203c33;
+  font-family: Arial, Helvetica, sans-serif;
+}
+.documents .label {
+  font-size: 14px;
+  letter-spacing: 0.3px;
+  font-weight: 700;
+}
+.documents .amount {
+  font-family: Georgia, serif;
+  font-size: 30px;
+}
+.documents .small {
+  font-size: 16px;
+}
+.documents .name {
+  font:
+    22px Georgia,
+    serif;
+}
+.documents .paper {
+  fill: #fffdf7;
+  stroke: #879d65;
+  stroke-width: 1.5;
+}
+.documents .line {
+  stroke: #c7d0b8;
+  stroke-width: 1.2;
+}
+.documents .seal {
+  fill: #e8eddc;
+  stroke: #879d65;
+}
+.documents .review {
+  fill: #f5ecd4;
+  stroke: #b59045;
+}
+.documentTrigger {
+  cursor: pointer;
+}
+.documentTrigger:focus-visible {
+  outline: 3px solid #a34c15;
+  outline-offset: 4px;
+}
+.scene {
+  margin: 0;
+  min-width: 0;
+}
+.diagnostic {
+  min-width: 0;
+}
+.diagnostic fieldset {
+  min-width: 0;
+}
+.recapList {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.recapList li {
+  padding: 20px 0;
+  border-bottom: 1px solid #c7d0b8;
+}
+.recapList h4 {
+  margin-bottom: 8px;
+}
+.recapList p {
+  font-size: 16px;
+  line-height: 1.7;
+}
+.note {
+  margin-block: 16px;
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.introduction {
+  margin: 18px 0 28px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-block: 20px;
+}
+.actions > :global(.primary) {
+  flex-basis: 100%;
+  justify-self: start;
+}
+.workshop :global(.entry-art) {
+  display: grid;
+  align-items: center;
+}
+.workshop :global(.story-explore-hint) {
+  font-size: 16px;
+  line-height: 1.65;
+  margin-block: 16px;
+}
+.workshop :global(.story-playback .story-play) {
+  padding: 0;
+  position: relative;
+}
+.workshop :global(.story-playback .story-skip) {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  padding: 0;
+  flex: none;
+  line-height: 1;
+}
+.workshop :global(.story-skip svg) {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+.workshop :global(.story-playback .story-play:hover:not(:disabled)) {
+  background: #293326;
+}
+.workshop :global(.story-playback .story-play:active:not(:disabled)) {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+.workshop :global(.story-playback .story-skip:hover:not(:disabled)) {
+  background: #e7eddd;
+}
+.workshop :global(.story-playback .story-skip:active:not(:disabled)) {
+  transform: translateY(1px);
+}
+.workshop :global(.story-playback button) {
+  transition:
+    transform 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
+}
+.workshop :global(.choice-panel > .primary) {
+  margin-top: 20px;
+}
+@media (min-width: 768px) {
+  .actions > :global(.primary) {
+    flex-basis: auto;
+    margin-right: auto;
+  }
+}

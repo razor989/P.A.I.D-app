@@ -4,6 +4,7 @@ type Mutable<T> = T extends object
   : T;
 import {
   c04ResponseContracts,
+  c04A01LegacyContract,
   validateC04ResponseContracts,
 } from "./response-contracts";
 
@@ -22,16 +23,16 @@ describe("canonical P10-T027-SC-FINAL-001 response authority", () => {
       [
         "C04-A01",
         "C04-S01",
-        "C04-A01-interpretation-v1",
-        1,
-        "c04-a01-no-change",
+        "C04-A01-elicit-engage-v4",
+        4,
+        "c04-a01-v3-original-before",
       ],
       [
         "C04-A02",
         "C04-S02",
-        "C04-A02-comparison-v1",
-        1,
-        "c04-a02-different-originals",
+        "C04-A02-guided-practice-v2",
+        2,
+        "c04-a02-v2-q1-option1",
       ],
       [
         "C04-A03",
@@ -54,7 +55,12 @@ describe("canonical P10-T027-SC-FINAL-001 response authority", () => {
           .filter((field) => !field.required)
           .map((field) => field.role),
       ),
-    ).toEqual([["percentage"], ["originalA", "originalB"], [], []]);
+    ).toEqual([[], [], [], []]);
+    expect(
+      c04A01LegacyContract.fields
+        .filter((field) => !field.required)
+        .map((field) => field.role),
+    ).toEqual(["percentage"]);
     expect(
       c04ResponseContracts[3]!.stages.map((stage) => [
         stage.id,
@@ -79,7 +85,10 @@ describe("canonical P10-T027-SC-FINAL-001 response authority", () => {
   it("preserves exact ordered IDs and byte-faithful approved labels", () => {
     expect(
       c04ResponseContracts.map((record) =>
-        record.choices[0]!.options.map((option) => [option.id, option.text]),
+        (record.activityId === "C04-A01"
+          ? c04A01LegacyContract
+          : record
+        ).choices[0]!.options.map((option) => [option.id, option.text]),
       ),
     ).toEqual([
       [
@@ -88,18 +97,9 @@ describe("canonical P10-T027-SC-FINAL-001 response authority", () => {
         ["c04-a01-decrease", "Maya’s monthly salary decreased."],
       ],
       [
-        [
-          "c04-a02-different-originals",
-          "The peso increases are equal, but Employee B’s percentage increase is greater because it is compared with a smaller original salary.",
-        ],
-        [
-          "c04-a02-same-percent",
-          "The peso increases are equal, so the percentage increases are equal.",
-        ],
-        [
-          "c04-a02-greater-original-greater-percent",
-          "Employee A’s percentage increase is greater because Employee A started with the larger salary.",
-        ],
+        ["c04-a02-v2-q1-option1", "Both increased by ₱2,000."],
+        ["c04-a02-v2-q1-option2", "Employee B gained more pesos."],
+        ["c04-a02-v2-q1-option3", "Both increased by ₱22,000."],
       ],
       [
         [
@@ -256,8 +256,29 @@ describe("canonical P10-T027-SC-FINAL-001 response authority", () => {
     ).toThrow();
     expect(
       c04ResponseContracts.every(
-        (record) => record.provenance.decisionId === "P10-T027-SC-FINAL-001",
+        (record) =>
+          record.provenance.decisionId ===
+          (record.activityId === "C04-A01"
+            ? "P10-T045-D226-A01-ELICIT-ENGAGE-01"
+            : record.activityId === "C04-A02"
+              ? "P10-T045-D226-PRACTICE-01"
+              : "P10-T027-SC-FINAL-001"),
       ),
     ).toBe(true);
+  });
+});
+
+describe("PRACTICE-01 v2 bank", () => {
+  it("defines only the exact v2 contract and banks", () => {
+    const contract = c04ResponseContracts[1]!;
+    expect(contract.contractId).toBe("C04-A02-guided-practice-v2");
+    expect(contract.stages.map((s) => s.id)).toEqual([
+      "PESO_COMPARISON",
+      "REFERENCE_PAIR",
+      "PERCENTAGE_COMPARISON",
+    ]);
+    expect(contract.choices.map((c) => c.correctId)).toEqual(
+      [1, 2, 3].map((q) => `c04-a02-v2-q${q}-option${q}`),
+    );
   });
 });

@@ -29,6 +29,8 @@ export type ExactDecimalInputProps = Readonly<{
   descriptions: Readonly<Record<DecimalDraft["state"], string>>;
   required?: boolean;
   disabled?: boolean;
+  accessibleLabel?: string;
+  normalize?: (draft: string) => string;
   onDraftChange: (draft: DecimalDraft) => void;
 }>;
 
@@ -38,13 +40,15 @@ export function ExactDecimalInput({
   descriptions,
   required = false,
   disabled = false,
+  accessibleLabel,
+  normalize = (value: string) => value,
   onDraftChange,
 }: ExactDecimalInputProps) {
   const id = useId();
   const [composing, setComposing] = useState(false);
   const assessment: DecimalDraft = composing
     ? { state: "composing", draft, candidate: null }
-    : assessDecimalDraft(draft);
+    : assessDecimalDraft(normalize(draft));
   const invalid =
     !composing &&
     (assessment.state === "malformed" ||
@@ -55,6 +59,7 @@ export function ExactDecimalInput({
       <label htmlFor={id}>{label}</label>
       <input
         id={id}
+        aria-label={accessibleLabel}
         className={styles.decimal}
         type="text"
         inputMode="decimal"

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StrictMode } from "react";
 import {
   act,
@@ -14,6 +14,8 @@ import { ExactDecimal, quantity } from "@/core/public";
 import type { ActivityId, LearnerResponse } from "@/core/public";
 import {
   createCanonicalC04Runtime,
+  createC04ActivityActor,
+  createC04ActivityBindings,
   composeC04ActivityFrame,
   projectC04CheckpointModelV1,
 } from "@/engine/c04-activity-binding/public";
@@ -29,6 +31,7 @@ import {
 } from "@/recovery/rehydration/public";
 import {
   projectC04CheckpointV1,
+  validateC04CheckpointV1,
   projectC02ReferenceCheckpointV2,
   projectC02RecoveryObligations,
 } from "@/recovery/projection/public";
@@ -52,8 +55,50 @@ import {
 } from "./composition-root";
 import { createWebTestStore } from "./web-test-store";
 
+type CapturedPresentation = {
+  onPresented?: (kind: "feedback" | "terminal", element: HTMLElement) => void;
+};
+const interception = vi.hoisted(() => ({
+  active: false,
+  captured: undefined as CapturedPresentation | undefined,
+  review: undefined as (() => void) | undefined,
+}));
+vi.mock("@/presentation/shell/public", async (importOriginal) => {
+  const actual = await importOriginal<{
+    AppShell: (props: {
+      c04Presentation?: CapturedPresentation;
+    }) => import("react").ReactNode;
+  }>();
+  return {
+    ...actual,
+    AppShell: (props: {
+      c04Presentation?: CapturedPresentation;
+      onReviewCompleted?: (() => void) | undefined;
+    }) => {
+      interception.review = props.onReviewCompleted;
+      if (!interception.active) return actual.AppShell(props);
+      interception.captured = props.c04Presentation;
+      return actual.AppShell({
+        ...props,
+        ...(props.c04Presentation
+          ? {
+              c04Presentation: {
+                ...props.c04Presentation,
+                onPresented: () => {},
+              },
+            }
+          : {}),
+      });
+    },
+  };
+});
+
 const sessions: AppSessionActor[] = [];
+beforeEach(() => localStorage.clear());
 afterEach(() => {
+  interception.active = false;
+  interception.captured = undefined;
+  interception.review = undefined;
   cleanup();
   sessions.splice(0).forEach((s) => s.stop());
   vi.restoreAllMocks();
@@ -62,6 +107,202 @@ afterEach(() => {
 const tick = async () => {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 };
+
+function choosePrepare() {
+  fireEvent.click(screen.getAllByRole("radio")[2]!);
+}
+
+function completeA02(
+  actor: NonNullable<ReturnType<typeof selectSession>["currentActivity"]>,
+) {
+  for (let i = 0; i < 6; i++) actor.send({ type: "CONTINUE" });
+  const control = composeC04ActivityFrame(actor).responseControls!.find(
+    (c) => c.role === "PESO_COMPARISON",
+  )!;
+  actor.send({
+    type: "RESPONSE_CHANGED",
+    response: {
+      kind: "COMPOSITE",
+      parts: [
+        {
+          key: "PESO_COMPARISON",
+          response: {
+            kind: "SINGLE_SELECTION",
+            selectionId: control.options![0]!.id,
+          },
+        },
+      ],
+    },
+  });
+  actor.send({ type: "CHECK_RESPONSE" });
+  actor.send({
+    type: "FEEDBACK_DELIVERED",
+    revision: actor.getSnapshot().context.responseRevision,
+    stage: "PESO_COMPARISON",
+  });
+  actor.send({ type: "FINISH_ACTIVITY" });
+  expect(actor.getSnapshot().context.position).toBe("COMPLETE");
+}
+
+it("binds competency Review callbacks to the retained actor and mounted root, rejecting stale replacements", async () => {
+  const root = trackedRoot();
+  root.start();
+  await tick();
+  const a = open(root.session, "C04-A02");
+  completeA02(a);
+  await tick();
+  navigate(root.session, { type: "SELECT_COMPETENCY", competencyId: "C04" });
+  const mounted = render(
+    <StrictMode>
+      <SessionProvider session={root.session}>
+        <StartupShell root={root} />
+      </SessionProvider>
+    </StrictMode>,
+  );
+  const initial = interception.review!;
+  expect(initial).toBeTypeOf("function");
+  act(() => root.session.send({ type: "TECHNICAL_STARTED" }));
+  act(() => initial());
+  expect(selectSession(root.session).completedReview).toBe(false);
+  act(() => root.session.send({ type: "TECHNICAL_SUCCEEDED" }));
+  act(() => initial());
+  expect(selectSession(root.session).completedReview).toBe(true);
+  expect(selectSession(root.session).currentActivity).toBe(a);
+  act(() => {
+    navigate(root.session, { type: "SYSTEM_BACK" });
+  });
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "Review completed activity" }),
+  );
+  act(() => {
+    open(root.session, "C04-A02");
+  });
+  const b = selectSession(root.session).currentActivity!;
+  await act(async () => {
+    completeA02(b);
+    await tick();
+  });
+  act(() => {
+    navigate(root.session, { type: "SELECT_COMPETENCY", competencyId: "C04" });
+  });
+  expect(
+    root.session.getSnapshot().can({ type: "REVIEW_COMPLETED_ACTIVITY" }),
+  ).toBe(true);
+  act(() => initial());
+  expect(selectSession(root.session).completedReview).toBe(false);
+  const latest = interception.review!;
+  mounted.unmount();
+  act(() => latest());
+  expect(selectSession(root.session).completedReview).toBe(false);
+  root.stop();
+});
+
+it("T045 denies stale, blocked, modal, duplicate, wrong-route and unmounted delivery callbacks", async () => {
+  interception.active = true;
+  const root = createApplicationRoot();
+  sessions.push(root.session);
+  root.start();
+  await tick();
+  const user = userEvent.setup();
+  const mounted = render(
+    <StrictMode>
+      <SessionProvider session={root.session}>
+        <StartupShell root={root} />
+      </SessionProvider>
+    </StrictMode>,
+  );
+  await user.click(screen.getByRole("button", { name: "Percentage Change" }));
+  await user.click(screen.getByRole("button", { name: "Prepare" }));
+  await user.click(screen.getByRole("button", { name: /Start with Maya/ }));
+  await user.click(
+    screen.getByRole("button", { name: /Share your first thinking/ }),
+  );
+  const actor = selectSession(root.session).currentActivity!;
+  choosePrepare();
+  const stale = interception.captured!;
+  await user.click(screen.getByRole("button", { name: "Share my thinking →" }));
+  const pending = interception.captured!;
+  const element = document.querySelector<HTMLElement>("[data-content-id]")!;
+  const send = vi.spyOn(actor, "send");
+  act(() => stale.onPresented?.("feedback", element));
+  expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+  act(() => root.session.send({ type: "TECHNICAL_STARTED" }));
+  act(() => pending.onPresented?.("feedback", element));
+  expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+  act(() => root.session.send({ type: "TECHNICAL_SUCCEEDED" }));
+  const modal = document.createElement("dialog");
+  modal.setAttribute("open", "");
+  document.body.append(modal);
+  act(() => pending.onPresented?.("feedback", element));
+  expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+  modal.remove();
+  element.hidden = true;
+  act(() => pending.onPresented?.("feedback", element));
+  expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+  element.hidden = false;
+  act(() => {
+    pending.onPresented?.("feedback", element);
+    pending.onPresented?.("feedback", element);
+  });
+  expect(
+    send.mock.calls.filter(([event]) => event.type === "FEEDBACK_DELIVERED"),
+  ).toHaveLength(1);
+  await user.click(screen.getByRole("button", { name: "Back" }));
+  act(() => pending.onPresented?.("feedback", element));
+  expect(
+    send.mock.calls.filter(([event]) => event.type === "FEEDBACK_DELIVERED"),
+  ).toHaveLength(1);
+  mounted.unmount();
+  act(() => pending.onPresented?.("feedback", element));
+  expect(
+    send.mock.calls.filter(([event]) => event.type === "FEEDBACK_DELIVERED"),
+  ).toHaveLength(1);
+  root.stop();
+});
+
+it("T045 real root acknowledges only feedback already mounted and preserves receipt-gated finish", async () => {
+  const root = createApplicationRoot();
+  sessions.push(root.session);
+  root.start();
+  await tick();
+  const user = userEvent.setup();
+  render(
+    <SessionProvider session={root.session}>
+      <StartupShell root={root} />
+    </SessionProvider>,
+  );
+  await user.click(screen.getByRole("button", { name: "Percentage Change" }));
+  await user.click(screen.getByRole("button", { name: "Prepare" }));
+  await user.click(screen.getByRole("button", { name: /Start with Maya/ }));
+  await user.click(
+    screen.getByRole("button", { name: /Share your first thinking/ }),
+  );
+  const actor = selectSession(root.session).currentActivity!;
+  const send = actor.send.bind(actor);
+  const receipt = vi.spyOn(actor, "send").mockImplementation((event) => {
+    if (event.type === "FEEDBACK_DELIVERED") {
+      expect(
+        document.querySelector("[data-content-id]")?.textContent,
+      ).toContain("Let’s keep that idea in mind");
+      expect(composeC04ActivityFrame(actor).completionActionAvailability).toBe(
+        false,
+      );
+    }
+    send(event);
+  });
+  choosePrepare();
+  await user.click(screen.getByRole("button", { name: "Share my thinking →" }));
+  expect(
+    receipt.mock.calls.filter(([event]) => event.type === "FEEDBACK_DELIVERED"),
+  ).toHaveLength(1);
+  expect(actor.getSnapshot().context.feedbackRevision).toBe(
+    actor.getSnapshot().context.responseRevision,
+  );
+  expect(
+    screen.getByRole("button", { name: "Finish here for now" }),
+  ).toBeDefined();
+  root.stop();
+});
 
 it("T044 mounts the production frame, reprojects actor stages/selections and releases its subscription", async () => {
   const root = createApplicationRoot();
@@ -77,27 +318,33 @@ it("T044 mounts the production frame, reprojects actor stages/selections and rel
   await user.click(screen.getByRole("button", { name: "Percentage Change" }));
   await user.click(screen.getByRole("button", { name: "Explore and Learn" }));
   const actor = selectSession(root.session).currentActivity!;
-  expect(
-    screen.getByRole("heading", { name: "Anchored Change Track" }),
-  ).toBeDefined();
-  await user.click(screen.getByRole("button", { name: "Continue" }));
-  expect(screen.getByText("Stage: EXP-01")).toBeDefined();
-  await user.click(screen.getByRole("button", { name: "Continue" }));
-  const frame = composeC04ActivityFrame(actor);
-  const option = frame.modelSelectionControl!.options[0]!;
-  await user.click(screen.getByRole("button", { name: option.text }));
+  expect(screen.getByRole("heading", { name: /Making sense/ })).toBeDefined();
+  await user.click(screen.getByRole("button", { name: /Explore the raises/ }));
+  expect(actor.getSnapshot().context.position).toBe("EXP-01");
+  await user.click(
+    screen.getByRole("button", { name: /What does a percentage mean/ }),
+  );
+  await user.click(
+    screen.getByRole("button", { name: /Investigate Employee A/ }),
+  );
+  await user.click(
+    screen.getByRole("button", { name: /Inspect the added money/ }),
+  );
   expect(actor.getSnapshot().context.model!.revision).toBe(1);
-  expect(screen.getAllByText(/10%/).length).toBeGreaterThan(0);
+  expect(JSON.stringify(composeC04ActivityFrame(actor))).toContain("10%");
+  await user.click(screen.getByRole("button", { name: /04.*Measure against/ }));
   act(() => root.session.send({ type: "TECHNICAL_STARTED" }));
-  await user.click(screen.getByRole("button", { name: option.text }));
+  await user.click(
+    screen.getByRole("button", { name: /Explore the original salary/ }),
+  );
   expect(actor.getSnapshot().context.model!.revision).toBe(1);
   act(() => root.session.send({ type: "TECHNICAL_SUCCEEDED" }));
-  for (let i = 0; i < 4; i++) {
-    await user.click(screen.getByRole("button", { name: "Continue" }));
-  }
+  await user.click(
+    screen.getByRole("button", { name: /Compare with the starting salary/ }),
+  );
   await user.click(screen.getByRole("button", { name: "Back" }));
   expect(
-    screen.queryByRole("heading", { name: "Anchored Change Track" }),
+    screen.queryByRole("heading", { name: "How much did A’s salary grow?" }),
   ).toBeNull();
   act(() => actor.send({ type: "CONTINUE" }));
   expect(screen.queryByText("Stage: EXP-03")).toBeNull();
@@ -342,38 +589,19 @@ function checkpoint(): Parameters<RecoveryCheckpointQueue["replace"]>[0] {
 function finish(session: AppSessionActor) {
   const actor = selectSession(session).currentActivity!;
   actor.send({ type: "CONTINUE" });
-  const money = (value: string) => ({
-    kind: "EXACT_QUANTITY" as const,
-    value: quantity(
-      ExactDecimal.from(value),
-      "MONETARY_AMOUNT",
-      "PHP",
-      "per month",
-    ),
-  });
+  const controls = composeC04ActivityFrame(actor).responseControls!;
   const response: LearnerResponse = {
     kind: "COMPOSITE",
-    parts: [
-      { key: "original", response: money("18000") },
-      { key: "new", response: money("18000") },
-      { key: "difference", response: money("0") },
-      {
-        key: "percentage",
-        response: {
-          kind: "EXACT_QUANTITY",
-          value: quantity(
-            ExactDecimal.from("0"),
-            "PERCENTAGE_CHANGE",
-            "%",
-            null,
-          ),
-        },
+    parts: controls.map((control, index) => ({
+      key: control.role,
+      response: {
+        kind: "SINGLE_SELECTION",
+        selectionId:
+          control.options![
+            index === 1 || index === 2 ? 1 : index === 3 ? 1 : 0
+          ]!.id,
       },
-      {
-        key: "interpretation",
-        response: { kind: "SINGLE_SELECTION", selectionId: "c04-a01-increase" },
-      },
-    ],
+    })),
   };
   actor.send({ type: "RESPONSE_CHANGED", response });
   actor.send({ type: "CHECK_RESPONSE" });
@@ -381,6 +609,7 @@ function finish(session: AppSessionActor) {
   actor.send({
     type: "FEEDBACK_DELIVERED",
     revision: actor.getSnapshot().context.responseRevision,
+    stage: "ORIGINAL",
   });
   actor.send({ type: "FINISH_ACTIVITY" });
   expect(actor.getSnapshot().matches({ instructional: "complete" })).toBe(true);
@@ -463,8 +692,8 @@ describe("T035 genuine composition and classified Session integration", () => {
     expect(() => root.start()).toThrow("disposed");
   });
   it("isolates root identities and mutable memory targets", async () => {
-    const a = createApplicationRoot();
-    const b = createApplicationRoot();
+    const a = createApplicationRoot(createWebTestStore());
+    const b = createApplicationRoot(createWebTestStore());
     sessions.push(a.session, b.session);
     a.start();
     b.start();
@@ -625,6 +854,131 @@ function trackedRoot(store?: RecoveryCheckpointStore) {
 }
 
 describe("T037 B2 authentic public integration feasibility", () => {
+  it("denies completed review after failed finalization and never offers another Session's retained actor", async () => {
+    const target = createWebTestStore();
+    const f = await classified({
+      load: () => target.load(),
+      replace: (value) => target.replace(value),
+      clear: () => Promise.reject(new Error("controlled finalization failure")),
+    });
+    const other = await classified();
+    const a = open(f.session, "C04-A02");
+    completeA02(a);
+    await tick();
+    expect(selectSession(f.session).lifecyclePhase).toBe("failed");
+    const before = a.getSnapshot();
+    expect(navigate(f.session, { type: "REVIEW_COMPLETED_ACTIVITY" })).toBe(
+      "rejected",
+    );
+    expect(a.getSnapshot()).toBe(before);
+    navigate(other.session, { type: "SELECT_COMPETENCY", competencyId: "C04" });
+    expect(navigate(other.session, { type: "REVIEW_COMPLETED_ACTIVITY" })).toBe(
+      "rejected",
+    );
+    expect(selectSession(other.session).currentActivity).toBeNull();
+    f.session.stop();
+    expect(selectSession(f.session).completedReview).toBe(false);
+  });
+  it("reviews only the same durably completed A02, preserving state and writes across exits, Replay and Continue", async () => {
+    const controlled = controlledStore();
+    const f = await classified(controlled.store);
+    const a = open(f.session, "C04-A02");
+    for (let i = 0; i < 6; i++) a.send({ type: "CONTINUE" });
+    const control = composeC04ActivityFrame(a).responseControls!.find(
+      (c) => c.role === "PESO_COMPARISON",
+    )!;
+    a.send({
+      type: "RESPONSE_CHANGED",
+      response: {
+        kind: "COMPOSITE",
+        parts: [
+          {
+            key: "PESO_COMPARISON",
+            response: {
+              kind: "SINGLE_SELECTION",
+              selectionId: control.options![0]!.id,
+            },
+          },
+        ],
+      },
+    });
+    a.send({ type: "CHECK_RESPONSE" });
+    a.send({
+      type: "FEEDBACK_DELIVERED",
+      revision: a.getSnapshot().context.responseRevision,
+      stage: "PESO_COMPARISON",
+    });
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().context.position).toBe("COMPLETE");
+    await tick();
+    expect(
+      f.session.getSnapshot().can({ type: "REVIEW_COMPLETED_ACTIVITY" }),
+    ).toBe(false);
+    controlled.clears[0]!.resolve();
+    await tick();
+    expect(selectSession(f.session).lifecyclePhase).toBe("finalized");
+    expect(navigate(f.session, { type: "REVIEW_COMPLETED_ACTIVITY" })).toBe(
+      "rejected",
+    );
+    navigate(f.session, { type: "SELECT_COMPETENCY", competencyId: "C01" });
+    expect(navigate(f.session, { type: "REVIEW_COMPLETED_ACTIVITY" })).toBe(
+      "rejected",
+    );
+    navigate(f.session, { type: "SELECT_COMPETENCY", competencyId: "C04" });
+    f.session.send({ type: "TECHNICAL_STARTED" });
+    expect(navigate(f.session, { type: "REVIEW_COMPLETED_ACTIVITY" })).toBe(
+      "rejected",
+    );
+    f.session.send({ type: "TECHNICAL_SUCCEEDED" });
+    const canonical = a.getSnapshot();
+    const completion = selectSession(f.session).completion;
+    const generation = f.session.getSnapshot().context.generation;
+    const send = vi.spyOn(a, "send");
+    const clear = vi.spyOn(f.store, "clear");
+    const replace = vi.spyOn(f.store, "replace");
+    const producer = acquireSessionCheckpointProducer(f.session);
+    for (let i = 0; i < 2; i++) {
+      expect(navigate(f.session, { type: "REVIEW_COMPLETED_ACTIVITY" })).toBe(
+        "destination-changed",
+      );
+      expect(selectSession(f.session).completedReview).toBe(true);
+      expect(navigate(f.session, { type: "REVIEW_COMPLETED_ACTIVITY" })).toBe(
+        "rejected",
+      );
+      expect(selectSession(f.session).currentActivity).toBe(a);
+      expect(a.getSnapshot()).toBe(canonical);
+      expect(navigate(f.session, { type: "SYSTEM_BACK" })).toBe(
+        "destination-changed",
+      );
+      expect(selectSession(f.session).destination).toEqual({
+        kind: "competency",
+        competencyId: "C04",
+      });
+      expect(selectSession(f.session).completedReview).toBe(false);
+    }
+    expect(send).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+    expect(replace).not.toHaveBeenCalled();
+    expect(producer.replace(checkpoint())).toBeNull();
+    expect(selectSession(f.session).completion).toBe(completion);
+    expect(f.session.getSnapshot().context.generation).toBe(generation);
+    navigate(f.session, { type: "RETURN_TO_LIBRARY" });
+    expect(navigate(f.session, { type: "REVIEW_COMPLETED_ACTIVITY" })).toBe(
+      "rejected",
+    );
+    navigate(f.session, { type: "SELECT_COMPETENCY", competencyId: "C04" });
+    navigate(f.session, { type: "REVIEW_COMPLETED_ACTIVITY" });
+    f.session.send({ type: "CONTINUE_COMPLETED_ACTIVITY" });
+    expect(
+      selectSession(f.session).currentActivity!.getSnapshot().context
+        .activityId,
+    ).toBe("C04-A03");
+    expect(selectSession(f.session).completedReview).toBe(false);
+    expect(a.getSnapshot().status).toBe("stopped");
+    expect(navigate(f.session, { type: "REVIEW_COMPLETED_ACTIVITY" })).toBe(
+      "rejected",
+    );
+  });
   it("projects a live engaged C04 actor through durable Store and exact Session Resume, then resolves real Back", async () => {
     const store = createWebTestStore();
     const root = trackedRoot(store);
@@ -834,27 +1188,19 @@ function checkedC04Response(actor: C04Actor): LearnerResponse {
     kind: "EXACT_QUANTITY" as const,
     value: quantity(ExactDecimal.from(value), "PERCENTAGE_CHANGE", "%", null),
   });
-  const option = (role: string) => ({
+  const option = (role: string, index = 0) => ({
     kind: "SINGLE_SELECTION" as const,
     selectionId: composeC04ActivityFrame(actor).responseControls!.find(
       (control) => control.role === role,
-    )!.options![0]!.id,
+    )!.options![index]!.id,
   });
   if (id === "C04-A01")
     return c04Composite({
-      original: money("18000"),
-      new: money("18000"),
-      difference: money("0"),
-      percentage: percent("0"),
-      interpretation: option("interpretation"),
+      original: option("original"),
     });
   if (id === "C04-A02")
     return c04Composite({
-      differenceA: money("2000"),
-      differenceB: money("2000"),
-      percentageA: percent("10"),
-      percentageB: percent("20"),
-      comparison: option("comparison"),
+      PESO_COMPARISON: option("PESO_COMPARISON"),
     });
   if (id === "C04-A03")
     return c04Composite({
@@ -944,6 +1290,11 @@ describe("T037 complete public C04 roundtrips and owner boundaries", () => {
       actor.send({
         type: "FEEDBACK_DELIVERED",
         revision: actor.getSnapshot().context.responseRevision,
+        ...(id === "C04-A02"
+          ? { stage: "PESO_COMPARISON" as const }
+          : id === "C04-A01"
+            ? { stage: "ORIGINAL" as const }
+            : {}),
       });
       const projected = projectC04CheckpointV1(actor);
       expect(projected.hasChecked).toBe(true);
@@ -1623,6 +1974,12 @@ describe("T036 genuine production-root startup", () => {
       const context = original.getSnapshot().context;
       if (id === "C04-A02")
         Object.assign(envelope.checkpoint, {
+          guidedPractice: {
+            contractId: "C04-A02-guided-practice-v2",
+            version: 2,
+            stage: "PESO_COMPARISON",
+            records: [],
+          },
           model: {
             evidence: projectC04CheckpointModelV1(context.model!.value.state),
             revision: context.model!.revision,
@@ -1877,4 +2234,234 @@ describe("T036 genuine production-root startup", () => {
     expect(other.queue).not.toBe(root.queue);
     other.stop();
   });
+});
+
+// PRACTICE-01 cross-layer actor and Recovery integration belongs at the composition boundary.
+describe("PRACTICE-01 trusted guided selection", () => {
+  const stages = [
+    "PESO_COMPARISON",
+    "REFERENCE_PAIR",
+    "PERCENTAGE_COMPARISON",
+  ] as const;
+  function response(q: number, option: number): LearnerResponse {
+    return {
+      kind: "COMPOSITE",
+      parts: [
+        {
+          key: stages[q]!,
+          response: {
+            kind: "SINGLE_SELECTION",
+            selectionId: `c04-a02-v2-q${q + 1}-option${option}`,
+          },
+        },
+      ],
+    };
+  }
+  function active() {
+    const actor = createC04ActivityActor("C04-A02");
+    actor.start();
+    for (let i = 0; i < 6; i++) {
+      const frame = composeC04ActivityFrame(actor);
+      const id =
+        frame.stateId === "EXP-02"
+          ? "C04-S02-A"
+          : frame.stateId === "EXP-03"
+            ? "C04-S02-B"
+            : null;
+      if (id) {
+        const c = frame.modelSelectionControl!;
+        actor.send({
+          type: "SELECT_MODEL_CHILD",
+          modelId: c.modelId,
+          selectionId: id,
+          revision: c.revision,
+          position: frame.stateId as "EXP-02" | "EXP-03",
+        });
+      }
+      actor.send({ type: "CONTINUE" });
+    }
+    expect(actor.getSnapshot().context.position).toBe("ACTIVE");
+    return actor;
+  }
+  it("evaluates every exact option, rejecting foreign/future/numeric structures", () => {
+    const ports = createC04ActivityBindings()[1]!.ports;
+    for (let q = 0; q < 3; q++)
+      for (let option = 1; option <= 3; option++) {
+        expect(ports.evaluate(response(q, option)).outcome).toBe(
+          option === q + 1 ? "CONFIRMED" : "RECONSIDERATION",
+        );
+      }
+    expect(
+      ports.ready({ kind: "SINGLE_SELECTION", selectionId: "foreign" }),
+    ).toBe(false);
+    expect(() =>
+      ports.evaluate({
+        kind: "COMPOSITE",
+        parts: [
+          {
+            key: stages[0],
+            response: {
+              kind: "SINGLE_SELECTION",
+              selectionId: "c04-a02-v2-q2-option2",
+            },
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+  it.each([false, true])(
+    "preserves eligible early Finish for wrong=%s with stage-specific receipts",
+    (wrong) => {
+      const actor = active();
+      actor.send({
+        type: "RESPONSE_CHANGED",
+        response: response(0, wrong ? 2 : 1),
+      });
+      actor.send({ type: "CHECK_RESPONSE" });
+      actor.send({ type: "NEXT_GUIDED_QUESTION" });
+      expect(actor.getSnapshot().context.responseStage).toBe(stages[0]);
+      actor.send({ type: "FEEDBACK_DELIVERED", revision: 1, stage: stages[1] });
+      expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+      actor.send({ type: "FINISH_ACTIVITY" });
+      expect(actor.getSnapshot().context.position).not.toBe("COMPLETE");
+      actor.send({ type: "FEEDBACK_DELIVERED", revision: 1, stage: stages[0] });
+      const frame = composeC04ActivityFrame(actor);
+      expect(frame.allowedLearnerIntents).toContain("FINISH_ACTIVITY");
+      expect(frame.allowedLearnerIntents.includes("NEXT_GUIDED_QUESTION")).toBe(
+        !wrong,
+      );
+      actor.send({ type: "FINISH_ACTIVITY" });
+      expect(actor.getSnapshot().context.position).toBe("COMPLETE");
+      actor.stop();
+    },
+  );
+  it("orders all questions, retains checked stage records and rejects forged history", () => {
+    const actor = active();
+    for (let q = 0; q < 3; q++) {
+      const before = composeC04ActivityFrame(actor);
+      expect(before.responseStage).toBe(stages[q]);
+      expect(JSON.stringify(before)).not.toContain(`q${q + 2}-option`);
+      actor.send({ type: "RESPONSE_CHANGED", response: response(q, q + 1) });
+      actor.send({ type: "CHECK_RESPONSE" });
+      const revision = actor.getSnapshot().context.responseRevision;
+      const pending = projectC04CheckpointV1(actor);
+      expect(pending.feedbackRevision).toBeNull();
+      actor.send({ type: "FEEDBACK_DELIVERED", revision, stage: stages[q]! });
+      expect(projectC04CheckpointV1(actor).feedbackRevision).toBe(revision);
+      if (q < 2) actor.send({ type: "NEXT_GUIDED_QUESTION" });
+      expect(projectC04CheckpointV1(actor).guidedPractice?.records.length).toBe(
+        Math.min(q + 1, 2),
+      );
+    }
+    const checkpoint = projectC04CheckpointV1(actor);
+    const forged = structuredClone(checkpoint);
+    forged.guidedPractice!.records[0]!.response.parts[0]!.response = {
+      kind: "SINGLE_SELECTION",
+      selectionId: "c04-a02-v2-q1-option2",
+    };
+    expect(() => validateC04CheckpointV1(forged)).toThrow();
+    const legacy = structuredClone(checkpoint);
+    delete legacy.guidedPractice;
+    expect(() => validateC04CheckpointV1(legacy)).toThrow(/Incompatible/);
+    actor.stop();
+  });
+});
+
+const diagnosticPolicy =
+  createC04ActivityBindings()[0]!.definition.guidedPractice!;
+const diagnosticContract = {
+  contractId: diagnosticPolicy.contractId,
+  stages: diagnosticPolicy.stages,
+  choices: diagnosticPolicy.stages.map((stage) => ({
+    role: stage.id.toLowerCase(),
+    options: stage.optionIds.map((id) => ({ id, text: id })),
+  })),
+};
+it("records every valid option without grading, requires actual current-stage receipts and retains ordered diagnostics", () => {
+  for (let option = 0; option < 3; option++) {
+    const actor = createC04ActivityActor("C04-A01").start();
+    try {
+      actor.send({ type: "CONTINUE" });
+      for (let q = 0; q < 4; q++) {
+        const choice = diagnosticContract.choices[q]!;
+        const response = {
+          kind: "COMPOSITE" as const,
+          parts: [
+            {
+              key: choice.role,
+              response: {
+                kind: "SINGLE_SELECTION" as const,
+                selectionId: choice.options[option]!.id,
+              },
+            },
+          ],
+        };
+        actor.send({ type: "RESPONSE_CHANGED", response });
+        actor.send({ type: "CHECK_RESPONSE" });
+        expect(actor.getSnapshot().context.evaluation).toEqual({
+          outcome: "CONFIRMED",
+          diagnostic: null,
+        });
+        let frame = composeC04ActivityFrame(actor);
+        expect(frame.feedbackState?.content.text.length).toBeGreaterThan(0);
+        expect(frame.feedbackState?.content.text).toContain(
+          "Let’s keep that idea in mind",
+        );
+        expect(frame.exposedDerivedFacts).toEqual([]);
+        expect(frame.allowedLearnerIntents).not.toContain("FINISH_ACTIVITY");
+        const revision = actor.getSnapshot().context.responseRevision;
+        actor.send({
+          type: "FEEDBACK_DELIVERED",
+          revision,
+          stage: "PESO_COMPARISON",
+        });
+        expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+        actor.send({
+          type: "FEEDBACK_DELIVERED",
+          revision,
+          stage: diagnosticContract.stages[q]!.id as "ORIGINAL",
+        });
+        frame = composeC04ActivityFrame(actor);
+        expect(frame.allowedLearnerIntents).toContain("FINISH_ACTIVITY");
+        const checkpoint = projectC04CheckpointV1(actor);
+        expect(validateC04CheckpointV1(checkpoint).responseContract).toEqual({
+          id: diagnosticContract.contractId,
+          version: 4,
+        });
+        expect(() =>
+          validateC04CheckpointV1({
+            ...checkpoint,
+            responseContract: { id: diagnosticContract.contractId, version: 3 },
+          }),
+        ).toThrow();
+        if (q < 3) actor.send({ type: "NEXT_GUIDED_QUESTION" });
+      }
+      expect(actor.getSnapshot().context.guidedRecords).toHaveLength(3);
+      actor.send({ type: "FINISH_ACTIVITY" });
+      expect(actor.getSnapshot().context.position).toBe("COMPLETE");
+    } finally {
+      actor.stop();
+    }
+  }
+});
+it("rejects malformed, duplicate and mixed-stage recording responses", () => {
+  const binding = createC04ActivityBindings()[0]!;
+  const part = {
+    key: "original",
+    response: {
+      kind: "SINGLE_SELECTION" as const,
+      selectionId: "c04-a01-v3-original-after",
+    },
+  };
+  expect(binding.ports.ready({ kind: "COMPOSITE", parts: [part] })).toBe(true);
+  expect(binding.ports.ready({ kind: "COMPOSITE", parts: [] })).toBe(false);
+  expect(binding.ports.ready({ kind: "COMPOSITE", parts: [part, part] })).toBe(
+    false,
+  );
+  expect(
+    binding.ports.ready({
+      kind: "COMPOSITE",
+      parts: [{ ...part, key: "new" }],
+    }),
+  ).toBe(false);
 });

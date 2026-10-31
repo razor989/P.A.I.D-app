@@ -6,6 +6,7 @@ import styles from "./shell.module.css";
 
 export function AppShell(props: ShellProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const wasCompletedReview = useRef(false);
   const destinationIdentity = JSON.stringify([
     props.destination.kind,
     props.destination.kind === "competency"
@@ -34,6 +35,39 @@ export function AppShell(props: ShellProps) {
       : props.destination.kind === "competency"
         ? (competency?.label ?? "Competency Overview")
         : `${competency?.label ?? "Activity"} — ${activity?.label ?? "Activity"}`;
+  const referenceActivity =
+    props.destination.kind === "activity" &&
+    (props.destination.activityId === "C04-A02" ||
+      (props.destination.activityId === "C04-A03" &&
+        props.c04Presentation?.frame.activityId === "C04-A03") ||
+      (props.destination.activityId === "C04-A01" &&
+        props.c04Presentation?.frame.activityId === "C04-A01" &&
+        props.c04Presentation.prepareContractId ===
+          "C04-A01-elicit-engage-v4"));
+  useEffect(() => {
+    if (wasCompletedReview.current && !props.completedReview) {
+      if (
+        !props.blocked &&
+        props.destination.kind === "competency" &&
+        props.destination.competencyId === "C04" &&
+        !document.querySelector(
+          'dialog[open], [role="dialog"][aria-modal="true"]',
+        )
+      ) {
+        (
+          document.querySelector<HTMLButtonElement>(
+            "#review-completed-activity:not(:disabled)",
+          ) ?? headingRef.current
+        )?.focus();
+      }
+    }
+    wasCompletedReview.current = props.completedReview === true;
+  }, [
+    props.completedReview,
+    destinationIdentity,
+    props.destination,
+    props.blocked,
+  ]);
   useEffect(() => {
     const previous = document.title;
     document.title = `P.A.I.D. — ${heading}`;
@@ -42,7 +76,10 @@ export function AppShell(props: ShellProps) {
     };
   }, [heading]);
   return (
-    <div className={styles.shell}>
+    <div
+      className={styles.shell}
+      data-reference-activity={referenceActivity || undefined}
+    >
       <a
         className={styles.skip}
         href="#paid-main"

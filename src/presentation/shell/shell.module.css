@@ -20,7 +20,14 @@
   flex-wrap: wrap;
   gap: var(--space-3);
 }
-.shell button {
+.shell
+  button:where(
+    :not(
+      [data-c04-track="C04-A02"] button,
+      [data-c04-track="C04-A03"] button,
+      [data-c04-track="C04-A01"][data-prepare-contract="v4"] button
+    )
+  ) {
   min-block-size: 44px;
   min-inline-size: 44px;
   padding: var(--space-2) var(--space-4);
@@ -52,4 +59,28 @@
 }
 .skip:focus {
   transform: none;
+}
+
+/* V1 supplies the visible activity masthead and lesson heading. Keep the route
+   heading as the existing focus target, and keep authentic Session navigation. */
+.shell[data-reference-activity] > .header > .brand,
+.shell[data-reference-activity] > .main > h1 {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.shell[data-reference-activity] > .main {
+  padding-block-start: 0;
+}
+.shell[data-reference-activity] {
+  max-inline-size: none;
+  padding-inline: 0;
+}
+.shell[data-reference-activity] > .header {
+  padding-inline: var(--layout-gutter);
 }

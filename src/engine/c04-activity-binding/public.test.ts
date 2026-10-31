@@ -20,6 +20,8 @@ import {
   isCanonicalC04Runtime,
   composeC04ActivityFrame,
   createC04ActivityActor,
+  projectC04ActorContractId,
+  projectC04PrepareValues,
   createC04RestoredActivityActor,
   createC04ActivityBindings,
   createC04ActivityRegistry,
@@ -31,6 +33,96 @@ import {
 import type { C04Restoration } from "./public";
 
 describe("T035 canonical runtime issuance", () => {
+  it("A01 typed result permissions vanish on revision without changing source quantities", () => {
+    const actor = createC04ActivityActor(
+      "C04-A01",
+      "C04-A01-guided-prepare-v3",
+    ).start();
+    try {
+      expect(projectC04PrepareValues(actor)).toEqual({
+        original: "18000",
+        next: "18000",
+        difference: null,
+        percentage: null,
+      });
+      actor.send({ type: "CONTINUE" });
+      actor.send({
+        type: "RESPONSE_CHANGED",
+        response: {
+          kind: "COMPOSITE",
+          parts: c04ResponseContracts[0]!.choices.map((choice) => ({
+            key: choice.role,
+            response: {
+              kind: "SINGLE_SELECTION",
+              selectionId: choice.correctId,
+            },
+          })),
+        },
+      });
+      actor.send({ type: "CHECK_RESPONSE" });
+      expect(projectC04PrepareValues(actor)).toEqual({
+        original: "18000",
+        next: "18000",
+        difference: "0",
+        percentage: "0",
+      });
+      actor.send({ type: "REVISE" });
+      expect(projectC04PrepareValues(actor)).toEqual({
+        original: "18000",
+        next: "18000",
+        difference: null,
+        percentage: null,
+      });
+    } finally {
+      actor.stop();
+    }
+  });
+  it("A01-GUIDED-01 exhausts all 81 selection combinations without numeric synthesis", () => {
+    const contract = c04ResponseContracts[0]!;
+    const binding = createC04ActivityRegistry(
+      "C04-A01-guided-prepare-v3",
+    ).resolve("C04-A01");
+    let confirmed = 0;
+    for (let a = 0; a < 3; a++)
+      for (let b = 0; b < 3; b++)
+        for (let c = 0; c < 3; c++)
+          for (let d = 0; d < 3; d++) {
+            const indices = [a, b, c, d];
+            const response: LearnerResponse = {
+              kind: "COMPOSITE",
+              parts: contract.choices.map((choice, index) => ({
+                key: choice.role,
+                response: {
+                  kind: "SINGLE_SELECTION",
+                  selectionId: choice.options[indices[index]!]!.id,
+                },
+              })),
+            };
+            expect(binding.ports.ready(response)).toBe(true);
+            const evaluation = binding.ports.evaluate(response);
+            expect(evaluation.outcome).toBe(
+              a === 0 && b === 1 && c === 1 && d === 0
+                ? "CONFIRMED"
+                : "RECONSIDERATION",
+            );
+            if (evaluation.outcome === "CONFIRMED") confirmed++;
+            if (response.kind === "COMPOSITE") {
+              expect(
+                binding.ports.ready({
+                  ...response,
+                  parts: response.parts.slice(1),
+                }),
+              ).toBe(false);
+              expect(
+                binding.ports.ready({
+                  ...response,
+                  parts: [...response.parts, response.parts[0]!],
+                }),
+              ).toBe(false);
+            }
+          }
+    expect(confirmed).toBe(1);
+  });
   it("authenticates exact issuance, not copies, prototypes, proxies or factories", () => {
     const runtime = createCanonicalC04Runtime();
     expect(isCanonicalC04Runtime(runtime)).toBe(true);
@@ -192,7 +284,9 @@ describe("D061/S2 identity and D019/S1 supplied-response membership", () => {
     (id) => {
       const actor = active(id);
       try {
-        const binding = createC04ActivityRegistry().resolve(id);
+        const binding = createC04ActivityRegistry(
+          "C04-A01-guided-prepare-v3",
+        ).resolve(id);
         const valid = composite({ difference: boundary });
         const invalid = [
           composite({ stranger: boundary }),
@@ -229,12 +323,17 @@ describe("D061/S2 identity and D019/S1 supplied-response membership", () => {
           actor.send({ type: "COMMIT_PRIMARY_RESPONSE" });
         }
         const stage =
-          contract.activityId === "C04-A04" ? "REASONING" : "RESPONSE";
+          contract.activityId === "C04-A02"
+            ? "PESO_COMPARISON"
+            : contract.activityId === "C04-A04"
+              ? "REASONING"
+              : "RESPONSE";
         expect(
           validateC04PartialResponseV1(
             contract.activityId,
             response(actor),
             stage,
+            projectC04ActorContractId(actor),
           ),
         ).toBe(true);
         expect(
@@ -242,6 +341,7 @@ describe("D061/S2 identity and D019/S1 supplied-response membership", () => {
             contract.activityId,
             response(actor, true),
             stage,
+            projectC04ActorContractId(actor),
           ),
         ).toBe(true);
         expect(
@@ -454,7 +554,8 @@ const composite = (
 const advance = (a: ActivityActor, count = 1) => {
   for (let i = 0; i < count; i++) a.send({ type: "CONTINUE" });
 };
-const start = (id: string) => createC04ActivityActor(id).start();
+const start = (id: string) =>
+  createC04ActivityActor(id, "C04-A01-guided-prepare-v3").start();
 const active = (id: string) => {
   const a = start(id);
   advance(a, id === "C04-A02" ? 6 : 1);
@@ -488,31 +589,30 @@ function response(
   wrong = false,
   optional = false,
 ): LearnerResponse {
+  void optional; // Kept for existing call sites; fresh A01 no longer has optional numeric evidence.
   const id = a.getSnapshot().context.activityId;
   if (id === "C04-A01")
     return composite({
-      original: money("18000"),
-      new: money("18000"),
-      difference: money(wrong ? "1" : "0"),
+      original: {
+        kind: "SINGLE_SELECTION",
+        selectionId: option(a, "original", 0),
+      },
+      new: { kind: "SINGLE_SELECTION", selectionId: option(a, "new", 1) },
+      difference: {
+        kind: "SINGLE_SELECTION",
+        selectionId: option(a, "difference", wrong ? 0 : 1),
+      },
       interpretation: {
         kind: "SINGLE_SELECTION",
         selectionId: option(a, "interpretation", wrong ? 1 : 0),
       },
-      ...(optional ? { percentage: percent("0") } : {}),
     });
   if (id === "C04-A02")
     return composite({
-      differenceA: money("2000"),
-      differenceB: money("2000"),
-      percentageA: percent(wrong ? "20" : "10"),
-      percentageB: percent("20"),
-      comparison: {
+      PESO_COMPARISON: {
         kind: "SINGLE_SELECTION",
-        selectionId: option(a, "comparison", wrong ? 1 : 0),
+        selectionId: option(a, "PESO_COMPARISON", wrong ? 1 : 0),
       },
-      ...(optional
-        ? { originalA: money("20000"), originalB: money("10000") }
-        : {}),
     });
   if (id === "C04-A03")
     return composite({
@@ -554,6 +654,9 @@ function feedback(a: ActivityActor) {
   a.send({
     type: "FEEDBACK_DELIVERED",
     revision: a.getSnapshot().context.responseRevision,
+    ...(a.getSnapshot().context.activityId === "C04-A02"
+      ? { stage: "PESO_COMPARISON" as const }
+      : {}),
   });
 }
 function terminal(a: ActivityActor) {
@@ -668,7 +771,9 @@ describe("four canonical production C04 bindings", () => {
       ]);
       const a = createActivityActor(registry, b.activityId).start();
       expect(a.getSnapshot().context.activityId).toBe(b.activityId);
-      expect(frame(a).stateId).toBe("ENTRY");
+      if (b.activityId === "C04-A01")
+        expect(() => frame(a)).toThrow("Unissued A01 actor contract");
+      else expect(frame(a).stateId).toBe("ENTRY");
       a.stop();
     }
     for (const id of [
@@ -684,7 +789,7 @@ describe("four canonical production C04 bindings", () => {
   });
 
   it.each(["C04-A01", "C04-A02", "C04-A03", "C04-A04"])(
-    "%s executes both genuine evaluator outcomes with participation completion",
+    "%s executes both evaluator outcomes with activity-specific completion",
     (id) => {
       for (const wrong of [false, true]) {
         const a = active(id);
@@ -692,7 +797,28 @@ describe("four canonical production C04 bindings", () => {
         expect(a.getSnapshot().context.evaluation?.outcome).toBe(
           wrong ? "RECONSIDERATION" : "CONFIRMED",
         );
-        expect(frame(a).feedbackState).toBeUndefined();
+        const checked = a.getSnapshot().context;
+        const beforeReceipt = frame(a);
+        expect(beforeReceipt.feedbackState?.outcome).toBe(
+          checked.evaluation?.outcome,
+        );
+        const contract = c04ResponseContracts.find(
+          (item) => item.activityId === id,
+        )!;
+        const feedbackId = wrong
+          ? id === "C04-A01"
+            ? "c04/S01/guided-reconsider"
+            : contract.choices[0]!.incorrectFeedbackRef
+          : contract.confirmationFeedbackRef;
+        expect(beforeReceipt.feedbackState?.content).toEqual({
+          id: feedbackId,
+          text: c04Copy[feedbackId as keyof typeof c04Copy],
+        });
+        expect(checked.checkedRevision).toBe(checked.responseRevision);
+        expect(checked.feedbackRevision).toBeNull();
+        expect(frame(a).feedbackState).toEqual(beforeReceipt.feedbackState);
+        expect(a.getSnapshot().context).toBe(checked);
+        expect(beforeReceipt.completionActionAvailability).toBe(false);
         a.send({ type: "FINISH_ACTIVITY" });
         expect(a.getSnapshot().context.position).not.toBe("COMPLETE");
         feedback(a);
@@ -700,6 +826,15 @@ describe("four canonical production C04 bindings", () => {
           wrong ? "RECONSIDERATION" : "CONFIRMED",
         );
         if (id === "C04-A04") terminal(a);
+        if (id === "C04-A03" && wrong) {
+          expect(frame(a).completionActionAvailability).toBe(false);
+          a.send({ type: "FINISH_ACTIVITY" });
+          expect(a.getSnapshot().context.position).toBe("RECONSIDERATION");
+          a.send({ type: "REVISE" });
+          submit(a, false);
+          feedback(a);
+          expect(a.getSnapshot().context.evaluation?.outcome).toBe("CONFIRMED");
+        }
         expect(frame(a).completionActionAvailability).toBe(true);
         a.send({ type: "FINISH_ACTIVITY" });
         expect(a.getSnapshot().context.position).toBe("COMPLETE");
@@ -712,7 +847,9 @@ describe("four canonical production C04 bindings", () => {
     "%s preserves optional source fields and required choice membership",
     (id) => {
       const a = active(id);
-      const binding = createC04ActivityRegistry().resolve(id);
+      const binding = createC04ActivityRegistry(
+        "C04-A01-guided-prepare-v3",
+      ).resolve(id);
       expect(binding.ports.ready(response(a))).toBe(true);
       expect(binding.ports.ready(response(a, false, true))).toBe(true);
       expect(binding.ports.ready(composite({ difference: money("0") }))).toBe(

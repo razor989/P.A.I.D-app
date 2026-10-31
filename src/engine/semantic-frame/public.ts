@@ -48,10 +48,29 @@ export type ChoiceExposure = Readonly<{
   activityId: ActivityId;
   contractId: string;
   version: number;
-  stage: "RESPONSE" | "PRIMARY" | "REASONING";
+  stage:
+    | "RESPONSE"
+    | "PRIMARY"
+    | "REASONING"
+    | "PESO_COMPARISON"
+    | "REFERENCE_PAIR"
+    | "PERCENTAGE_COMPARISON"
+    | "ORIGINAL"
+    | "NEW"
+    | "DIFFERENCE"
+    | "INTERPRETATION";
   controls: readonly PublicResponseControl[];
 }>;
-export type ResponseStageProjection = "PRIMARY" | "REASONING";
+export type ResponseStageProjection =
+  | "PRIMARY"
+  | "REASONING"
+  | "PESO_COMPARISON"
+  | "REFERENCE_PAIR"
+  | "PERCENTAGE_COMPARISON"
+  | "ORIGINAL"
+  | "NEW"
+  | "DIFFERENCE"
+  | "INTERPRETATION";
 const familySemantics = {
   C01: {
     source: "P9B-MDL-C01-01",
@@ -1230,6 +1249,7 @@ export function projectSemanticActivityFrame(
 ): SemanticActivityFrame {
   const { context: c, phase, support, definition, ports, content } = input;
   const staging = definition.responseStages;
+  const guided = definition.guidedPractice;
   const teaching = definition.terminalTeaching;
   const floor = definition.embeddedFloor;
   if (
@@ -1511,6 +1531,15 @@ export function projectSemanticActivityFrame(
       intents.push("REVISE");
     if (finish) intents.push("FINISH_ACTIVITY");
     if (
+      guided &&
+      phase === "CONFIRMATION" &&
+      currentFeedback &&
+      c.evaluation?.outcome === "CONFIRMED" &&
+      guided.stages.findIndex((s) => s.id === c.responseStage) <
+        guided.stages.length - 1
+    )
+      intents.push("NEXT_GUIDED_QUESTION");
+    if (
       reviewAvailable ||
       sourceAvailable ||
       (modes.includes("REINFORCEMENT") && phase.startsWith("EXP-"))
@@ -1527,10 +1556,17 @@ export function projectSemanticActivityFrame(
           ? floor.mainFeedback.payrollRole
           : floor.mainFeedback.arithmetic
       : null;
+  // T045-D226-S1: presentation eligibility is not a delivery receipt.
+  // Keep currentFeedback unchanged for progression and all other disclosures.
+  const pendingC04Feedback =
+    ["C04-A01", "C04-A02", "C04-A03", "C04-A04"].includes(c.activityId) &&
+    currentCheck &&
+    (phase === "CONFIRMATION" || phase === "RECONSIDERATION") &&
+    c.feedbackRevision === null;
   const feedback = approvedMain
     ? safeText(approvedMain)
     : !floor &&
-        currentFeedback &&
+        (currentFeedback || pendingC04Feedback) &&
         content.feedback?.revision === c.responseRevision &&
         content.feedback.outcome === c.evaluation?.outcome
       ? safeText(content.feedback.content)
@@ -1567,10 +1603,24 @@ export function projectSemanticActivityFrame(
         !Number.isSafeInteger(exposure.version) ||
         exposure.version < 1 ||
         (staging && exposure.version !== staging.version) ||
-        !["RESPONSE", "PRIMARY", "REASONING"].includes(exposure.stage) ||
-        (staging
-          ? exposure.stage === "RESPONSE"
-          : exposure.stage !== "RESPONSE") ||
+        ![
+          "RESPONSE",
+          "PRIMARY",
+          "REASONING",
+          "PESO_COMPARISON",
+          "REFERENCE_PAIR",
+          "PERCENTAGE_COMPARISON",
+          "ORIGINAL",
+          "NEW",
+          "DIFFERENCE",
+          "INTERPRETATION",
+        ].includes(exposure.stage) ||
+        (guided
+          ? exposure.stage !== c.responseStage ||
+            exposure.version !== guided.version
+          : staging
+            ? exposure.stage === "RESPONSE"
+            : exposure.stage !== "RESPONSE") ||
         stages.has(exposure.stage) ||
         !array(exposure.controls)
       )
@@ -1642,7 +1692,13 @@ export function projectSemanticActivityFrame(
           );
         } else if (control.acceptedKinds.includes("SINGLE_SELECTION"))
           throw new TypeError("Missing selectable options");
-        if (editable && exposure.stage === (c.responseStage ?? "RESPONSE"))
+        if (
+          (editable ||
+            (guided &&
+              support === "NONE" &&
+              ["CONFIRMATION", "RECONSIDERATION"].includes(phase))) &&
+          exposure.stage === (c.responseStage ?? "RESPONSE")
+        )
           controls.push(
             Object.freeze({
               role: control.role,
@@ -1783,7 +1839,7 @@ export function projectSemanticActivityFrame(
     allowedLearnerIntents: Object.freeze(intents),
     ...(modelSelectionControl ? { modelSelectionControl } : {}),
     responseContract: safeText(content.responseContract)!,
-    ...(staging ? { responseStage: c.responseStage! } : {}),
+    ...(staging || guided ? { responseStage: c.responseStage! } : {}),
     ...(content.responseControls
       ? { responseControls: Object.freeze(controls) }
       : {}),

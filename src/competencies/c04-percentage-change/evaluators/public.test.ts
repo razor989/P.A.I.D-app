@@ -82,6 +82,112 @@ const make = (
   }) as C04EvaluationDefinition;
 
 describe("C04 bounded evaluation", () => {
+  it("authenticates guided A01 definitions and rejects foreign, numeric, incomplete and duplicate evidence", () => {
+    const ids = [
+      [
+        "c04-a01-v3-original-before",
+        "c04-a01-v3-original-after",
+        "c04-a01-v3-original-neither",
+      ],
+      [
+        "c04-a01-v3-new-before",
+        "c04-a01-v3-new-after",
+        "c04-a01-v3-new-neither",
+      ],
+      [
+        "c04-a01-v3-difference-total",
+        "c04-a01-v3-difference-zero",
+        "c04-a01-v3-difference-sum",
+      ],
+      ["c04-a01-no-change", "c04-a01-increase", "c04-a01-decrease"],
+    ];
+    const fields = ["original", "new", "difference", "interpretation"] as const;
+    const definition: C04EvaluationDefinition = {
+      state: createC04ModelState(fixtures[0] as C04ModelDefinition),
+      fields,
+      choices: fields.map((key, index) => ({
+        key,
+        options: ids[index]!,
+        correctId: ids[index]![index === 1 || index === 2 ? 1 : 0]!,
+      })),
+    };
+    const valid = {
+      kind: "COMPOSITE",
+      parts: definition.choices.map((choice) => ({
+        key: choice.key,
+        response: selection(choice.correctId),
+      })),
+    };
+    expect(evaluateC04Response(definition, valid)).toEqual({
+      outcome: "CONFIRMED",
+      diagnostic: null,
+    });
+    for (const input of [
+      { ...valid, parts: valid.parts.slice(1) },
+      { ...valid, parts: [...valid.parts, valid.parts[0]] },
+      response({
+        original: exact(money("18000")),
+        new: selection(ids[1]![1]!),
+        difference: selection(ids[2]![1]!),
+        interpretation: selection(ids[3]![0]!),
+      }),
+      {
+        ...valid,
+        parts: valid.parts.map((part, index) =>
+          index ? part : { ...part, response: selection("foreign") },
+        ),
+      },
+    ])
+      expect(() => evaluateC04Response(definition, input)).toThrow();
+    for (const invalid of [
+      {
+        ...definition,
+        fields: ["original", "original", "difference", "interpretation"],
+      },
+      { ...definition, fields: [...fields, "percentage"] },
+      {
+        ...definition,
+        choices: definition.choices.map((choice, index) =>
+          index ? choice : { ...choice, correctId: ids[0]![1]! },
+        ),
+      },
+      {
+        ...definition,
+        choices: definition.choices.map((choice, index) =>
+          index
+            ? choice
+            : { ...choice, options: [...choice.options].reverse() },
+        ),
+      },
+    ])
+      expect(() =>
+        evaluateC04Response(invalid as C04EvaluationDefinition, valid),
+      ).toThrow();
+    const wrongInterpretation = {
+      ...valid,
+      parts: valid.parts.map((part) =>
+        part.key === "interpretation"
+          ? { ...part, response: selection("c04-a01-increase") }
+          : part,
+      ),
+    };
+    expect(evaluateC04Response(definition, wrongInterpretation)).toEqual({
+      outcome: "RECONSIDERATION",
+      diagnostic: "RECONSIDER_INTERPRETATION",
+    });
+    const wrongQuantity = {
+      ...valid,
+      parts: valid.parts.map((part) =>
+        part.key === "difference"
+          ? { ...part, response: selection("c04-a01-v3-difference-total") }
+          : part,
+      ),
+    };
+    expect(evaluateC04Response(definition, wrongQuantity)).toEqual({
+      outcome: "RECONSIDERATION",
+      diagnostic: "RECONSIDER_QUANTITY",
+    });
+  });
   const a01 = () =>
     make(
       0,

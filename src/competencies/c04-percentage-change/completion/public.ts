@@ -25,7 +25,7 @@ function record(
   );
 }
 
-/** Eligibility is not correctness; feedback must belong to the currently evaluated revision. */
+/** Feedback must be current. A03 application additionally requires a confirmed response. */
 export function c04CompletionEligible(input: C04CompletionEvidence): boolean {
   if (
     !record(input, [
@@ -60,7 +60,10 @@ export function c04CompletionEligible(input: C04CompletionEvidence): boolean {
             "RECONSIDER_REPRESENTATION",
             "RECONSIDER_UNDEFINED",
             "RECONSIDER_QUANTITY",
-          ].includes(input.evaluation.diagnostic))
+          ].includes(input.evaluation.diagnostic)) ||
+        (input.activityId === "C04-A02" &&
+          input.evaluation.outcome === "RECONSIDERATION" &&
+          /^GUIDED_Q[1-3]_OPTION[1-3]$/.test(input.evaluation.diagnostic ?? ""))
       ))
   )
     throw new TypeError("Invalid C04 evaluation evidence");
@@ -74,6 +77,7 @@ export function c04CompletionEligible(input: C04CompletionEvidence): boolean {
   return (
     input.checkedRevision === input.responseRevision &&
     input.feedbackRevision === input.responseRevision &&
-    input.evaluation !== null
+    input.evaluation !== null &&
+    (input.activityId !== "C04-A03" || input.evaluation.outcome === "CONFIRMED")
   );
 }

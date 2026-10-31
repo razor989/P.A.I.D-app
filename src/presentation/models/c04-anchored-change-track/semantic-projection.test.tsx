@@ -11,6 +11,75 @@ import type { SemanticActivityFrame } from "@/engine/semantic-frame/public";
 import { AnchoredChangeTrack } from "./AnchoredChangeTrack";
 
 afterEach(cleanup);
+
+it("T045 D226-S1 resolves the preserved receipt dependency without unlocking early Finish", () => {
+  const actor = createC04ActivityActor(
+    "C04-A01",
+    "C04-A01-interpretation-v1",
+  ).start();
+  try {
+    actor.send({ type: "CONTINUE" });
+    const option = composeC04ActivityFrame(actor).responseControls!.find(
+      (control) => control.role === "interpretation",
+    )!.options![0]!;
+    actor.send({
+      type: "RESPONSE_CHANGED",
+      response: composite({
+        original: money("18000"),
+        new: money("18000"),
+        difference: money("0"),
+        interpretation: {
+          kind: "SINGLE_SELECTION",
+          selectionId: option.id,
+        },
+      }),
+    });
+    actor.send({ type: "CHECK_RESPONSE" });
+    const before = composeC04ActivityFrame(actor);
+    expect(before.stateId).toBe("CONFIRMATION");
+    expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+    expect(before.feedbackState?.content.id).toBe("c04/S01/confirmation");
+    expect(before.completionActionAvailability).toBe(false);
+    expect(
+      before.contentReferences.some((content) =>
+        content.id.endsWith("/confirmation"),
+      ),
+    ).toBe(false);
+    const pending = render(
+      <AnchoredChangeTrack
+        frame={before}
+        blocked={false}
+        onIntent={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(
+      pending.container.querySelector("[data-feedback]")?.textContent,
+    ).toContain(before.feedbackState!.content.text);
+    pending.unmount();
+
+    // Deliberately simulated headless receipt for the reproduction only.
+    // Production must NOT do this before genuine presentation.
+    actor.send({
+      type: "FEEDBACK_DELIVERED",
+      revision: actor.getSnapshot().context.responseRevision,
+    });
+    const after = composeC04ActivityFrame(actor);
+    expect(after.feedbackState?.outcome).toBe("CONFIRMED");
+    expect(after.feedbackState?.content.id).toBe("c04/S01/confirmation");
+    expect(after.completionActionAvailability).toBe(true);
+    expect(
+      [
+        ...before.contentReferences,
+        ...before.exposedModelFacts,
+        ...before.exposedDerivedFacts,
+      ].some((content) => content.id === after.feedbackState?.content.id),
+    ).toBe(false);
+  } finally {
+    actor.stop();
+  }
+});
+
 const money = (value: string) => ({
   kind: "EXACT_QUANTITY" as const,
   value: quantity(
@@ -92,7 +161,10 @@ function assertProjection(frame: SemanticActivityFrame) {
 it.each(["C04-A01", "C04-A03", "C04-A04"])(
   "%s keeps independent answers withheld before check and renders only issued facts",
   (id) => {
-    const actor = createC04ActivityActor(id).start();
+    const actor = createC04ActivityActor(
+      id,
+      "C04-A01-interpretation-v1",
+    ).start();
     try {
       for (const phase of ["ENTRY", "ACTIVE"]) {
         const frame = composeC04ActivityFrame(actor);
@@ -196,7 +268,10 @@ it("retains all five authentic A02 stages and engagement-gated dependent passage
 it.each(["C04-A01", "C04-A03", "C04-A04"])(
   "%s exposes provider answers only on the real checked path",
   (id) => {
-    const actor = createC04ActivityActor(id).start();
+    const actor = createC04ActivityActor(
+      id,
+      "C04-A01-interpretation-v1",
+    ).start();
     try {
       actor.send({ type: "CONTINUE" });
       const option = (role: string) => ({

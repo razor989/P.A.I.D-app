@@ -31,7 +31,7 @@ test("Session destinations, real keyboard skip, guarded availability and Back su
     "P.A.I.D. — Percentage Change — Explore and Learn",
   );
   await expect(
-    page.getByRole("heading", { level: 2, name: "Activity host" }),
+    page.getByRole("heading", { level: 2, name: "Making sense of a raise" }),
   ).toBeVisible();
   await expect(page.getByRole("main")).toHaveCount(1);
   await expect(page.getByRole("textbox")).toHaveCount(0);

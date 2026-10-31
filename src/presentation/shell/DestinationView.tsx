@@ -21,6 +21,7 @@ export function DestinationView(props: ShellProps) {
           competency={competency}
           blocked={props.blocked}
           onSelect={props.onActivity}
+          onReviewCompleted={props.onReviewCompleted}
         />
       ) : (
         <p role="status">This competency is unavailable.</p>
@@ -30,7 +31,12 @@ export function DestinationView(props: ShellProps) {
       return (
         <ActivityShell
           activityId={props.destination.activityId}
-          c04Presentation={props.c04Presentation}
+          c04Presentation={
+            props.destination.activityId ===
+            props.c04Presentation?.frame.activityId
+              ? props.c04Presentation
+              : undefined
+          }
         />
       );
   }

@@ -2,6 +2,8 @@ import type { ActivityId, CompetencyId } from "@/core/public";
 import type { C04Presentation } from "../models/c04-anchored-change-track/public";
 
 export type { C04Presentation } from "../models/c04-anchored-change-track/public";
+/** C04 owns response and durable Session continuation callbacks as one route payload. */
+export type C04RoutePresentation = C04Presentation;
 
 export { AppShell } from "./AppShell";
 export type ActivitySummary = Readonly<{
@@ -20,6 +22,8 @@ export type Destination =
   | Readonly<{ kind: "competency"; competencyId: CompetencyId }>
   | Readonly<{ kind: "activity"; activityId: ActivityId }>;
 export type ShellProps = Readonly<{
+  completedReview?: boolean;
+  onReviewCompleted?: (() => void) | undefined;
   c04Presentation?: C04Presentation | undefined;
   destination: Destination;
   competencies: readonly CompetencySummary[];

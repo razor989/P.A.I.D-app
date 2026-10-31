@@ -7,6 +7,29 @@ import type { C04TrackFrame } from "./public";
 
 afterEach(cleanup);
 
+it("presents current feedback without inventing Finish eligibility", () => {
+  render(
+    <AnchoredChangeTrack
+      frame={{
+        ...frame,
+        stateId: "CONFIRMATION",
+        allowedLearnerIntents: [],
+        feedbackState: {
+          outcome: "CONFIRMED",
+          content: { id: "current", text: "Current approved feedback" },
+        },
+      }}
+      blocked={false}
+      onIntent={vi.fn()}
+      onSelect={vi.fn()}
+    />,
+  );
+  expect(
+    screen.getByRole("status", { name: "Confirmation" }).textContent,
+  ).toContain("Current approved feedback");
+  expect(screen.queryByRole("button", { name: "Finish activity" })).toBeNull();
+});
+
 it.each([
   ["C04-A01", "equal", "180"],
   ["C04-A02", "increase", "330"],

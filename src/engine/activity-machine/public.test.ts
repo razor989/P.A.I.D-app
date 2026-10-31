@@ -1498,6 +1498,7 @@ import { ExactDecimal, quantity } from "../../core/public";
 import type { LearnerResponse } from "../../core/public";
 import {
   c04ResponseContracts,
+  c04A01LegacyContract,
   c04Scenarios,
 } from "../../study/competencies/c04/public";
 import {
@@ -2182,64 +2183,69 @@ describe("synthetic staged response and both-outcome compatibility", () => {
         },
       },
     ];
-    c04ResponseContracts.forEach((contract, index) => {
-      const scenario = c04Scenarios[index]!;
-      const cases = (index === 1 ? ["C04-S02-A", "C04-S02-B"] : [null]).map(
-        (childId, pairIndex) => {
-          const original = scenario.facts[pairIndex * 2]!;
-          const next = scenario.facts[pairIndex * 2 + 1]!;
-          if (
-            original.resolution.kind !== "KNOWN" ||
-            next.resolution.kind !== "KNOWN"
-          )
-            throw new Error("Unestablished source fact");
-          return {
-            childId,
-            original: { role: original.key, value: original.resolution.value },
-            newValue: { role: next.key, value: next.resolution.value },
-          };
-        },
-      );
-      const state = createC04ModelState({
-        activityId: contract.activityId,
-        scenarioId: contract.scenarioId,
-        cases,
-      } as C04ModelDefinition);
-      const choice = contract.choices[0]!;
-      const required = Object.entries(numerical[index]!);
-      const definition = {
-        state,
-        fields: [...required.map(([key]) => key), choice.role],
-        choices: [
-          {
-            key: choice.role,
-            options: choice.options.map((option) => option.id),
-            correctId: choice.correctId,
+    [c04A01LegacyContract, ...c04ResponseContracts.slice(1)].forEach(
+      (contract, index) => {
+        const scenario = c04Scenarios[index]!;
+        const cases = (index === 1 ? ["C04-S02-A", "C04-S02-B"] : [null]).map(
+          (childId, pairIndex) => {
+            const original = scenario.facts[pairIndex * 2]!;
+            const next = scenario.facts[pairIndex * 2 + 1]!;
+            if (
+              original.resolution.kind !== "KNOWN" ||
+              next.resolution.kind !== "KNOWN"
+            )
+              throw new Error("Unestablished source fact");
+            return {
+              childId,
+              original: {
+                role: original.key,
+                value: original.resolution.value,
+              },
+              newValue: { role: next.key, value: next.resolution.value },
+            };
           },
-        ],
-      } as C04EvaluationDefinition;
-      for (const option of choice.options) {
-        const response = {
-          kind: "COMPOSITE",
-          parts: [
-            ...required.map(([key, response]) => ({ key, response })),
+        );
+        const state = createC04ModelState({
+          activityId: contract.activityId,
+          scenarioId: contract.scenarioId,
+          cases,
+        } as C04ModelDefinition);
+        const choice = contract.choices[0]!;
+        const required = index === 1 ? [] : Object.entries(numerical[index]!);
+        const definition = {
+          state,
+          fields: [...required.map(([key]) => key), choice.role],
+          choices: [
             {
               key: choice.role,
-              response: { kind: "SINGLE_SELECTION", selectionId: option.id },
+              options: choice.options.map((option) => option.id),
+              correctId: choice.correctId,
             },
           ],
-        };
-        expect(evaluateC04Response(definition, response).outcome).toBe(
-          option.id === choice.correctId ? "CONFIRMED" : "RECONSIDERATION",
-        );
-      }
-      expect(() =>
-        evaluateC04Response(definition, {
-          kind: "COMPOSITE",
-          parts: required.map(([key, response]) => ({ key, response })),
-        }),
-      ).toThrow();
-    });
+        } as C04EvaluationDefinition;
+        for (const option of choice.options) {
+          const response = {
+            kind: "COMPOSITE",
+            parts: [
+              ...required.map(([key, response]) => ({ key, response })),
+              {
+                key: choice.role,
+                response: { kind: "SINGLE_SELECTION", selectionId: option.id },
+              },
+            ],
+          };
+          expect(evaluateC04Response(definition, response).outcome).toBe(
+            option.id === choice.correctId ? "CONFIRMED" : "RECONSIDERATION",
+          );
+        }
+        expect(() =>
+          evaluateC04Response(definition, {
+            kind: "COMPOSITE",
+            parts: required.map(([key, response]) => ({ key, response })),
+          }),
+        ).toThrow();
+      },
+    );
   });
   it("commits semantic boundaries without grading, rejects wrong representations, and blocks support-stage mutation", () => {
     const a = actor(staged);

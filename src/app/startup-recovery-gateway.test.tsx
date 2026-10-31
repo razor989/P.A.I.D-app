@@ -85,9 +85,12 @@ describe("T036 bounded Recovery gateway", () => {
       );
     expect(start).toHaveBeenCalledTimes(1);
     expect(root.session.getSnapshot().context.currentActivity).toBe(actor);
-    expect(screen.getByRole("heading", { level: 2 }).textContent).toBe(
-      "Activity host",
-    );
+    expect(
+      screen.getByRole("heading", {
+        name: "Anchored Change Track",
+        level: 2,
+      }),
+    ).toBeDefined();
     view.unmount();
     root.stop();
   });

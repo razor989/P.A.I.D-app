@@ -15,12 +15,14 @@ import { c04Copy } from "./content";
 import { validateC04ResponseContracts } from "./response-contracts";
 
 export {
+  c04A01LegacyContract,
+  c04A01V3Contract,
   c04ResponseContracts,
   validateC04ResponseContracts,
 } from "./response-contracts";
 export type { C04ResponseContract } from "./response-contracts";
 
-export { c04Copy } from "./content";
+export { c04Copy, c04PrepareDiagnosticPrompts } from "./content";
 
 const ids = ["C04-A01", "C04-A02", "C04-A03", "C04-A04"] as const;
 const scenarioIds = ["C04-S01", "C04-S02", "C04-S03", "C04-S04"] as const;
@@ -49,6 +51,15 @@ export const c04RoleKeys = Object.freeze(
       "reconsider-interpretation",
       "completion",
       "accessibility-summary",
+      "guided-q1-title",
+      "guided-q1-prompt",
+      "guided-q2-title",
+      "guided-q2-prompt",
+      "guided-q3-title",
+      "guided-q3-prompt",
+      "guided-q4-title",
+      "guided-q4-prompt",
+      "guided-reconsider",
     ],
     [
       "scenario",
@@ -59,6 +70,24 @@ export const c04RoleKeys = Object.freeze(
       "reconsider-interpretation",
       "completion",
       "accessibility-summary",
+      "q1-title",
+      "q1-prompt",
+      "q1-hint",
+      "q1-success",
+      "q1-reconsider",
+      "q1-total",
+      "q2-title",
+      "q2-prompt",
+      "q2-hint",
+      "q2-success",
+      "q2-reconsider",
+      "q2-new",
+      "q3-title",
+      "q3-prompt",
+      "q3-hint",
+      "q3-success",
+      "q3-reconsider",
+      "q3-equal",
     ],
     [
       "scenario",
@@ -290,7 +319,7 @@ export function validateC04Local(
     ) ||
     !same(boundary, c04Boundary) ||
     !same(roles, c04RoleKeys) ||
-    Object.keys(copy).length !== 34 ||
+    Object.keys(copy).length !== Object.keys(c04Copy).length ||
     Object.keys(c04Copy).some(
       (key) => copy[key] !== c04Copy[key as keyof typeof c04Copy],
     )

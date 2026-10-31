@@ -423,6 +423,9 @@ export default tseslint.config(
         "presentation/shell/public",
         "presentation/technical/public",
         "session/navigation/public",
+        "study/competencies/c04/public",
+        "recovery/projection/public",
+        "recovery/checkpoint/public",
       ],
     ],
     [
@@ -441,6 +444,23 @@ export default tseslint.config(
     ["session-provider.test.tsx", ["session/app-machine/public"]],
     ["bootstrap.test.tsx", ["session/app-machine/public"]],
     ["web-test-store.ts", ["recovery/store/public"]],
+    ["browser-checkpoint-store.ts", ["recovery/store/public"]],
+    [
+      "c04-apply-projection.ts",
+      [
+        "study/competencies/c04/public",
+        "competencies/c04-percentage-change/model/public",
+        "engine/semantic-frame/public",
+      ],
+    ],
+    [
+      "c04-reference-projection.ts",
+      [
+        "study/competencies/c04/public",
+        "competencies/c04-percentage-change/model/public",
+        "engine/semantic-frame/public",
+      ],
+    ],
   ].map(([file, targets]) => ({
     ...restriction("app", targets),
     files: [`src/app/${file}`],
@@ -459,6 +479,7 @@ export default tseslint.config(
     ]),
     files: [
       "src/presentation/models/c04-anchored-change-track/semantic-projection.test.tsx",
+      "src/presentation/models/c04-anchored-change-track/prepare.test.tsx",
     ],
   },
 );

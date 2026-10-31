@@ -42,7 +42,98 @@ export type CompletionEvidence = Readonly<{
   feedbackRevision: number | null;
   evaluation: Evaluation | null;
 }>;
-export type ResponseStage = "PRIMARY" | "REASONING";
+export type GuidedStage =
+  | "PESO_COMPARISON"
+  | "REFERENCE_PAIR"
+  | "PERCENTAGE_COMPARISON"
+  | "ORIGINAL"
+  | "NEW"
+  | "DIFFERENCE"
+  | "INTERPRETATION";
+export type ResponseStage = "PRIMARY" | "REASONING" | GuidedStage;
+export type GuidedPracticeDefinition = Readonly<{
+  contractId: "C04-A02-guided-practice-v2" | "C04-A01-elicit-engage-v4";
+  version: 2 | 4;
+  stages: readonly Readonly<{
+    id: GuidedStage;
+    optionIds: readonly string[];
+  }>[];
+}>;
+export type GuidedStageRecord = Readonly<{
+  stage: GuidedStage;
+  response: LearnerResponse;
+  responseRevision: number;
+  checkedRevision: number;
+  feedbackRevision: number;
+  evaluation: Evaluation;
+}>;
+
+export function guidedResponseReady(
+  response: LearnerResponse | null,
+  stage: unknown,
+  policy: GuidedPracticeDefinition,
+): boolean {
+  const current = policy.stages.find((s) => s.id === stage);
+  return (
+    !!current &&
+    !!response &&
+    isLearnerResponse(response) &&
+    response.kind === "COMPOSITE" &&
+    response.parts.length === 1 &&
+    response.parts[0]!.key ===
+      (policy.version === 4 ? String(stage).toLowerCase() : stage) &&
+    response.parts[0]!.response.kind === "SINGLE_SELECTION" &&
+    current.optionIds.includes(response.parts[0]!.response.selectionId)
+  );
+}
+
+/** Detached history is re-evaluated by the same trusted ports, never trusted as a score. */
+export function validateGuidedPracticeContext(
+  context: ActivityContext,
+  policy: GuidedPracticeDefinition,
+  ports: ActivityPorts,
+): void {
+  const index = policy.stages.findIndex((s) => s.id === context.responseStage);
+  const records = context.guidedRecords;
+  const reject = (): never => {
+    throw new TypeError("Invalid guided practice history");
+  };
+  if (index < 0 || !Array.isArray(records) || records.length !== index)
+    reject();
+  let previous = 0;
+  for (const [i, record] of records!.entries()) {
+    if (
+      !fields(record, [
+        "stage",
+        "response",
+        "responseRevision",
+        "checkedRevision",
+        "feedbackRevision",
+        "evaluation",
+      ]) ||
+      record.stage !== policy.stages[i]!.id ||
+      !guidedResponseReady(record.response, record.stage, policy) ||
+      !Number.isSafeInteger(record.responseRevision) ||
+      record.responseRevision <= previous ||
+      record.checkedRevision !== record.responseRevision ||
+      record.feedbackRevision !== record.responseRevision ||
+      !fields(record.evaluation, ["outcome", "diagnostic"]) ||
+      record.evaluation.outcome !== "CONFIRMED" ||
+      record.evaluation.diagnostic !== null ||
+      ports.evaluate(record.response).outcome !== "CONFIRMED"
+    )
+      reject();
+    previous = record.responseRevision;
+  }
+  if (
+    (index > 0 && context.responseRevision <= previous) ||
+    (context.response !== null &&
+      !guidedResponseReady(context.response, context.responseStage, policy)) ||
+    ((context.position === "ENTRY" || context.position.startsWith("EXP-")) &&
+      index !== 0)
+  )
+    reject();
+}
 export type PrimaryField = Readonly<{
   key: string;
   acceptedKinds: readonly ("EXACT_QUANTITY" | "SEMANTIC_BOUNDARY")[];
@@ -563,6 +654,7 @@ export type ActivityDefinition = Readonly<{
     Partial<Record<Position, readonly Exclude<SupportPhase, "NONE">[]>>
   >;
   responseStages?: StagedResponseDefinition;
+  guidedPractice?: GuidedPracticeDefinition;
   terminalTeaching?: TerminalTeachingDefinition;
   modelSelection?: ModelSelectionDefinition;
   modelIntents?: ModelIntentDefinition;
@@ -610,8 +702,15 @@ export type ActivityEvent =
     }
   | { type: "CONTINUE" | "PREVIOUS" | "INFO_NEEDED" }
   | { type: "RESPONSE_CHANGED"; response: LearnerResponse }
-  | { type: "CHECK_RESPONSE" | "CHECK_AGAIN" | "REVISE" | "FINISH_ACTIVITY" }
-  | { type: "FEEDBACK_DELIVERED"; revision: number }
+  | {
+      type:
+        | "CHECK_RESPONSE"
+        | "CHECK_AGAIN"
+        | "REVISE"
+        | "FINISH_ACTIVITY"
+        | "NEXT_GUIDED_QUESTION";
+    }
+  | { type: "FEEDBACK_DELIVERED"; revision: number; stage?: GuidedStage }
   | { type: "OPEN_SUPPORT"; mode: Exclude<SupportPhase, "NONE"> }
   | { type: "CLOSE_SUPPORT" | "COMMIT_PRIMARY_RESPONSE" | "RETURN_TO_PRIMARY" }
   | {
@@ -654,6 +753,7 @@ export type ActivityContext = Readonly<{
   feedbackRevision: number | null;
   evaluation: Evaluation | null;
   responseStage?: ResponseStage;
+  guidedRecords?: readonly GuidedStageRecord[];
   firstPrimaryCommitment?: PrimaryCommitment | null;
   currentPrimaryCommitment?: PrimaryCommitment | null;
   commitmentSequence?: number;
@@ -1217,6 +1317,7 @@ export function validateActivityDefinition(
       "edges",
       "support",
       ...("responseStages" in value ? ["responseStages"] : []),
+      ...("guidedPractice" in value ? ["guidedPractice"] : []),
       ...("terminalTeaching" in value ? ["terminalTeaching"] : []),
       ...("embeddedFloor" in value ? ["embeddedFloor"] : []),
       ...("modelSelection" in value ? ["modelSelection"] : []),
@@ -1231,6 +1332,59 @@ export function validateActivityDefinition(
   )
     throw new TypeError("Invalid activity definition");
   if ("responseStages" in value) validateStages(value.responseStages);
+  if ("guidedPractice" in value) {
+    const p = value.guidedPractice;
+    const diagnostic =
+      value.activityId === "C04-A01" &&
+      fields(p, ["contractId", "version", "stages"]) &&
+      p.contractId === "C04-A01-elicit-engage-v4" &&
+      p.version === 4;
+    const stages = diagnostic
+      ? ["ORIGINAL", "NEW", "DIFFERENCE", "INTERPRETATION"]
+      : ["PESO_COMPARISON", "REFERENCE_PAIR", "PERCENTAGE_COMPARISON"];
+    if (
+      (!diagnostic && value.activityId !== "C04-A02") ||
+      "responseStages" in value ||
+      !fields(p, ["contractId", "version", "stages"]) ||
+      (!diagnostic && p.contractId !== "C04-A02-guided-practice-v2") ||
+      (!diagnostic && p.version !== 2) ||
+      !Array.isArray(p.stages) ||
+      p.stages.length !== stages.length ||
+      p.stages.some(
+        (s: unknown, q: number) =>
+          !fields(s, ["id", "optionIds"]) ||
+          s.id !== stages[q] ||
+          JSON.stringify(s.optionIds) !==
+            JSON.stringify(
+              diagnostic
+                ? [
+                    [
+                      "c04-a01-v3-original-before",
+                      "c04-a01-v3-original-after",
+                      "c04-a01-v3-original-neither",
+                    ],
+                    [
+                      "c04-a01-v3-new-before",
+                      "c04-a01-v3-new-after",
+                      "c04-a01-v3-new-neither",
+                    ],
+                    [
+                      "c04-a01-v3-difference-total",
+                      "c04-a01-v3-difference-zero",
+                      "c04-a01-v3-difference-sum",
+                    ],
+                    [
+                      "c04-a01-no-change",
+                      "c04-a01-increase",
+                      "c04-a01-decrease",
+                    ],
+                  ][q]
+                : [1, 2, 3].map((o) => `c04-a02-v2-q${q + 1}-option${o}`),
+            ),
+      )
+    )
+      throw new TypeError("Invalid A02 guided practice policy");
+  }
   if ("embeddedFloor" in value) {
     validateC02Floor(value.embeddedFloor);
     if (
@@ -1457,6 +1611,7 @@ export function isActivityEvent(value: unknown): value is ActivityEvent {
     case "CLOSE_SUPPORT":
     case "COMMIT_PRIMARY_RESPONSE":
     case "RETURN_TO_PRIMARY":
+    case "NEXT_GUIDED_QUESTION":
       return fields(value, ["type"]);
     case "RESPONSE_CHANGED":
       return (
@@ -1464,7 +1619,21 @@ export function isActivityEvent(value: unknown): value is ActivityEvent {
       );
     case "FEEDBACK_DELIVERED":
       return (
-        fields(value, ["type", "revision"]) &&
+        fields(value, [
+          "type",
+          "revision",
+          ...("stage" in value ? ["stage"] : []),
+        ]) &&
+        (!("stage" in value) ||
+          [
+            "PESO_COMPARISON",
+            "REFERENCE_PAIR",
+            "PERCENTAGE_COMPARISON",
+            "ORIGINAL",
+            "NEW",
+            "DIFFERENCE",
+            "INTERPRETATION",
+          ].includes(value.stage as string)) &&
         Number.isSafeInteger(value.revision) &&
         (value.revision as number) >= 0
       );
@@ -1659,6 +1828,7 @@ function validateActivityRestoration(
     "evaluation",
     ...(definition.modelSelection ? ["model", "c04A02StageEngagement"] : []),
     ...(definition.responseStages ? stagingKeys : []),
+    ...(definition.guidedPractice ? ["responseStage", "guidedRecords"] : []),
     ...(definition.terminalTeaching
       ? ["terminalEntryRevision", "terminalTeachingRevision"]
       : []),
@@ -1731,7 +1901,15 @@ function validateActivityRestoration(
     reject();
   for (const response of [value.response, value.checkedResponse])
     if (response !== null && !isLearnerResponse(response)) reject();
-  if ((value.responseRevision === 0) !== (value.response === null)) reject();
+  if (
+    (value.responseRevision === 0) !== (value.response === null) &&
+    !(
+      definition.guidedPractice &&
+      value.response === null &&
+      (value.guidedRecords?.length ?? 0) > 0
+    )
+  )
+    reject();
   const instruction =
     value.position === "ENTRY" || value.position.startsWith("EXP-");
   const feedback = [
@@ -1811,6 +1989,8 @@ function validateActivityRestoration(
       reject();
   }
   const policy = definition.responseStages;
+  if (definition.guidedPractice)
+    validateGuidedPracticeContext(value, definition.guidedPractice, ports);
   if (policy) {
     const first = value.firstPrimaryCommitment,
       current = value.currentPrimaryCommitment;
@@ -2352,6 +2532,7 @@ export function createActivityMachine(
   const staging = definition.responseStages
     ? structuredClone(definition.responseStages)
     : undefined;
+  const guided = definition.guidedPractice;
   const teaching = definition.terminalTeaching
     ? structuredClone(definition.terminalTeaching)
     : undefined;
@@ -2459,6 +2640,8 @@ export function createActivityMachine(
     valid(event) &&
     context.origin === null &&
     context.response !== null &&
+    (!guided ||
+      guidedResponseReady(context.response, context.responseStage, guided)) &&
     (!staging || stagedResponseReady(context, staging)) &&
     ports.ready(context.response) &&
     context.checkedRevision !== context.responseRevision &&
@@ -2646,6 +2829,8 @@ export function createActivityMachine(
       context.responseRevision >= Number.MAX_SAFE_INTEGER
     )
       return false;
+    if (guided)
+      return guidedResponseReady(event.response, context.responseStage, guided);
     if (!staging) return true;
     if (context.responseStage === "PRIMARY") {
       // Partial drafts are allowed, but only declared representations/roles.
@@ -2989,6 +3174,57 @@ export function createActivityMachine(
           target: "reconsideration",
         },
         on: {
+          NEXT_GUIDED_QUESTION: {
+            guard: ({
+              context,
+              event,
+            }: {
+              context: ActivityContext;
+              event: ActivityEvent;
+            }) =>
+              valid(event) &&
+              !!guided &&
+              idle({ context }) &&
+              guided.stages.findIndex((s) => s.id === context.responseStage) <
+                guided.stages.length - 1 &&
+              context.evaluation?.outcome === "CONFIRMED" &&
+              context.checkedRevision === context.responseRevision &&
+              context.feedbackRevision === context.responseRevision &&
+              context.responseRevision < Number.MAX_SAFE_INTEGER &&
+              guidedResponseReady(
+                context.response,
+                context.responseStage,
+                guided,
+              ),
+            target: "active",
+            actions: [
+              assign(({ context }: { context: ActivityContext }) => ({
+                ...clear,
+                position: "ACTIVE" as const,
+                response: null,
+                hasChecked: false,
+                responseRevision: context.responseRevision + 1,
+                responseStage:
+                  guided!.stages[
+                    guided!.stages.findIndex(
+                      (s) => s.id === context.responseStage,
+                    ) + 1
+                  ]!.id,
+                guidedRecords: Object.freeze([
+                  ...context.guidedRecords!,
+                  Object.freeze({
+                    stage: context.responseStage as GuidedStage,
+                    response: context.response!,
+                    responseRevision: context.responseRevision,
+                    checkedRevision: context.checkedRevision!,
+                    feedbackRevision: context.feedbackRevision!,
+                    evaluation: context.evaluation!,
+                  }),
+                ]),
+              })),
+              seal,
+            ],
+          },
           C02_MAIN_FEEDBACK_DELIVERED: mainFloorDelivery,
           CONTINUE: [
             enterFloor,
@@ -3026,6 +3262,7 @@ export function createActivityMachine(
               idle({ context }) &&
               !floor &&
               event.type === "FEEDBACK_DELIVERED" &&
+              (!guided || event.stage === context.responseStage) &&
               context.checkedRevision === event.revision &&
               context.feedbackRevision === null,
             actions: [
@@ -3137,6 +3374,7 @@ export function createActivityMachine(
               idle({ context }) &&
               !floor &&
               event.type === "FEEDBACK_DELIVERED" &&
+              (!guided || event.stage === context.responseStage) &&
               context.checkedRevision === event.revision &&
               context.feedbackRevision === null,
             actions: [
@@ -3348,6 +3586,12 @@ export function createActivityMachine(
               reasoningExposed: false,
               explanationCommitmentSequence: null,
               checkedCommitmentSequence: null,
+            }
+          : {}),
+        ...(guided
+          ? {
+              responseStage: guided.stages[0]!.id,
+              guidedRecords: Object.freeze([]),
             }
           : {}),
         ...(teaching

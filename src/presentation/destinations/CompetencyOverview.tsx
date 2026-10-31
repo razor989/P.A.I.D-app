@@ -6,18 +6,21 @@ export function CompetencyOverview({
   competency,
   blocked,
   onSelect,
+  onReviewCompleted,
 }: Readonly<{
   competency: CompetencySummary;
   blocked: boolean;
   onSelect: (id: ActivityId) => void;
+  onReviewCompleted?: (() => void) | undefined;
 }>) {
   return (
     <section aria-labelledby="activities-heading">
       <h2 id="activities-heading">Learning activities</h2>
       <p>
         Interactive explanatory learning precedes application and assessment.
-        This version provides the destination structure; instructional
-        presentation is not yet available.
+        {competency.id === "C04"
+          ? " Explore and Learn includes the integrated salary investigation."
+          : " This version provides the destination structure; instructional presentation is not yet available."}
       </p>
       <ol className={styles.list}>
         {competency.activities.map((a) => (
@@ -33,9 +36,30 @@ export function CompetencyOverview({
               </button>
             </h3>
             <p className={styles.identifier}>{a.id}</p>
+            {competency.id === "C04" &&
+              a.id === "C04-A02" &&
+              onReviewCompleted && (
+                <div>
+                  <button
+                    id="review-completed-activity"
+                    type="button"
+                    disabled={blocked}
+                    onClick={onReviewCompleted}
+                    aria-describedby="completed-review-description"
+                  >
+                    Review completed activity
+                  </button>
+                  <p id="completed-review-description">
+                    Review your retained completion without starting again.
+                    Opening the activity above starts a fresh replay.
+                  </p>
+                </div>
+              )}
             <p id={`${a.id}-availability`}>
               {a.available
-                ? "Activity host available; instructional presentation is not yet available."
+                ? a.id === "C04-A02"
+                  ? "Open the salary investigation and comparison."
+                  : "Activity host available; instructional presentation is not yet available."
                 : "Not available in the current Session."}
             </p>
           </li>

@@ -11,6 +11,13 @@
 .workspace p {
   max-inline-size: var(--reading-max);
 }
+.workspace input {
+  max-inline-size: 100%;
+  box-sizing: border-box;
+}
+.workspace button {
+  overflow-wrap: anywhere;
+}
 .phase {
   font-family: var(--font-technical);
 }

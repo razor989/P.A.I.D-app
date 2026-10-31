@@ -53,6 +53,7 @@ export type SessionEvent =
         | "RECOVER_PENDING_CLEAR";
     }>
   | Readonly<{ type: "RETURN_TO_LIBRARY" }>
+  | Readonly<{ type: "REVIEW_COMPLETED_ACTIVITY" }>
   | Readonly<{
       type:
         | "CONTINUE_RECOVERED_ACTIVITY"
@@ -97,6 +98,7 @@ export function isSessionEvent(value: unknown): value is SessionEvent {
     case "SELECT_ACTIVITY":
       return exact(["type", "activityId"]) && isActivityId(event.activityId);
     case "RETURN_TO_LIBRARY":
+    case "REVIEW_COMPLETED_ACTIVITY":
     case "CONTINUE_RECOVERED_ACTIVITY":
     case "ABANDON_RECOVERED_ACTIVITY":
     case "DISCARD_UNUSABLE_CHECKPOINT":
@@ -137,6 +139,7 @@ type Context = Readonly<{
   switchOrigin: SessionDestination | null;
   transaction: Transaction | null;
   finalizedActor: ActivityActor | null;
+  completedReviewActor: ActivityActor | null;
   lastResult: RecoveryMutationResult | null;
   barrierError: unknown;
   startupTransaction: StartupTransaction | null;
@@ -240,6 +243,7 @@ function replaceActivity(context: Context, id: ActivityId) {
     generation: context.generation + 1,
     writable: true,
     finalizedActor: null,
+    completedReviewActor: null,
     transaction: null,
     lastResult: null,
     barrierError: null,
@@ -366,6 +370,7 @@ function initialContext(input: SessionInput): Context {
     switchOrigin: null,
     transaction: null,
     finalizedActor: null,
+    completedReviewActor: null,
     lastResult: null,
     barrierError: null,
     startupTransaction: null,
@@ -473,6 +478,19 @@ const machine = setup({
     }),
   },
   guards: {
+    canReviewCompleted: and([
+      "eventValid",
+      stateIn({ session: { technical: "idle", decision: "none" } }),
+      ({ context }) =>
+        context.destination?.kind === "competency" &&
+        context.destination.competencyId === "C04" &&
+        context.currentActivity?.getSnapshot().context.activityId ===
+          "C04-A02" &&
+        complete(context) &&
+        free(context) &&
+        context.finalizedActor === context.currentActivity &&
+        context.completedReviewActor === null,
+    ]),
     returnToLibrary: and([
       "eventValid",
       ({ context }) => free(context),
@@ -575,9 +593,11 @@ const machine = setup({
       }),
     })),
     library: assign({
+      completedReviewActor: null,
       destination: () => Object.freeze({ kind: "library" as const }),
     }),
     competency: assign({
+      completedReviewActor: null,
       destination: ({ event }) => {
         if (event.type !== "SELECT_COMPETENCY")
           throw new TypeError("Invalid competency intent");
@@ -630,6 +650,13 @@ const machine = setup({
     continueActivity: assign(({ context }) =>
       replaceActivity(context, successor(context)!),
     ),
+    reviewCompleted: assign(({ context }) => ({
+      completedReviewActor: context.currentActivity,
+      destination: Object.freeze({
+        kind: "activity" as const,
+        activityId: "C04-A02" as const,
+      }),
+    })),
     beginFinish: assign(({ context }) => ({
       writable: false,
       lastResult: null,
@@ -854,6 +881,11 @@ const machine = setup({
               guard: "canContinue",
               target: ".activity",
               actions: "continueActivity",
+            },
+            REVIEW_COMPLETED_ACTIVITY: {
+              guard: "canReviewCompleted",
+              target: ".activity",
+              actions: "reviewCompleted",
             },
             RETURN_TO_UNFINISHED_ACTIVITY: {
               guard: "choiceOpen",
@@ -1195,6 +1227,11 @@ export function selectSession(actor: AppSessionActor) {
     canConfirmRecoveryClear: snapshot.can({ type: "CONFIRM_RECOVERY_CLEAR" }),
     destination: context.destination,
     currentActivity: context.currentActivity,
+    completedReview:
+      snapshot.status === "active" &&
+      context.destination?.kind === "activity" &&
+      context.completedReviewActor !== null &&
+      context.completedReviewActor === context.currentActivity,
     completion: context.completion,
     decision: snapshot.matches({
       session: { decision: "activitySwitchChoice" },

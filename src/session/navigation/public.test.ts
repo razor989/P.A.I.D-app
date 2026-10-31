@@ -63,6 +63,19 @@ function open(s: AppSessionActor, id: (typeof ids)[number] = "C04-A02") {
 const back = (s: AppSessionActor) => navigate(s, { type: "SYSTEM_BACK" });
 
 describe("T033 real C04 Session semantic navigation", () => {
+  it("forwards only the exact completed-review intent and denies unavailable review", () => {
+    const s = session();
+    expect(isNavigationIntent({ type: "REVIEW_COMPLETED_ACTIVITY" })).toBe(
+      true,
+    );
+    expect(
+      isNavigationIntent({ type: "REVIEW_COMPLETED_ACTIVITY", actor: {} }),
+    ).toBe(false);
+    expect(navigate(s, { type: "REVIEW_COMPLETED_ACTIVITY" })).toBe("rejected");
+    open(s);
+    back(s);
+    expect(navigate(s, { type: "REVIEW_COMPLETED_ACTIVITY" })).toBe("rejected");
+  });
   it("closes Review before Previous and routes, preserving exact underlying state", () => {
     const s = session();
     const a = open(s);

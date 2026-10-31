@@ -16,9 +16,21 @@ type Field =
   | "percentageA"
   | "percentageB"
   | "comparison"
-  | "explanation";
+  | "explanation"
+  | "PESO_COMPARISON"
+  | "REFERENCE_PAIR"
+  | "PERCENTAGE_COMPARISON";
 type Choice = Readonly<{
-  key: "interpretation" | "comparison" | "explanation";
+  key:
+    | "original"
+    | "new"
+    | "difference"
+    | "interpretation"
+    | "comparison"
+    | "explanation"
+    | "PESO_COMPARISON"
+    | "REFERENCE_PAIR"
+    | "PERCENTAGE_COMPARISON";
   options: readonly string[];
   correctId: string;
 }>;
@@ -33,6 +45,7 @@ export type C04EvaluationDefinition = Readonly<{
 }>;
 
 export type C04Diagnostic =
+  | `GUIDED_Q${number}_OPTION${number}`
   | "RECONSIDER_INTERPRETATION"
   | "RECONSIDER_DIRECTION"
   | "RECONSIDER_REPRESENTATION"
@@ -124,6 +137,10 @@ function known(value: Quantity): Truth {
   return { value, undefined: false };
 }
 
+function array(value: unknown): boolean {
+  return Array.isArray(value);
+}
+
 /** No answer data is returned. A02 uses both issued child states, never a mixed pair. */
 export function evaluateC04Response(
   definition: C04EvaluationDefinition,
@@ -131,12 +148,119 @@ export function evaluateC04Response(
 ): C04Evaluation {
   if (
     !plain(definition, ["state", "fields", "choices"]) ||
-    !Array.isArray(definition.fields) ||
-    !Array.isArray(definition.choices)
+    !array(definition.fields) ||
+    !array(definition.choices)
   )
     throw new TypeError("Invalid C04 evaluation definition");
   const view = deriveC04ModelState(definition.state); // rejects unissued/forged state
   const activity = view.state.activityId;
+  // A01-GUIDED-01: selected statements are graded as selections, never as numbers.
+  if (activity === "C04-A01" && definition.choices.length === 4) {
+    const roles = ["original", "new", "difference", "interpretation"];
+    const ids = [
+      [
+        "c04-a01-v3-original-before",
+        "c04-a01-v3-original-after",
+        "c04-a01-v3-original-neither",
+      ],
+      [
+        "c04-a01-v3-new-before",
+        "c04-a01-v3-new-after",
+        "c04-a01-v3-new-neither",
+      ],
+      [
+        "c04-a01-v3-difference-total",
+        "c04-a01-v3-difference-zero",
+        "c04-a01-v3-difference-sum",
+      ],
+      ["c04-a01-no-change", "c04-a01-increase", "c04-a01-decrease"],
+    ];
+    if (
+      definition.fields.length !== 4 ||
+      new Set(definition.fields).size !== 4 ||
+      !roles.every((role) => definition.fields.includes(role as Field)) ||
+      definition.choices.some(
+        (choice, index) =>
+          !plain(choice, ["key", "options", "correctId"]) ||
+          choice.key !== roles[index] ||
+          JSON.stringify(choice.options) !== JSON.stringify(ids[index]) ||
+          choice.correctId !== ids[index]![index === 1 || index === 2 ? 1 : 0],
+      )
+    )
+      throw new TypeError("Invalid A01 guided definition");
+    if (
+      !isLearnerResponse(input) ||
+      input.kind !== "COMPOSITE" ||
+      input.parts.length !== 4 ||
+      new Set(input.parts.map((part) => part.key)).size !== 4 ||
+      input.parts.some((part) => {
+        const index = roles.indexOf(part.key);
+        return (
+          index < 0 ||
+          part.response.kind !== "SINGLE_SELECTION" ||
+          !ids[index]!.includes(part.response.selectionId)
+        );
+      })
+    )
+      throw new TypeError("Invalid A01 guided response");
+    const wrong = definition.choices.find((choice) => {
+      const part = input.parts.find((part) => part.key === choice.key)!;
+      return (
+        part.response.kind !== "SINGLE_SELECTION" ||
+        part.response.selectionId !== choice.correctId
+      );
+    });
+    return wrong
+      ? {
+          outcome: "RECONSIDERATION",
+          diagnostic:
+            wrong.key === "interpretation"
+              ? "RECONSIDER_INTERPRETATION"
+              : "RECONSIDER_QUANTITY",
+        }
+      : { outcome: "CONFIRMED", diagnostic: null };
+  }
+  // PRACTICE-01 opt-in: authenticate one exact source stage, never synthesize numbers.
+  if (
+    activity === "C04-A02" &&
+    definition.fields.length === 1 &&
+    ["PESO_COMPARISON", "REFERENCE_PAIR", "PERCENTAGE_COMPARISON"].includes(
+      definition.fields[0]!,
+    )
+  ) {
+    const q = [
+      "PESO_COMPARISON",
+      "REFERENCE_PAIR",
+      "PERCENTAGE_COMPARISON",
+    ].indexOf(definition.fields[0]!);
+    const choice = definition.choices[0];
+    const ids = [1, 2, 3].map((o) => `c04-a02-v2-q${q + 1}-option${o}`);
+    if (
+      definition.choices.length !== 1 ||
+      !plain(choice, ["key", "options", "correctId"]) ||
+      choice.key !== definition.fields[0] ||
+      JSON.stringify(choice.options) !== JSON.stringify(ids) ||
+      choice.correctId !== ids[q]
+    )
+      throw new TypeError("Invalid guided C04 source stage");
+    if (
+      !isLearnerResponse(input) ||
+      input.kind !== "COMPOSITE" ||
+      input.parts.length !== 1 ||
+      input.parts[0]!.key !== choice.key ||
+      input.parts[0]!.response.kind !== "SINGLE_SELECTION" ||
+      !ids.includes(input.parts[0]!.response.selectionId)
+    )
+      throw new TypeError("Invalid guided C04 response");
+    const selected = input.parts[0]!.response.selectionId;
+    return selected === choice.correctId
+      ? Object.freeze({ outcome: "CONFIRMED", diagnostic: null })
+      : Object.freeze({
+          outcome: "RECONSIDERATION",
+          diagnostic:
+            `GUIDED_Q${q + 1}_OPTION${ids.indexOf(selected) + 1}` as C04Diagnostic,
+        });
+  }
   const allowed = keys[activity];
   const fields: readonly unknown[] = definition.fields;
   if (

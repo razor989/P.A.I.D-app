@@ -65,7 +65,7 @@ describe("C04 fixed source definitions", () => {
     expect(c04ResponseContracts.map((record) => record.activityId)).toEqual(
       c04Competency.activityIds,
     );
-    expect(Object.keys(c04Copy)).toHaveLength(34);
+    expect(Object.keys(c04Copy)).toHaveLength(61);
     for (const record of c04ResponseContracts) {
       expect(c04Copy).toHaveProperty(record.confirmationFeedbackRef);
       for (const choice of record.choices)
@@ -190,8 +190,8 @@ describe("C04 fixed source definitions", () => {
         "Static semantic — Undefined terminal boundary",
       ],
     ]);
-    expect(Object.keys(c04Copy)).toHaveLength(34);
-    expect(c04RoleKeys.map((r) => r.length)).toEqual([8, 8, 8, 8]);
+    expect(Object.keys(c04Copy)).toHaveLength(61);
+    expect(c04RoleKeys.map((r) => r.length)).toEqual([17, 26, 8, 8]);
     expect(c04RoleKeys[3]).toContain("undefined-result");
     for (const [i, a] of c04Activities.entries()) {
       expect(a.contentReferences.map((r) => r.contentId)).toEqual([

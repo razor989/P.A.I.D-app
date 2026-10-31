@@ -113,36 +113,15 @@ function finish(s: AppSessionActor) {
   const a = selectSession(s).currentActivity!;
   expect(a.getSnapshot().context.activityId).toBe("C04-A01");
   a.send({ type: "CONTINUE" });
-  const money = (value: string) => ({
-    kind: "EXACT_QUANTITY" as const,
-    value: quantity(
-      ExactDecimal.from(value),
-      "MONETARY_AMOUNT",
-      "PHP",
-      "per month",
-    ),
-  });
   const response: LearnerResponse = {
     kind: "COMPOSITE",
     parts: [
-      { key: "original", response: money("18000") },
-      { key: "new", response: money("18000") },
-      { key: "difference", response: money("0") },
       {
-        key: "percentage",
+        key: "original",
         response: {
-          kind: "EXACT_QUANTITY",
-          value: quantity(
-            ExactDecimal.from("0"),
-            "PERCENTAGE_CHANGE",
-            "%",
-            null,
-          ),
+          kind: "SINGLE_SELECTION",
+          selectionId: "c04-a01-v3-original-neither",
         },
-      },
-      {
-        key: "interpretation",
-        response: { kind: "SINGLE_SELECTION", selectionId: "c04-a01-increase" },
       },
     ],
   };
@@ -153,6 +132,7 @@ function finish(s: AppSessionActor) {
   a.send({
     type: "FEEDBACK_DELIVERED",
     revision: a.getSnapshot().context.responseRevision,
+    stage: "ORIGINAL",
   });
   a.send({ type: "FINISH_ACTIVITY" });
   expect(a.getSnapshot().matches({ instructional: "complete" })).toBe(true);

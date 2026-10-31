@@ -58,6 +58,15 @@ function reconstruct(envelope: RecoveryCheckpointEnvelopeV1): Actor {
           response: decodeResponse(item.response)!,
         };
   const context: Context = {
+    ...(data.guidedPractice
+      ? {
+          responseStage: data.guidedPractice.stage,
+          guidedRecords: data.guidedPractice.records.map((r) => ({
+            ...r,
+            response: decodeResponse(r.response)!,
+          })),
+        }
+      : {}),
     activityId: identity,
     position: data.position,
     origin: null,
@@ -95,6 +104,9 @@ function reconstruct(envelope: RecoveryCheckpointEnvelopeV1): Actor {
   };
   const actor = createC04RestoredActivityActor({
     scenarioId: data.scenarioId,
+    ...(data.responseContract
+      ? { a01ContractId: data.responseContract.id }
+      : {}),
     context,
     ...(data.model ? { modelEvidence: data.model.evidence } : {}),
   });

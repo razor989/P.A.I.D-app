@@ -8,8 +8,50 @@ import { ActivityHost } from "./ActivityHost";
 import type { CompetencySummary } from "../shell/public";
 
 afterEach(cleanup);
+it("keeps retained Review separate from fresh opening and blocks it with the destination", async () => {
+  const review = vi.fn(),
+    select = vi.fn();
+  const user = userEvent.setup();
+  const c = {
+    ...competency,
+    activities: competency.activities.map((a) => ({ ...a, available: true })),
+  };
+  const view = render(
+    <CompetencyOverview
+      competency={c}
+      blocked={false}
+      onSelect={select}
+      onReviewCompleted={review}
+    />,
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Review completed activity" }),
+  );
+  expect(review).toHaveBeenCalledTimes(1);
+  expect(select).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "Explore and Learn" }));
+  expect(select).toHaveBeenCalledWith("C04-A02");
+  view.rerender(
+    <CompetencyOverview
+      competency={c}
+      blocked
+      onSelect={select}
+      onReviewCompleted={review}
+    />,
+  );
+  await user.click(
+    screen.getByRole("button", { name: "Review completed activity" }),
+  );
+  expect(review).toHaveBeenCalledTimes(1);
+  view.rerender(
+    <CompetencyOverview competency={c} blocked={false} onSelect={select} />,
+  );
+  expect(
+    screen.queryByRole("button", { name: "Review completed activity" }),
+  ).toBeNull();
+});
 
-it("T044 renders only matching C04 projections and discloses the partial-feature boundary", () => {
+it("T045 renders only matching C04 projections without the obsolete partial-feature note", () => {
   const presentation = {
     frame: {
       activityId: "C04-A01" as const,
@@ -27,15 +69,15 @@ it("T044 renders only matching C04 projections and discloses the partial-feature
     <ActivityHost activityId="C04-A01" c04Presentation={presentation} />,
   );
   expect(
-    screen.getByRole("heading", { name: "Anchored Change Track" }),
+    screen.getByRole("heading", { name: "Two moments. One salary review." }),
   ).toBeDefined();
-  expect(screen.getByRole("note").textContent).toContain("track model only");
+  expect(screen.queryByRole("note")).toBeNull();
   expect(screen.queryByRole("button", { name: /check|finish/i })).toBeNull();
   view.rerender(
     <ActivityHost activityId="C04-A03" c04Presentation={presentation} />,
   );
   expect(
-    screen.queryByRole("heading", { name: "Anchored Change Track" }),
+    screen.queryByRole("heading", { name: "Two moments. One salary review." }),
   ).toBeNull();
   view.rerender(
     <ActivityHost activityId="C01-A01" c04Presentation={presentation} />,
