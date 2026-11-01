@@ -61,6 +61,10 @@ Object.assign(window, {
         responseRevision: context?.responseRevision,
         feedbackRevision: context?.feedbackRevision,
         terminalTeachingRevision: context?.terminalTeachingRevision,
+        responseStage: context?.responseStage,
+        response: context?.response,
+        commitmentSequence: context?.commitmentSequence,
+        firstPrimaryCommitment: context?.firstPrimaryCommitment,
         receipts,
         clears,
       };

@@ -40,6 +40,8 @@ export function AppShell(props: ShellProps) {
     (props.destination.activityId === "C04-A02" ||
       (props.destination.activityId === "C04-A03" &&
         props.c04Presentation?.frame.activityId === "C04-A03") ||
+      (props.destination.activityId === "C04-A04" &&
+        props.c04Presentation?.frame.activityId === "C04-A04") ||
       (props.destination.activityId === "C04-A01" &&
         props.c04Presentation?.frame.activityId === "C04-A01" &&
         props.c04Presentation.prepareContractId ===

@@ -26,6 +26,7 @@ import {
 import { createBrowserCheckpointStore } from "./browser-checkpoint-store";
 import { projectC04Reference } from "./c04-reference-projection";
 import { projectC04Apply } from "./c04-apply-projection";
+import { projectC04Transfer } from "./c04-transfer-projection";
 import { projectC04CheckpointV1 } from "@/recovery/projection/public";
 import { createRecoveryCheckpointV1 } from "@/recovery/checkpoint/public";
 import { SessionProvider, useSessionSnapshot } from "./session-provider";
@@ -392,7 +393,46 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
           }
         },
         apply: projectC04Apply(frame),
-        ...(frame.activityId === "C04-A03"
+        transfer: projectC04Transfer(frame),
+        transferRecord:
+          frame.activityId === "C04-A04" &&
+          frame.stateId === "COMPLETE" &&
+          frame.feedbackState &&
+          renderedContext?.checkedRevision ===
+            renderedContext?.responseRevision &&
+          renderedContext?.feedbackRevision ===
+            renderedContext?.responseRevision &&
+          renderedContext?.terminalTeachingRevision ===
+            renderedContext?.responseRevision &&
+          renderedContext?.checkedResponse?.kind === "COMPOSITE"
+            ? {
+                primary: Object.fromEntries(
+                  renderedContext.checkedResponse.parts.flatMap((part) =>
+                    part.response.kind === "EXACT_QUANTITY"
+                      ? [[part.key, part.response.value.magnitude.toString()]]
+                      : part.response.kind === "SEMANTIC_BOUNDARY"
+                        ? [[part.key, "UNDEFINED"]]
+                        : [],
+                  ),
+                ),
+                reasoning:
+                  contract?.choices
+                    .find((choice) => choice.role === "explanation")
+                    ?.options.find(
+                      (option) =>
+                        renderedContext.checkedResponse?.kind === "COMPOSITE" &&
+                        renderedContext.checkedResponse.parts.some(
+                          (part) =>
+                            part.key === "explanation" &&
+                            part.response.kind === "SINGLE_SELECTION" &&
+                            part.response.selectionId === option.id,
+                        ),
+                    )?.text ?? "Recorded reasoning is unavailable.",
+                feedback: frame.feedbackState.content,
+                outcome: frame.feedbackState.outcome,
+              }
+            : undefined,
+        ...(frame.activityId === "C04-A03" || frame.activityId === "C04-A04"
           ? {
               responseConclusion:
                 renderedContext?.response?.kind === "COMPOSITE"

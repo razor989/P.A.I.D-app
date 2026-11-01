@@ -4,6 +4,7 @@ import type { C04Presentation } from "../models/c04-anchored-change-track/public
 import { ReferenceExperience } from "../models/c04-reference/ReferenceExperience";
 import { PrepareExperience } from "../models/c04-anchored-change-track/PrepareExperience";
 import { ApplyExperience } from "../models/c04-anchored-change-track/ApplyExperience";
+import { TransferExperience } from "../models/c04-anchored-change-track/TransferExperience";
 
 export function ActivityHost({
   activityId,
@@ -27,6 +28,11 @@ export function ActivityHost({
     c04Presentation?.frame.activityId === activityId
   )
     return <ApplyExperience {...c04Presentation} />;
+  if (
+    activityId === "C04-A04" &&
+    c04Presentation?.frame.activityId === activityId
+  )
+    return <TransferExperience {...c04Presentation} />;
   if (
     c04Presentation &&
     activityId.startsWith("C04-") &&

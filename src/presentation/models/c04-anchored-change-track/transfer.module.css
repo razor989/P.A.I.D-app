@@ -1,0 +1,1474 @@
+/* A04 composition; actual accepted workshop layers own identity and control behavior. */
+.workshop[data-c04-track="C04-A04"] {
+  min-width: 0;
+  overflow-x: clip;
+}
+.workshop[data-c04-track="C04-A04"] > :global(.reference-main) {
+  overflow-x: clip;
+}
+.workshop h2 em,
+.workshop h3 em {
+  color: var(--green);
+  font-weight: 400;
+}
+.workshop .heading h2 {
+  font:
+    400 clamp(34px, 4vw, 52px)/1.12 Georgia,
+    serif;
+  letter-spacing: -1px;
+}
+.heading {
+  padding: 34px 0 28px;
+}
+.workshop :global(.entry) h2 {
+  font-size: clamp(44px, 5.5vw, 72px);
+}
+.entryModel {
+  padding: 36px 12px;
+}
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 44px;
+  align-items: start;
+  padding: 0 0 24px;
+}
+.situation,
+.work,
+.response,
+.model {
+  min-width: 0;
+}
+.allowance {
+  margin: 0;
+  padding: 26px 22px 16px;
+  background: var(--sheet);
+  border-bottom: 2px solid #c7d0b8;
+}
+.allowance :global(.model-heading) {
+  gap: 16px;
+}
+.allowance :global(.model-heading) p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.allowanceIcon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #e8eddc;
+  border: 1px solid #879d65;
+  font:
+    400 29px Georgia,
+    serif;
+}
+.scale {
+  width: 100%;
+  display: block;
+  overflow: visible;
+}
+.scale text {
+  fill: var(--ink);
+}
+.role {
+  font:
+    700 17px Arial,
+    sans-serif;
+}
+.amount {
+  font:
+    400 30px Georgia,
+    serif;
+}
+.scale .small {
+  font:
+    400 16px Arial,
+    sans-serif;
+  fill: var(--muted);
+}
+.change {
+  font:
+    400 25px Georgia,
+    serif;
+}
+.guide {
+  stroke: #c7d0b8;
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+}
+.zero {
+  stroke: var(--green);
+  stroke-width: 4;
+  fill: none;
+}
+.newBar {
+  fill: #dfe8d1;
+  stroke: #687f53;
+  stroke-width: 1.5;
+}
+.bracket {
+  fill: none;
+  stroke: #687f53;
+  stroke-width: 1.5;
+}
+.hitArea {
+  fill: transparent;
+}
+.scale [role="button"] {
+  cursor: pointer;
+}
+.scale [role="button"]:focus-visible {
+  outline: 3px solid #a34c15;
+  outline-offset: 4px;
+}
+.scale [role="button"]:hover .newBar {
+  stroke-width: 3;
+}
+.allowance figcaption {
+  font:
+    400 14px/1.7 Arial,
+    sans-serif;
+  color: var(--muted);
+}
+.scenario {
+  font-size: 14px;
+  line-height: 1.8;
+  margin: 20px 4px 0 !important;
+  color: var(--muted);
+}
+.commitment {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 18px !important;
+}
+.response h3 {
+  font:
+    400 30px/1.25 Georgia,
+    serif;
+}
+.direction {
+  font-size: 15px;
+  line-height: 1.8;
+  margin: 16px 0 24px !important;
+}
+.quantities {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+}
+.quantities input {
+  width: 100%;
+}
+.note {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+  margin-top: 16px !important;
+}
+.record {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  padding: 20px 0;
+  margin: 0 0 22px;
+  border-bottom: 1px solid var(--line);
+}
+.record div {
+  min-width: 0;
+}
+.record dt {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.record dd {
+  font:
+    400 28px/1.5 Georgia,
+    serif;
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+.reasons {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.reasons legend {
+  font-size: 14px;
+  line-height: 1.7;
+  margin-bottom: 14px;
+}
+.reasons :global(.choice) {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  margin: 0 0 14px;
+  line-height: 1.8;
+}
+.reasons input {
+  flex: 0 0 auto;
+  margin-top: 6px;
+  accent-color: var(--green);
+  width: 18px;
+  height: 18px;
+}
+.reasons input:focus-visible {
+  outline: 3px solid #a34c15;
+  outline-offset: 3px;
+}
+.reasons label:has(input:focus-visible) {
+  outline: 2px solid #a34c15;
+  outline-offset: 3px;
+}
+.letter {
+  font:
+    400 22px Georgia,
+    serif;
+  color: var(--green);
+}
+.feedback {
+  margin-top: 20px;
+}
+.feedback p {
+  line-height: 1.8;
+}
+.checked h3 {
+  font:
+    400 28px Georgia,
+    serif;
+}
+.conclusion {
+  font:
+    400 19px/1.8 Georgia,
+    serif;
+  margin-bottom: 24px !important;
+}
+.mathComparison {
+  display: grid;
+  gap: 24px;
+}
+.mathComparison section {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.mathComparison h3 {
+  font:
+    400 23px/1.4 Georgia,
+    serif;
+}
+.mathComparison section > p:not(.equation),
+.transfer {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.equation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin: 18px 0 !important;
+  font:
+    400 clamp(22px, 2.6vw, 29px)/1.6 Georgia,
+    serif;
+}
+.equation strong {
+  color: var(--green);
+  font-weight: 400;
+}
+.fraction {
+  display: grid;
+  text-align: center;
+}
+.fraction span {
+  padding: 2px 12px;
+}
+.fraction span + span {
+  border-top: 1px solid var(--ink);
+}
+.transfer {
+  margin-top: 26px !important;
+  border-left: 2px solid #879d65;
+  padding-left: 18px;
+}
+.review {
+  padding: 12px 0 0;
+  border-top: 1px solid var(--line);
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (max-width: 800px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .entryModel {
+    padding: 12px 0;
+  }
+  .allowance {
+    max-width: 600px;
+    margin: auto;
+  }
+  .scenario {
+    max-width: 600px;
+    margin: 16px auto 0 !important;
+  }
+}
+@media (max-width: 420px) {
+  .allowance {
+    padding: 20px 8px 12px;
+  }
+  .quantities {
+    grid-template-columns: 1fr;
+  }
+  .record dd {
+    font-size: 24px;
+  }
+  .scale .small {
+    font-size: 21px;
+  }
+  .role {
+    font-size: 22px;
+  }
+  .amount {
+    font-size: 35px;
+  }
+  .workshop .heading h2 {
+    font-size: 32px;
+  }
+  .response h3 {
+    font-size: 28px;
+  }
+}
+.completion {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 12px 0 40px;
+  /* The inherited inspection remeasures its floating/companion slot on scroll.
+     Do not let browser anchoring chase that temporary layout while tapping. */
+  overflow-anchor: none;
+}
+.recapGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+  margin: 24px 0;
+}
+.recapModel,
+.recapGrid > .checked {
+  min-width: 0;
+  border: 1px solid #c5d0b7;
+  border-radius: 14px;
+  padding: 22px;
+  background: #eef2e5;
+}
+.recapGrid > .checked {
+  background: #fbefdf;
+  border-color: #dcc6ae;
+}
+.recapModel .allowance {
+  padding: 12px 0;
+  background: transparent;
+}
+.completion .checked h3 {
+  font: inherit;
+  font-size: 20px;
+  font-weight: 700;
+}
+.recordedReason,
+.reflection {
+  font-size: 14px;
+  line-height: 1.8;
+  margin-top: 12px !important;
+}
+.contrast {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  margin: 24px 0;
+}
+.contrast strong {
+  display: block;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(30px, 4vw, 42px);
+  color: var(--green);
+  margin: 8px 0;
+}
+.synthesis {
+  margin-top: 28px;
+}
+.synthesisHeading {
+  max-width: 760px;
+  margin-bottom: 20px;
+}
+.workshop .synthesisHeading h3 {
+  font:
+    400 clamp(27px, 3vw, 36px)/1.25 Georgia,
+    serif;
+  margin: 8px 0 12px;
+}
+.synthesis p {
+  font-size: 14px;
+  line-height: 1.8;
+}
+.referenceChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  margin: 0 0 20px;
+}
+.referenceChoices legend {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.referenceChoices label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 12px 18px;
+  border: 1px solid #9cac85;
+  border-radius: 8px;
+  background: #f3f0e5;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+.referenceChoices label:has(input:checked) {
+  background: #e2e9d5;
+  border-color: var(--green);
+  box-shadow: inset 0 -3px var(--green);
+}
+.referenceChoices input {
+  accent-color: var(--green);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+.referenceChoices label:has(input:focus-visible) {
+  outline: 3px solid #a34c15;
+  outline-offset: 4px;
+}
+.connectionGrid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  border: 1px solid #c5d0b7;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #eef2e5;
+}
+.connectionModel {
+  min-width: 0;
+  padding: 24px;
+  margin: 0;
+}
+.connectionModel figcaption strong,
+.connectionModel figcaption span {
+  display: block;
+}
+.connectionModel figcaption span {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 8px;
+}
+.connectionModel svg {
+  display: block;
+  width: 100%;
+  margin: 18px 0 0;
+}
+.connectionModel text {
+  font:
+    400 20px Arial,
+    Helvetica,
+    sans-serif;
+  fill: var(--ink);
+}
+.referenceBar {
+  fill: #d5dfc3;
+  stroke: #4b5c39;
+  stroke-width: 2;
+}
+.addedBar {
+  fill: #f0ce75;
+  stroke: #755514;
+  stroke-width: 2;
+}
+.connectionModel .referenceBar {
+  transition: width 650ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+.movingAddition {
+  transition: transform 650ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+.connectionModel [data-reference-zero] {
+  transition: opacity 650ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+.connectionModel [data-motion-blocked] .referenceBar,
+.connectionModel [data-motion-blocked] .movingAddition,
+.connectionModel [data-motion-blocked] [data-reference-zero] {
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .connectionModel .referenceBar,
+  .movingAddition,
+  .connectionModel [data-reference-zero] {
+    transition: none;
+  }
+}
+.connectionModel .addedLabel {
+  fill: #755514;
+  font-weight: 700;
+}
+.modelKey {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  font-size: 12px;
+}
+.modelKey span::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  background: #d5dfc3;
+  border: 1px solid #4b5c39;
+}
+.modelKey span + span::before {
+  background: #f0ce75;
+  border-color: #755514;
+}
+.connectionReading {
+  min-width: 0;
+  background: #fbefdf;
+  border-left: 1px solid #dcc6ae;
+  padding: 24px;
+}
+.synthesis .connectionQuestion {
+  font:
+    400 25px/1.4 Georgia,
+    serif;
+  margin: 12px 0 20px;
+}
+.connectionResult {
+  min-height: 150px;
+  margin-top: 20px;
+  border-top: 1px solid #dcc6ae;
+  padding-top: 16px;
+}
+.connectionResult > strong {
+  display: block;
+  font:
+    400 42px/1.2 Georgia,
+    serif;
+  color: var(--green);
+  margin-bottom: 10px;
+}
+.referenceRule {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr 1fr;
+  gap: 24px;
+  padding: 24px;
+  background: #f3f0e5;
+  border: 1px solid #d6d6bf;
+  border-radius: 14px;
+  margin-top: 20px;
+}
+.referenceRule > div {
+  border-left: 2px solid #9cac85;
+  padding-left: 14px;
+  min-width: 0;
+}
+.referenceRule span,
+.referenceRule strong {
+  display: block;
+}
+.referenceRule span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+.referenceRule strong {
+  font:
+    400 22px/1.4 Georgia,
+    serif;
+  margin-bottom: 10px;
+}
+.storyScreen {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  background: #102722;
+  border: 1px solid #9c91644d;
+  overflow: hidden;
+}
+.storyScreen .transferStory {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  min-height: 75vh;
+}
+.storyScreenTitle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.storyScreenActions {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 20px 28px;
+  border-top: 1px solid #eed29626;
+}
+.workshop .storyScreenActions button {
+  color: #fff4d9;
+  background: transparent;
+  font-weight: 400;
+  min-height: 44px;
+}
+.storyScreenTransition {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+  animation: story-curtain 1300ms cubic-bezier(0.76, 0, 0.24, 1) both;
+  background: #102722;
+}
+.storyScreenTransition span {
+  position: absolute;
+  inset: 10% -15%;
+  border: 1px solid #eed29680;
+  border-radius: 50%;
+  transform: rotate(-32deg);
+  box-shadow:
+    0 0 0 38px #eed29608,
+    0 0 0 78px #eed29605;
+  animation: story-aperture 1200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.storyScreenTransition span:nth-child(2) {
+  inset: 24% 6%;
+  animation-delay: 80ms;
+}
+.storyScreenTransition span:nth-child(3) {
+  inset: 37% 24%;
+  animation-delay: 160ms;
+}
+.storyInvitationPanel {
+  margin-top: 36px;
+  padding: clamp(28px, 5vw, 56px);
+  background: #19352c;
+  color: #fff4d9;
+  border: 1px solid #9c916466;
+}
+.workshop .storyInvitationPanel h3,
+.workshop .storyInvitationPanel h3 em,
+.workshop .storyInvitation h3 em {
+  color: #fff4d9;
+}
+.workshop .storyInvitationPanel h3 {
+  font:
+    400 clamp(32px, 4vw, 48px)/1.15 Georgia,
+    serif;
+  margin: 18px 0;
+}
+.storyInvitationPanel :global(.eyebrow) {
+  color: #eed296;
+}
+.storyInvitationPanel p {
+  color: #e3e2d5;
+  margin-bottom: 24px;
+}
+.workshop .storyInvitationPanel button {
+  background: transparent;
+  color: #fff4d9;
+  border: 1px solid #eed29680;
+  box-shadow: none;
+}
+.storyProp {
+  transform-box: fill-box;
+  transform-origin: 50% 85%;
+  animation: story-prop-settle 1600ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.storyCinema[data-object="bill"] .storyProp {
+  animation-name: story-paper-flutter;
+}
+.storyCinema[data-object="savings"] .storyProp {
+  animation-name: story-jar-settle;
+}
+.storyCinema[data-revealed][data-object="price"] .storyDetail {
+  transform-box: fill-box;
+  transform-origin: 5% 45%;
+  animation: story-tag-swing 1500ms ease-out both;
+}
+.storyCinema[data-revealed][data-object="savings"] .storyDetail {
+  animation: story-first-deposit 1200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.storyTape {
+  fill: #e5bc70;
+  stroke: #ab874c;
+  stroke-width: 1;
+}
+.storyGlass {
+  fill: none;
+  stroke: #c8d9c4;
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.storyModelLane {
+  fill: #eed29606;
+  stroke: #eed29626;
+}
+.storyScreen[data-blocked] *,
+.transferStory[data-blocked] * {
+  animation: none !important;
+}
+.storyScreen[data-blocked] .storyScreenTransition {
+  display: none;
+}
+.storyModelBadge {
+  fill: #dfd9b8;
+}
+.storyBars .storyModelLabel {
+  fill: #19352c;
+  font:
+    700 13px Arial,
+    sans-serif;
+  letter-spacing: 1px;
+}
+@keyframes story-curtain {
+  0%,
+  15% {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+  }
+  65% {
+    clip-path: polygon(0 0, 100% 0, 80% 48%, 0 74%);
+  }
+  100% {
+    clip-path: polygon(0 0, 100% 0, 100% 0, 0 0);
+    visibility: hidden;
+  }
+}
+@keyframes story-aperture {
+  from {
+    transform: rotate(-55deg) scale(0.65);
+  }
+  to {
+    transform: rotate(12deg) scale(1.3);
+  }
+}
+@keyframes story-prop-settle {
+  0% {
+    transform: translateY(14px) rotate(-7deg);
+  }
+  45% {
+    transform: translateY(-5px) rotate(3deg);
+  }
+  75% {
+    transform: rotate(-1deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes story-paper-flutter {
+  0% {
+    transform: translateY(-12px) rotate(8deg) skewY(-3deg);
+  }
+  45% {
+    transform: translateY(3px) rotate(-4deg);
+  }
+  75% {
+    transform: rotate(2deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes story-jar-settle {
+  0% {
+    transform: translateY(-12px) rotate(-4deg);
+  }
+  45% {
+    transform: scale(1.025, 0.97) rotate(2deg);
+  }
+  70% {
+    transform: translateY(-3px) rotate(-1deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes story-tag-swing {
+  0% {
+    transform: rotate(-16deg);
+  }
+  35% {
+    transform: rotate(10deg);
+  }
+  65% {
+    transform: rotate(-5deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes story-first-deposit {
+  0% {
+    transform: translateY(-52px) rotate(-8deg);
+  }
+  65% {
+    transform: translateY(3px) rotate(3deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .storyScreenTransition {
+    display: none;
+  }
+  .storyScreen *,
+  .storyCinema .storyProp,
+  .storyCinema[data-revealed] .storyDetail {
+    animation: none !important;
+  }
+}
+@media (forced-colors: active) {
+  .storyScreen,
+  .storyInvitationPanel {
+    background: Canvas;
+    color: CanvasText;
+  }
+  .storyScreenTransition {
+    display: none;
+  }
+  .storyModelBadge {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+  .storyBars .storyModelLabel {
+    fill: CanvasText;
+  }
+  .storyTape {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+  .storyGlass {
+    stroke: CanvasText;
+  }
+  .workshop .storyScreenActions button,
+  .workshop .storyInvitationPanel h3,
+  .workshop .storyInvitationPanel h3 em,
+  .storyInvitationPanel p {
+    color: CanvasText;
+  }
+}
+.transferStory {
+  --story-cream: #fff4d9;
+  --story-gold: #eed296;
+  margin-top: 40px;
+  position: relative;
+  border: 1px solid #9c91644d;
+  border-radius: 4px;
+  color: var(--story-cream);
+  background:
+    radial-gradient(
+      ellipse at 50% 38%,
+      #bca26326 0%,
+      #61724b18 34%,
+      transparent 68%
+    ),
+    linear-gradient(145deg, #20392f, #102722 70%, #142b26);
+  overflow: hidden;
+  isolation: isolate;
+}
+.storyAtmosphere {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+  fill: none;
+  stroke: #edd49a;
+  stroke-width: 0.65;
+  opacity: 0.14;
+  mask-image: radial-gradient(ellipse at 50% 45%, #000 15%, transparent 68%);
+}
+.storyAtmosphere g {
+  fill: #edd49a;
+}
+.transferStory[data-finale] .storyAtmosphere {
+  opacity: 0.3;
+}
+.storyInvitation {
+  padding: clamp(32px, 6vw, 80px);
+  min-height: 340px;
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+.storyInvitation > div {
+  flex: 1;
+}
+.workshop .storyInvitation h3,
+.workshop .storyScene h3 {
+  font:
+    400 clamp(36px, 5vw, 64px)/1.08 Georgia,
+    serif;
+  letter-spacing: -0.035em;
+  color: var(--story-cream);
+  margin: 16px 0 20px;
+}
+.storyInvitation button {
+  flex-shrink: 0;
+}
+.storyProgress {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  padding: 24px 20px 0;
+}
+.storyProgress button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 8px 2px;
+  font:
+    400 12px/1.4 Arial,
+    sans-serif;
+  color: #dfdccb;
+  cursor: pointer;
+}
+.storyProgress button span {
+  display: inline;
+  font-size: 11px;
+  color: var(--story-gold);
+  margin-right: 8px;
+}
+.storyProgress button[aria-current] {
+  color: var(--story-cream);
+  box-shadow: inset 0 -1px var(--story-gold);
+}
+.storyScene {
+  padding: 40px clamp(24px, 5vw, 64px) 32px;
+}
+.storyScene > header {
+  max-width: 620px;
+  margin: 0 auto 24px;
+  text-align: center;
+}
+.storyCinema {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  align-items: center;
+  min-height: 340px;
+  padding: 16px 0;
+  background: none;
+  position: relative;
+}
+.storyObject {
+  width: 100%;
+  max-width: 440px;
+  grid-row: span 2;
+  justify-self: center;
+  overflow: visible;
+  filter: drop-shadow(0 22px 18px #05171288);
+  animation: story-camera 1500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.storyWorld circle {
+  fill: #e8d29a0c;
+  stroke: #e8d29a30;
+}
+.storyWorld ellipse {
+  fill: #f1d69a12;
+}
+.storyWorld path {
+  fill: none;
+  stroke: #e8d29a24;
+}
+.storySide {
+  fill: #9a7844;
+  stroke: #715a37;
+}
+.storyTop {
+  fill: #efd4a1;
+  stroke: #ac8f5b;
+}
+.storyObject text {
+  font:
+    700 17px Arial,
+    sans-serif;
+  fill: var(--ink);
+}
+.storyPaper {
+  fill: #fffaf0;
+  stroke: #718253;
+  stroke-width: 2;
+}
+.storyGold {
+  fill: #f0ce75;
+  stroke: #755514;
+  stroke-width: 2;
+}
+.storyOutline {
+  fill: none;
+  stroke: #718253;
+  stroke-width: 2;
+}
+.storyShadow {
+  fill: #091a16;
+}
+.storyAmounts {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 8px 12px 20px;
+}
+.storyAmounts div {
+  display: grid;
+  gap: 8px;
+}
+.storyAmounts span {
+  font-size: 12px;
+}
+.storyAmounts strong {
+  font:
+    400 clamp(28px, 3.3vw, 42px)/1.2 Georgia,
+    serif;
+}
+.storyBars {
+  width: 100%;
+  overflow: visible;
+}
+.storyBars text {
+  fill: var(--story-cream);
+  font:
+    400 19px Arial,
+    sans-serif;
+}
+.storyBars .storyScale {
+  font-size: 13px;
+}
+.storyRemoved {
+  fill: #f5e7c8;
+  stroke: #906519;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+.storyChange {
+  opacity: 0;
+  transform: scaleX(0);
+}
+.storyTeaching {
+  padding: 24px 0 8px;
+  border-top: 1px solid #e8d29a26;
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+}
+.storyTeaching strong {
+  display: block;
+  font:
+    400 clamp(28px, 3.7vw, 44px)/1.15 Georgia,
+    serif;
+  color: var(--story-gold);
+  margin-bottom: 12px;
+}
+.storyTeaching button {
+  margin-top: 16px;
+}
+.workshop .transferStory .storyEquation {
+  font:
+    400 clamp(16px, 2vw, 20px)/1.5 Georgia,
+    serif;
+  margin-top: 14px;
+}
+.storyNavigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 32px;
+  background: transparent;
+  border-top: 0;
+}
+.storyNavigation > span {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.storyConnections {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  max-width: 760px;
+  margin: 56px auto 0;
+  position: relative;
+}
+.storyConnections > div {
+  border-top: 1px solid #e8d29a66;
+  padding: 28px 0 16px;
+  text-align: center;
+  animation: story-arrive 1000ms 200ms both;
+}
+.storyConnections > div:nth-child(2) {
+  animation-delay: 340ms;
+}
+.storyConnections > div:nth-child(3) {
+  animation-delay: 480ms;
+}
+.storyConnections > div > p:first-of-type {
+  font:
+    400 clamp(32px, 4vw, 48px)/1.3 Georgia,
+    serif;
+  margin: 14px 0;
+}
+.storyClosing {
+  grid-column: 1 / -1;
+  padding: 24px 0;
+  text-align: center;
+}
+.storyClosing span {
+  display: block;
+  color: var(--story-gold);
+  font:
+    italic clamp(28px, 3.8vw, 42px)/1.4 Georgia,
+    serif;
+  margin-top: 20px;
+}
+.transferStory :global(.eyebrow) {
+  color: var(--story-gold);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+.workshop .transferStory p {
+  color: #e3e2d5;
+  line-height: 1.65;
+}
+.transferStory :global(button.secondary) {
+  background: #edcf8c08;
+  color: var(--story-cream);
+  border: 1px solid #edcf8c70;
+  border-radius: 2px;
+  box-shadow: none;
+  padding: 14px 22px;
+  font-weight: 400;
+  letter-spacing: 0.025em;
+  transition:
+    background 250ms ease,
+    border-color 250ms ease;
+}
+.transferStory :global(button.text-button) {
+  color: var(--story-cream);
+  background: transparent;
+  box-shadow: none;
+  font-weight: 400;
+}
+.transferStory button:enabled:hover {
+  background: #edcf8c14;
+  border-color: var(--story-gold);
+}
+.transferStory button:focus-visible {
+  outline: 2px solid var(--story-gold);
+  outline-offset: 4px;
+}
+.workshop .transferStory button:disabled {
+  background: transparent;
+  color: #b3b9ae;
+  opacity: 0.55;
+  box-shadow: none;
+}
+.storyTeaching :global(button.secondary) {
+  border-width: 0 0 1px;
+  padding: 12px 4px;
+  background: transparent;
+}
+.transferStory .storyBars .bracket,
+.transferStory .storyBars .zero {
+  stroke: var(--story-gold);
+}
+.transferStory[data-finale] .storyScene {
+  padding-top: 100px;
+  padding-bottom: 72px;
+  background: none;
+}
+.transferStory[data-finale] .storyScene > header {
+  max-width: 800px;
+}
+.transferStory[data-finale] .storyScene > header::before {
+  content: "";
+  display: block;
+  width: 1px;
+  height: 64px;
+  margin: 0 auto 32px;
+  background: linear-gradient(transparent, #edcf8c99);
+}
+.transferStory[data-finale] h3 {
+  font-size: clamp(44px, 6.5vw, 88px);
+  text-wrap: balance;
+  text-shadow: 0 4px 32px #0a1e1880;
+}
+@keyframes story-camera {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.9) rotate(-2deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes story-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes story-unfold {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+@keyframes story-detail {
+  from {
+    transform: translateY(-18px);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.storyScene {
+  animation: story-arrive 420ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+.storyCinema[data-revealed] .storyChange {
+  animation: story-unfold 850ms 180ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+.storyCinema[data-revealed] .storyDetail {
+  animation: story-detail 650ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+.storyCinema[data-revealed] .storyShadow {
+  animation: story-arrive 650ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+.transferStory[data-blocked] *,
+.transferStory[data-blocked] .storyChange {
+  animation: none;
+}
+.transferStory[data-blocked] [data-revealed] .storyChange {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .transferStory button {
+    transition: none;
+  }
+  .storyObject,
+  .storyConnections > div,
+  .storyScene,
+  .storyCinema[data-revealed] .storyChange,
+  .storyCinema[data-revealed] .storyDetail,
+  .storyCinema[data-revealed] .storyShadow {
+    animation: none;
+  }
+  .storyCinema[data-revealed] .storyChange {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (max-width: 700px) {
+  .storyInvitation {
+    display: block;
+    padding: 20px;
+  }
+  .storyInvitation button {
+    margin-top: 18px;
+  }
+  .storyProgress {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .storyProgress button {
+    font-size: 10px;
+  }
+  .storyCinema,
+  .storyConnections {
+    grid-template-columns: 1fr;
+  }
+  .storyCinema {
+    padding: 0;
+  }
+  .storyObject {
+    max-width: 300px;
+    grid-row: auto;
+  }
+  .storyScene {
+    padding: 28px 20px;
+  }
+  .storyConnections {
+    gap: 0;
+    margin-top: 32px;
+  }
+  .storyConnections > div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    text-align: left;
+    align-items: center;
+    gap: 4px 16px;
+    padding: 20px 0;
+  }
+  .storyConnections > div > p:first-of-type {
+    grid-column: 2;
+    grid-row: span 2;
+    text-align: right;
+    margin: 0;
+  }
+  .transferStory[data-finale] .storyScene {
+    padding: 48px 24px 24px;
+  }
+  .transferStory[data-finale] .storyScene > header::before {
+    height: 40px;
+    margin-bottom: 24px;
+  }
+  .storyAmounts {
+    justify-content: center;
+  }
+  .storyBars text {
+    font-size: 24px;
+  }
+  .storyBars .storyScale {
+    font-size: 17px;
+  }
+  .storyNavigation {
+    flex-wrap: wrap;
+    padding: 16px;
+    gap: 10px;
+  }
+  /* The shared inspector probes floating placement on scroll. On narrow A04
+     it always uses its in-flow companion, including during that measurement. */
+  .workshop :global(.story-callout[data-placement]) {
+    position: relative;
+    left: auto;
+    top: auto;
+  }
+  .recapGrid,
+  .contrast {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .connectionGrid,
+  .referenceRule {
+    grid-template-columns: 1fr;
+  }
+  .connectionReading {
+    border-left: 0;
+    border-top: 1px solid #dcc6ae;
+  }
+  .recapModel,
+  .recapGrid > .checked,
+  .connectionModel,
+  .connectionReading {
+    padding: 18px;
+  }
+  .connectionResult {
+    min-height: 0;
+  }
+  .connectionModel text {
+    font-size: 25px;
+  }
+}
+@media (forced-colors: active) {
+  .storyAtmosphere {
+    display: none;
+  }
+  .transferStory :global(button.secondary),
+  .transferStory :global(button.text-button) {
+    color: ButtonText;
+    border-color: ButtonText;
+  }
+  .transferStory {
+    --story-cream: CanvasText;
+    --story-gold: CanvasText;
+    background: Canvas;
+    color: CanvasText;
+  }
+  .synthesis .transferStory p,
+  .storyProgress button {
+    color: CanvasText;
+  }
+  .storySide,
+  .storyTop,
+  .storyPaper,
+  .storyGold,
+  .storyShadow,
+  .storyRemoved {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+  .storyOutline {
+    stroke: CanvasText;
+  }
+  .storyObject text,
+  .storyBars text {
+    fill: CanvasText;
+  }
+  .storyProgress button[aria-current] {
+    outline: 2px solid Highlight;
+    outline-offset: -3px;
+  }
+  .newBar {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+  .zero,
+  .bracket,
+  .guide {
+    stroke: CanvasText;
+  }
+  .scale text {
+    fill: CanvasText;
+  }
+  .referenceBar,
+  .addedBar {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+  .connectionModel text {
+    fill: CanvasText;
+  }
+  .referenceChoices label:has(input:checked) {
+    outline: 2px solid Highlight;
+  }
+  .reasons label:has(input:checked) {
+    outline: 2px solid Highlight;
+  }
+}

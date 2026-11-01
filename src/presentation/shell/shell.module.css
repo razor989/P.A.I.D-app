@@ -25,6 +25,7 @@
     :not(
       [data-c04-track="C04-A02"] button,
       [data-c04-track="C04-A03"] button,
+      [data-c04-track="C04-A04"] button,
       [data-c04-track="C04-A01"][data-prepare-contract="v4"] button
     )
   ) {

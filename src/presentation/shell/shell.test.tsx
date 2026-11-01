@@ -16,6 +16,8 @@ it.each([
   ["C04-A04", "C04-A01", "C04-A01-elicit-engage-v4", false],
   ["C04-A02", "C04-A02", undefined, true],
   ["C04-A03", "C04-A03", undefined, true],
+  ["C04-A04", "C04-A04", undefined, true],
+  ["C04-A04", "C04-A03", undefined, false],
   ["C04-A03", "C04-A02", undefined, false],
 ] as const)(
   "bounds reference shell styling to the route and exact contract: %s / %s / %s",

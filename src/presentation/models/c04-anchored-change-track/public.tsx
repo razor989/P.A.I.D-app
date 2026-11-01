@@ -37,6 +37,22 @@ export type C04Action =
   | "NEXT_GUIDED_QUESTION"
   | "FINISH_ACTIVITY";
 export type C04Presentation = Readonly<{
+  transferRecord?:
+    | Readonly<{
+        primary: Readonly<Record<string, string>>;
+        reasoning: string;
+        feedback: Readonly<{ id: string; text: string }>;
+        outcome: "CONFIRMED" | "RECONSIDERATION";
+      }>
+    | undefined;
+  transfer?:
+    | Readonly<{
+        original: string | null;
+        next: string | null;
+        difference: string | null;
+        explained: boolean;
+      }>
+    | undefined;
   apply?:
     | Readonly<{
         original: string | null;
