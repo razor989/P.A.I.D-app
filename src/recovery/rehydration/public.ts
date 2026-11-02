@@ -1,4 +1,11 @@
 import { createC04RestoredActivityActor } from "@/engine/c04-activity-binding/public";
+import { createC03RestoredActivityActor } from "@/engine/c03-activity-binding/public";
+import { parseRecoveryCheckpointV3 } from "../checkpoint/public";
+import type { RecoveryCheckpointEnvelopeV3 } from "../checkpoint/public";
+import {
+  decodeC03CheckpointContext,
+  projectC03CheckpointV3,
+} from "../projection/public";
 import type { C04Restoration } from "@/engine/c04-activity-binding/public";
 import { parseRecoveryCheckpointV1 } from "../checkpoint/public";
 import type { RecoveryCheckpointEnvelopeV1 } from "../checkpoint/public";
@@ -354,5 +361,107 @@ export async function recoverReferenceCheckpointV2(
     return issueReferenceClassification(queue, {
       status: "UNUSABLE_CHECKPOINT_V2",
     });
+  }
+}
+
+type C03Actor = ReturnType<typeof createC03RestoredActivityActor>;
+export type RecoveryClassificationV3 =
+  | Readonly<{ status: "technical-failure-v3"; error: unknown }>
+  | Readonly<{ status: "NO_CHECKPOINT_V3" | "UNUSABLE_CHECKPOINT_V3" }>
+  | Readonly<{
+      status: "VALID_C03_CHECKPOINT_V3";
+      checkpoint: RecoveryCheckpointEnvelopeV3;
+      actor: C03Actor;
+    }>;
+const c03Claims = new WeakMap<
+  object,
+  { queue: ReadQueue; untouched: () => boolean; release: () => void }
+>();
+function issueC03Classification(
+  queue: ReadQueue,
+  value: RecoveryClassificationV3,
+): RecoveryClassificationV3 {
+  Object.freeze(value);
+  const actor = value.status === "VALID_C03_CHECKPOINT_V3" ? value.actor : null;
+  const snapshot = actor?.getSnapshot();
+  const work = actor
+    ? canonicalCheckpointJSON(projectC03CheckpointV3(actor))
+    : null;
+  let emitted = false;
+  const subscription = actor?.subscribe(() => {
+    emitted = true;
+  });
+  c03Claims.set(value, {
+    queue,
+    untouched: () => {
+      if (emitted || (actor && actor.getSnapshot() !== snapshot)) return false;
+      try {
+        return (
+          !actor ||
+          canonicalCheckpointJSON(projectC03CheckpointV3(actor)) === work
+        );
+      } catch {
+        return false;
+      }
+    },
+    release: () => subscription?.unsubscribe(),
+  });
+  return value;
+}
+export function claimRecoveryClassificationV3(
+  queue: ReadQueue,
+  value: unknown,
+): value is RecoveryClassificationV3 {
+  if (value === null || typeof value !== "object") return false;
+  const proof = c03Claims.get(value);
+  if (!proof || proof.queue !== queue) return false;
+  c03Claims.delete(value);
+  const untouched = proof.untouched();
+  proof.release();
+  return untouched;
+}
+/** Explicit source-bound C03 reconstruction; no Session dispatch or event replay. */
+export async function recoverC03CheckpointV3(
+  queue: ReadQueue,
+): Promise<RecoveryClassificationV3> {
+  let result: Awaited<ReturnType<ReadQueue["load"]>>;
+  try {
+    result = await queue.load();
+  } catch (error) {
+    return issueC03Classification(queue, {
+      status: "technical-failure-v3",
+      error,
+    });
+  }
+  if (result.status === "technical-failure")
+    return issueC03Classification(queue, {
+      status: "technical-failure-v3",
+      error: result.error,
+    });
+  if (result.checkpoint === null)
+    return issueC03Classification(queue, { status: "NO_CHECKPOINT_V3" });
+  let actor: C03Actor | undefined;
+  try {
+    const checkpoint = parseRecoveryCheckpointV3(result.checkpoint);
+    const data = checkpoint.checkpoint;
+    actor = createC03RestoredActivityActor({
+      activityId: data.activityId,
+      scenarioId: data.scenarioId,
+      context: decodeC03CheckpointContext(data),
+      model: data.model?.evidence ?? null,
+    });
+    if (
+      canonicalCheckpointJSON(projectC03CheckpointV3(actor)) !==
+      canonicalCheckpointJSON(data)
+    )
+      throw new TypeError("Reconstructed C03 work mismatch");
+    return issueC03Classification(queue, {
+      status: "VALID_C03_CHECKPOINT_V3",
+      checkpoint,
+      actor,
+    });
+  } catch {
+    actor?.stop();
+    return issueC03Classification(queue, { status: "UNUSABLE_CHECKPOINT_V3" });
   }
 }

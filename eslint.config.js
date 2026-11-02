@@ -292,6 +292,7 @@ export default tseslint.config(
       "engine/activity-machine/public",
       "engine/activity-runtime/public",
       "engine/c04-activity-binding/public",
+      "engine/c03-activity-binding/public",
     ]),
     files: ["src/recovery/projection/public.ts"],
   },
@@ -313,7 +314,11 @@ export default tseslint.config(
   {
     ...restriction(
       "recovery/rehydration",
-      ["engine/c04-activity-binding/public", "engine/activity-runtime/public"],
+      [
+        "engine/c04-activity-binding/public",
+        "engine/activity-runtime/public",
+        "engine/c03-activity-binding/public",
+      ],
       [
         {
           regex:
@@ -323,6 +328,14 @@ export default tseslint.config(
       ],
     ),
     files: ["src/recovery/rehydration/public.ts"],
+  },
+  // T061 bounded owner grant: exact integration test and actually used targets.
+  {
+    ...restriction("recovery/rehydration", [
+      "engine/c03-activity-binding/public",
+      "engine/activity-machine/public",
+    ]),
+    files: ["src/recovery/rehydration/c03.test.ts"],
   },
   {
     ...restriction(

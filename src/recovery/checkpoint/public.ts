@@ -8,6 +8,8 @@ import {
 } from "../projection/public";
 import type { C04CheckpointV1 } from "../projection/public";
 import type { C02ReferenceCheckpointV2 } from "../projection/public";
+import { validateC03CheckpointV3 } from "../projection/public";
+import type { C03CheckpointV3 } from "../projection/public";
 
 export type RecoveryCheckpointEnvelopeV1 = Readonly<{
   schemaVersion: 1;
@@ -97,4 +99,47 @@ export function parseRecoveryCheckpointV2(
 ): RecoveryCheckpointEnvelopeV2 {
   const value: unknown = JSON.parse(text);
   return validateRecoveryCheckpointV2(value);
+}
+
+/** C03 opt-in; V1/V2 bytes and dispatch remain untouched. */
+export type RecoveryCheckpointEnvelopeV3 = Readonly<{
+  schemaVersion: 3;
+  studyDefinitionRevision: typeof studyDefinitionRevision;
+  kind: "unfinished-activity";
+  checkpoint: C03CheckpointV3;
+}>;
+const envelopeV3 = z.strictObject({
+  schemaVersion: z.literal(3),
+  studyDefinitionRevision: z.literal(studyDefinitionRevision),
+  kind: z.literal("unfinished-activity"),
+  checkpoint: z.unknown(),
+});
+export function validateRecoveryCheckpointV3(
+  value: unknown,
+): RecoveryCheckpointEnvelopeV3 {
+  assertCheckpointData(value);
+  const parsed = envelopeV3.parse(value);
+  return Object.freeze({
+    ...parsed,
+    checkpoint: validateC03CheckpointV3(parsed.checkpoint),
+  });
+}
+export function createRecoveryCheckpointV3(
+  checkpoint: C03CheckpointV3,
+): RecoveryCheckpointEnvelopeV3 {
+  return validateRecoveryCheckpointV3({
+    schemaVersion: 3,
+    studyDefinitionRevision,
+    kind: "unfinished-activity",
+    checkpoint,
+  });
+}
+export function serializeRecoveryCheckpointV3(value: unknown): string {
+  return canonicalCheckpointJSON(validateRecoveryCheckpointV3(value));
+}
+export function parseRecoveryCheckpointV3(
+  text: string,
+): RecoveryCheckpointEnvelopeV3 {
+  const value: unknown = JSON.parse(text);
+  return validateRecoveryCheckpointV3(value);
 }

@@ -659,6 +659,7 @@ export type ActivityDefinition = Readonly<{
   modelSelection?: ModelSelectionDefinition;
   modelIntents?: ModelIntentDefinition;
   instructionalContinuation?: InstructionalContinuationPolicy;
+  c03Inspection?: "C03-A02-ordinary-day-exp02-v1";
   embeddedFloor?: C02FloorDefinition;
 }>;
 export type ActivityPorts = Readonly<{
@@ -735,7 +736,15 @@ function stageEngagement(
   });
 }
 
+const c03InspectionIssuers = new WeakSet<object>();
+function issueC03Inspection(ordinaryInspectedAtRevision: number | null) {
+  const evidence = Object.freeze({ ordinaryInspectedAtRevision });
+  c03InspectionIssuers.add(evidence);
+  return evidence;
+}
+
 export type ActivityContext = Readonly<{
+  c03Inspection?: Readonly<{ ordinaryInspectedAtRevision: number | null }>;
   c02Floor?: C02FloorState;
   activityId: ActivityId;
   position: Position;
@@ -1035,6 +1044,14 @@ export function instructionalContinueEligible(
       )
     )
       return false;
+    if (
+      definition.c03Inspection &&
+      context.position === "EXP-02" &&
+      (!context.c03Inspection ||
+        !c03InspectionIssuers.has(context.c03Inspection) ||
+        context.c03Inspection.ordinaryInspectedAtRevision === null)
+    )
+      return false;
     const policy = definition.instructionalContinuation;
     if (!("instructionalContinuation" in definition)) return true;
     if (!policy) return false;
@@ -1322,6 +1339,7 @@ export function validateActivityDefinition(
       ...("embeddedFloor" in value ? ["embeddedFloor"] : []),
       ...("modelSelection" in value ? ["modelSelection"] : []),
       ...("modelIntents" in value ? ["modelIntents"] : []),
+      ...("c03Inspection" in value ? ["c03Inspection"] : []),
       ...("instructionalContinuation" in value
         ? ["instructionalContinuation"]
         : []),
@@ -1332,6 +1350,28 @@ export function validateActivityDefinition(
   )
     throw new TypeError("Invalid activity definition");
   if ("responseStages" in value) validateStages(value.responseStages);
+  if (
+    "c03Inspection" in value &&
+    (value.c03Inspection !== "C03-A02-ordinary-day-exp02-v1" ||
+      value.activityId !== "C03-A02" ||
+      !fields(value.modelSelection, [
+        "modelId",
+        "scenarioId",
+        "initialSelectionId",
+        "selectionIds",
+        "allowedSelections",
+      ]) ||
+      value.modelSelection.modelId !== "C03-A02:Overtime Work Record" ||
+      value.modelSelection.scenarioId !== "C03-S02" ||
+      value.modelSelection.initialSelectionId !== "C03-S02-A" ||
+      !sameIntentState(value.modelSelection.selectionIds, [
+        "C03-S02-A",
+        "C03-S02-B",
+      ]) ||
+      !own(value.edges["EXP-02"]) ||
+      value.edges["EXP-02"].CONTINUE !== "EXP-03")
+  )
+    throw new TypeError("Invalid C03 inspection policy");
   if ("guidedPractice" in value) {
     const p = value.guidedPractice;
     const diagnostic =
@@ -1826,7 +1866,14 @@ function validateActivityRestoration(
     "checkedRevision",
     "feedbackRevision",
     "evaluation",
-    ...(definition.modelSelection ? ["model", "c04A02StageEngagement"] : []),
+    ...(definition.modelSelection
+      ? [
+          "model",
+          ...(definition.c03Inspection
+            ? ["c03Inspection"]
+            : ["c04A02StageEngagement"]),
+        ]
+      : []),
     ...(definition.responseStages ? stagingKeys : []),
     ...(definition.guidedPractice ? ["responseStage", "guidedRecords"] : []),
     ...(definition.terminalTeaching
@@ -1836,7 +1883,7 @@ function validateActivityRestoration(
   if (
     !fields(value, keys) ||
     value.activityId !== definition.activityId ||
-    !/^C04-A0[1-4]$/.test(value.activityId) ||
+    !/^C0[34]-A0[1-4]$/.test(value.activityId) ||
     value.origin !== null ||
     value.infoOrigin !== null
   )
@@ -1894,7 +1941,9 @@ function validateActivityRestoration(
   )
     reject();
   if (
-    (value.position.startsWith("EXP-") && value.activityId !== "C04-A02") ||
+    (value.position.startsWith("EXP-") &&
+      value.activityId !== "C04-A02" &&
+      value.activityId !== "C03-A02") ||
     (value.position === "POST_CONFIRMATION_EXPLANATION" &&
       value.activityId !== "C04-A04")
   )
@@ -1976,17 +2025,40 @@ function validateActivityRestoration(
       !definition.modelSelection.selectionIds.includes(m.value.selectionId)
     )
       reject();
-    validateC04A02StageEngagementV1(value.c04A02StageEngagement);
-    const e = value.c04A02StageEngagement!;
-    if (
-      m!.revision <
-        Number(e["EXP-02"]["C04-S02-A"]) + Number(e["EXP-03"]["C04-S02-B"]) ||
-      (m!.revision === 0 &&
-        m!.value.selectionId !==
-          definition.modelSelection.initialSelectionId) ||
-      (value.position === "ENTRY" && m!.revision !== 0)
-    )
-      reject();
+    if (definition.c03Inspection) {
+      const e = value.c03Inspection;
+      if (
+        !fields(e, ["ordinaryInspectedAtRevision"]) ||
+        !e ||
+        !(
+          e.ordinaryInspectedAtRevision === null ||
+          (rev(e.ordinaryInspectedAtRevision) &&
+            e.ordinaryInspectedAtRevision > 0 &&
+            e.ordinaryInspectedAtRevision <= m!.revision)
+        ) ||
+        (value.position === "ENTRY" &&
+          (m!.revision !== 0 || e.ordinaryInspectedAtRevision !== null)) ||
+        (e.ordinaryInspectedAtRevision === null && m!.revision !== 0) ||
+        (e.ordinaryInspectedAtRevision === m!.revision &&
+          m!.value.selectionId !== "C03-S02-A") ||
+        (!["ENTRY", "EXP-01", "EXP-02"].includes(value.position) &&
+          e.ordinaryInspectedAtRevision === null) ||
+        (m!.revision === 0 && m!.value.selectionId !== "C03-S02-A")
+      )
+        reject();
+    } else {
+      validateC04A02StageEngagementV1(value.c04A02StageEngagement);
+      const e = value.c04A02StageEngagement!;
+      if (
+        m!.revision <
+          Number(e["EXP-02"]["C04-S02-A"]) + Number(e["EXP-03"]["C04-S02-B"]) ||
+        (m!.revision === 0 &&
+          m!.value.selectionId !==
+            definition.modelSelection.initialSelectionId) ||
+        (value.position === "ENTRY" && m!.revision !== 0)
+      )
+        reject();
+    }
   }
   const policy = definition.responseStages;
   if (definition.guidedPractice)
@@ -2108,10 +2180,18 @@ function validateActivityRestoration(
             ...value.model,
             value: Object.freeze({ ...value.model.value }),
           }),
-          c04A02StageEngagement: stageEngagement(
-            value.c04A02StageEngagement!["EXP-02"]["C04-S02-A"],
-            value.c04A02StageEngagement!["EXP-03"]["C04-S02-B"],
-          ),
+          ...(definition.c03Inspection
+            ? {
+                c03Inspection: issueC03Inspection(
+                  value.c03Inspection!.ordinaryInspectedAtRevision,
+                ),
+              }
+            : {
+                c04A02StageEngagement: stageEngagement(
+                  value.c04A02StageEngagement!["EXP-02"]["C04-S02-A"],
+                  value.c04A02StageEngagement!["EXP-03"]["C04-S02-B"],
+                ),
+              }),
         }
       : {}),
     ...(policy
@@ -3567,6 +3647,9 @@ export function createActivityMachine(
         ...(activityId === "C04-A02"
           ? { c04A02StageEngagement: stageEngagement(false, false) }
           : {}),
+        ...(definition.c03Inspection
+          ? { c03Inspection: issueC03Inspection(null) }
+          : {}),
         position: "ENTRY",
         origin: null,
         infoOrigin: null,
@@ -3674,8 +3757,20 @@ export function createActivityMachine(
                 adapter!.select(previous.value, event.selectionId),
                 event.selectionId,
               );
-              if (!value || value.state === previous.value.state) return {};
+              const inspected =
+                !!definition.c03Inspection &&
+                context.position === "EXP-02" &&
+                event.selectionId === "C03-S02-A" &&
+                context.c03Inspection?.ordinaryInspectedAtRevision === null;
+              if (
+                !value ||
+                (value.state === previous.value.state && !inspected)
+              )
+                return {};
               return {
+                ...(inspected
+                  ? { c03Inspection: issueC03Inspection(previous.revision + 1) }
+                  : {}),
                 ...(context.c04A02StageEngagement
                   ? {
                       c04A02StageEngagement: stageEngagement(

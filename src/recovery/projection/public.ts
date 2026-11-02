@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  inspectC03RecoveryActor,
+  validateC03RecoveryWork,
+} from "@/engine/c03-activity-binding/public";
 import { ExactDecimal, isLearnerResponse } from "@/core/public";
 import type { LearnerResponse } from "@/core/public";
 import {
@@ -225,6 +229,129 @@ const activitySchema = z.strictObject({
     .optional(),
 });
 export type C04CheckpointV1 = z.infer<typeof activitySchema>;
+
+/** Explicit C03 durable work; no computed model truth is persisted. */
+const c03Schema = z.strictObject({
+  competencyId: z.literal("C03"),
+  activityId: z.enum(["C03-A01", "C03-A02", "C03-A03", "C03-A04"]),
+  scenarioId: z.enum(["C03-S01", "C03-S02", "C03-S03", "C03-S04"]),
+  responseContract: z.strictObject({ id: label, version: z.literal(1) }),
+  position: z.enum([
+    "ENTRY",
+    "EXP-01",
+    "EXP-02",
+    "EXP-03",
+    "EXP-04",
+    "EXP-05",
+    "ACTIVE",
+    "REVISION",
+    "CONFIRMATION",
+    "RECONSIDERATION",
+  ]),
+  response: responseSchema.nullable(),
+  responseRevision: revision,
+  hasChecked: z.boolean(),
+  checkedResponse: responseSchema.nullable(),
+  checkedRevision: revision.nullable(),
+  feedbackRevision: revision.nullable(),
+  evaluation: activitySchema.shape.evaluation,
+  model: z
+    .strictObject({
+      evidence: z.strictObject({
+        activityId: z.literal("C03-A02"),
+        scenarioId: z.literal("C03-S02"),
+        selectedChildId: z.enum(["C03-S02-A", "C03-S02-B"]),
+      }),
+      revision,
+      inspection: z.strictObject({
+        ordinaryInspectedAtRevision: revision.nullable(),
+      }),
+    })
+    .nullable(),
+});
+export type C03CheckpointV3 = z.infer<typeof c03Schema>;
+
+/** Decode semantic work only; source composition reissues the opaque model. */
+export function decodeC03CheckpointContext(
+  data: C03CheckpointV3,
+): ActivityContext {
+  return {
+    activityId: data.activityId,
+    position: data.position,
+    origin: null,
+    infoOrigin: null,
+    response: data.response === null ? null : decodeResponse(data.response),
+    checkedResponse:
+      data.checkedResponse === null
+        ? null
+        : decodeResponse(data.checkedResponse),
+    responseRevision: data.responseRevision,
+    checkedRevision: data.checkedRevision,
+    feedbackRevision: data.feedbackRevision,
+    hasChecked: data.hasChecked,
+    evaluation: data.evaluation,
+    ...(data.model
+      ? {
+          model: {
+            modelId: "C03-A02:Overtime Work Record",
+            revision: data.model.revision,
+            value: {
+              selectionId: data.model.evidence.selectedChildId,
+              state: null,
+            },
+          },
+          c03Inspection: data.model.inspection,
+        }
+      : {}),
+  };
+}
+
+export function validateC03CheckpointV3(value: unknown): C03CheckpointV3 {
+  assertCheckpointData(value);
+  const data = c03Schema.parse(value);
+  if (
+    data.responseContract.id !==
+    "C03 condition-linked overtime response semantics (task-local reference)"
+  )
+    fail("C03 response contract mismatch");
+  if ((data.activityId === "C03-A02") !== (data.model !== null))
+    fail("C03 model membership mismatch");
+  validateC03RecoveryWork({
+    activityId: data.activityId,
+    scenarioId: data.scenarioId,
+    context: decodeC03CheckpointContext(data),
+    model: data.model?.evidence ?? null,
+  });
+  return frozen(data);
+}
+
+export function projectC03CheckpointV3(
+  actor: Parameters<typeof inspectC03RecoveryActor>[0],
+): C03CheckpointV3 {
+  const source = inspectC03RecoveryActor(actor);
+  const c = source.context;
+  return validateC03CheckpointV3({
+    competencyId: "C03",
+    activityId: source.activityId,
+    scenarioId: source.scenarioId,
+    responseContract: source.responseContract,
+    position: c.position,
+    response: encodeResponse(c.response),
+    checkedResponse: encodeResponse(c.checkedResponse),
+    responseRevision: c.responseRevision,
+    checkedRevision: c.checkedRevision,
+    feedbackRevision: c.feedbackRevision,
+    hasChecked: c.hasChecked,
+    evaluation: c.evaluation,
+    model: source.model
+      ? {
+          evidence: source.model,
+          revision: c.model!.revision,
+          inspection: c.c03Inspection,
+        }
+      : null,
+  });
+}
 
 // D061/S6–S8: reference transport only, not production response/model IDs.
 const c02Roles = [
