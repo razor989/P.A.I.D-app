@@ -389,11 +389,15 @@ export default tseslint.config(
     ),
     files: ["src/session/completion/public.test.ts"],
   },
-  // D177/S5: the two actually used T033 test collaborators only.
+  // D177/S5 plus T045 TASK §5: exact public legacy-runtime test collaborator.
   {
     ...restriction(
       "session/navigation",
-      ["study/catalog/public", "engine/activity-machine/public"],
+      [
+        "study/catalog/public",
+        "engine/activity-machine/public",
+        "engine/c04-activity-binding/public",
+      ],
       [
         {
           regex: "^\\.\\./\\.\\./(?:engine|study)/",
@@ -455,6 +459,15 @@ export default tseslint.config(
     ],
     [
       "c04-reference-projection.ts",
+      [
+        "study/competencies/c04/public",
+        "competencies/c04-percentage-change/model/public",
+        "engine/semantic-frame/public",
+      ],
+    ],
+    [
+      "c04-transfer-projection.ts",
+      // T045 TASK §5: existing public projection capabilities; no exposure change.
       [
         "study/competencies/c04/public",
         "competencies/c04-percentage-change/model/public",

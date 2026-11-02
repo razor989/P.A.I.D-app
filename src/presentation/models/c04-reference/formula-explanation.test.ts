@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createFormulaExplanation, formulaFrame } from "./formula-explanation";
 import { formulaChapters } from "./formula-content";
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   document.body.replaceChildren();
@@ -28,11 +29,12 @@ it("projects every cue independently and preserves the percentage equality disti
     );
 });
 function setup(reduced = true) {
-  vi.stubGlobal("matchMedia", () => ({
+  const motion = {
     matches: reduced,
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
-  }));
+  };
+  vi.stubGlobal("matchMedia", () => motion);
   const host = document.createElement("div");
   document.body.append(host);
   const announce = vi.fn(),
@@ -43,7 +45,7 @@ function setup(reduced = true) {
     input.value = String(time);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   };
-  return { host, story, seek, announce };
+  return { host, story, seek, announce, motion };
 }
 it("builds from an intact original, keeps the new total separate and reconstructs earlier states", () => {
   const { host, story, seek } = setup();
@@ -98,11 +100,16 @@ it("retains identity, pauses on inspection, restores focus, blocks and cleans up
       "cancelAnimationFrame",
     ],
   });
-  const { host, story } = setup(false),
+  const removeListener = vi.spyOn(document, "removeEventListener");
+  const { host, story, seek, motion } = setup(false),
     svg = host.querySelector(".story-salary"),
     range = host.querySelector("input");
+  // Seek covers absolute-time reconstruction above. Exercise real scheduled
+  // playback across the chapter boundary without redrawing 248 jsdom frames.
+  seek(11.9);
   host.querySelector<HTMLButtonElement>('[data-story="play"]')!.click();
-  vi.advanceTimersByTime(12400);
+  expect(vi.getTimerCount()).toBe(1);
+  vi.advanceTimersByTime(500);
   expect(host.querySelector(".formula-story")!.getAttribute("data-time")).toBe(
     "12.400",
   );
@@ -144,5 +151,18 @@ it("retains identity, pauses on inspection, restores focus, blocks and cleans up
   story.detach();
   expect(vi.getTimerCount()).toBe(0);
   expect(host.children).toHaveLength(0);
+  expect(motion.removeEventListener).toHaveBeenCalledWith(
+    "change",
+    expect.any(Function),
+  );
+  expect(removeListener).toHaveBeenCalledWith(
+    "visibilitychange",
+    expect.any(Function),
+  );
   story.dispose();
+  original.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  window.dispatchEvent(new Event("resize"));
+  document.dispatchEvent(new Event("visibilitychange"));
+  expect(vi.getTimerCount()).toBe(0);
+  expect(host.children).toHaveLength(0);
 });

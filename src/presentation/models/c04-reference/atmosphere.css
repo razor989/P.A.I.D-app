@@ -1,224 +1,420 @@
 @scope (.c04-reference) {
-/* Workshop surface layer: decorative texture stays outside opaque reading surfaces. */
-:scope {
-  --desk: #e9e3d5;
-  --sheet: #fffdf7;
-  --surface-edge: #cbcdbb;
-  --surface-shadow: 0 10px 26px #33412b0c, 0 2px 3px #33412b08;
-}
-:scope {
-  min-height: 100vh;
-  background-color: var(--desk);
-  background-image:
-    radial-gradient(ellipse at 8% 8%, #f7eed8 0, transparent 48%),
-    radial-gradient(ellipse at 96% 40%, #dce5d5 0, transparent 55%),
-    repeating-linear-gradient(0deg, #52654a04 0, #52654a04 1px, transparent 1px, transparent 5px);
-  background-attachment: scroll;
-}
-.masthead {
-  height: 88px;
-  background: #faf7ef;
-  border-bottom: 1px solid #bdc7b0;
-  box-shadow: 0 5px 16px #33412b05;
-}
-.reference-main {
-  margin-top: 24px;
-  padding: 0 30px 24px;
-  min-height: 0;
-  background: #f8f6ee;
-  border: 1px solid #d2d0bf;
-  border-radius: 22px;
-  box-shadow: var(--surface-shadow);
-}
-.site-footer {
-  margin-top: 18px;
-  border-top: 0;
-  padding-top: 16px;
-  padding-bottom: 22px;
-}
-.entry {
-  padding-top: 32px;
-  padding-bottom: 26px;
-  gap: 32px;
-}
-.entry-copy {
-  border-left: 4px solid #b5bf9c;
-  padding: 14px 0 14px 24px;
-}
-.entry h2 { font-size: 68px; }
-.entry-art {
-  background-color: #e1e8d3;
-  background-image:
-    radial-gradient(ellipse at 50% 10%, #f7f7e7 0, transparent 70%),
-    repeating-linear-gradient(90deg, transparent 0, transparent 31px, #a2b18a16 31px, #a2b18a16 32px);
-  border-color: #bfcaaa;
-  box-shadow: inset 0 -12px 25px #6c805614;
-}
-.pay-ticket { box-shadow: 0 14px 20px #34422c19, 0 2px 2px #34422c0a; }
-.entry-bottom {
-  background: #eeeadd;
-  border: 1px solid #d9d1bc;
-  border-radius: 12px;
-  padding: 18px 22px;
-}
-.entry-bottom .mini-icon { background: #dfe5ce; }
-.progress {
-  padding: 18px 0 0;
-  border-bottom: 1px solid #e0e1d3;
-}
-.progress ol { margin-top: 0; margin-bottom: 0; }
-.lesson-heading { padding: 25px 0 22px; }
-.workbench {
-  background-color: #dfe7d4;
-  background-image: linear-gradient(125deg, #eaf0e1, #dce4ce);
-  border: 1px solid #bdcaae;
-  border-top: 4px solid #9cae87;
-  box-shadow: inset 0 1px 0 #ffffffa8, 0 4px 12px #33412b08;
-  padding: 24px;
-  border-radius: 16px;
-}
-.employee {
-  background: var(--sheet);
-  border-color: #c1cdb1;
-  box-shadow: 0 5px 13px #33412b0c, 0 1px 2px #33412b0a;
-}
-.employee-B { background: #fff7ed; border-color: #d9bfa3; }
-.employee-head { border-bottom: 1px solid #dce2ce; padding-bottom: 17px; }
-.employee-B .employee-head { border-bottom-color: #e8d6c0; }
-.teaching {
-  background: var(--sheet);
-  border: 1px solid #d4d8c5;
-  border-radius: 12px;
-  padding: 24px 26px;
-  box-shadow: 0 3px 9px #33412b06;
-}
-.investigation { gap: 24px; }
-.investigation .teaching { min-width: 0; }
-.teaching h3 { padding-bottom: 13px; border-bottom: 1px solid #e0e4d4; }
-#supporting-detail { border-color: #d6dcc9; }
-.hundred-grid {
-  background: #fffef9;
-  box-shadow: 0 3px 0 #ced5bd;
-}
-.formula-board {
-  background: #f5f3e5;
-  border: 1px solid #cdd0b6;
-  border-left: 4px solid #809567;
-  border-radius: 12px;
-  padding: 22px 18px;
-  max-width: 812px;
-  margin: 0 auto;
-  box-shadow: 0 3px 10px #33412b08;
-}
-.formula-board + .teaching { max-width: 812px; margin-top: 20px; }
-.lesson-nav {
-  margin-top: 20px;
-  padding: 18px 0 0;
-  border-top: 1px solid #d5d9c7;
-}
-.check-header { padding-top: 28px; padding-bottom: 24px; }
-.practice-count { color: #455a44; }
-.consolidation-layout {
-  background: #e9e6d9;
-  border: 1px solid #d2ccb7;
-  border-radius: 16px;
-  padding: 24px;
-  gap: 24px;
-  align-items: start;
-}
-.choice-panel { background: var(--sheet); box-shadow: var(--surface-shadow); }
-.practice-visual {
-  background: #e0e6d4;
-  border: 1px solid #c4cfb6;
-  padding: 18px;
-  border-radius: 12px;
-}
-.context-explanation {
-  background: #f8f8ed;
-  border-left: 3px solid #a1b28c;
-  padding: 16px;
-  border-radius: 0 8px 8px 0;
-  margin-top: 18px;
-}
-.completion {
-  margin: 26px auto 0;
-  max-width: 1000px;
-  background: var(--sheet);
-  border: 1px solid #d4d6c2;
-  border-top: 5px solid #99ac80;
-  border-radius: 16px;
-  padding: 32px 36px 26px;
-  box-shadow: 0 6px 18px #33412b08;
-}
-.completion-seal { box-shadow: 0 0 0 8px #edf1e3; margin-bottom: 23px; }
-.recap-pair { margin: 26px 0; }
-.recap-pair article { box-shadow: 0 4px 9px #33412b09; }
-.transfer-note {
-  background: #f1f0e4;
-  border: 1px solid #d6d6bf;
-  border-radius: 12px;
-  padding: 24px 26px;
-  max-width: none;
-  margin-top: 26px;
-}
-.completion-actions { margin-bottom: 22px; }
-@media (min-width: 1500px) {
-  .entry { padding-top: 38px; padding-bottom: 30px; }
-  .entry-art { min-height: 485px; }
-}
-@media (max-width: 850px) {
-  .reference-main { padding: 0 22px 22px; margin: 18px 18px 0; }
-  .masthead { height: 80px; }
-  .entry { gap: 22px; }
-  .entry-copy { padding-left: 18px; }
-  .entry h2 { font-size: 54px; }
-  .teaching { padding: 20px; }
-  .investigation { gap: 20px; }
-  .consolidation-layout { padding: 18px; gap: 18px; }
-  .practice-visual { padding: 14px; }
-}
-@media (max-width: 620px) {
-  :scope { background-attachment: scroll; }
-  .masthead { height: 72px; }
-  .reference-main { margin: 12px 10px 0; padding: 0 14px 18px; border-radius: 16px; }
-  .entry { padding-top: 22px; gap: 24px; }
-  .entry-copy { padding: 5px 0 5px 13px; border-left-width: 3px; }
-  .entry h2 { font-size: clamp(38px, 11.7vw, 58px); }
-  .entry-art { min-height: 380px; }
-  .pay-ticket { padding: 16px 11px; }
-  .pay-ticket strong { font-size: 23px; white-space: nowrap; letter-spacing: -1px; }
-  .pay-ticket small { font-size: 9px; line-height: 1.6; }
-  .entry-bottom { padding: 16px 13px; gap: 12px; }
-  .entry-bottom .mini-icon { width: 36px; height: 40px; font-size: 22px; }
-  .progress { padding-top: 16px; }
-  .lesson-heading { padding: 22px 0 20px; }
-  .lesson-heading h2, .check-header h2 { font-size: 32px; }
-  .workbench { padding: 14px 10px; border-radius: 12px; }
-  .teaching { padding: 19px 15px; }
-  .teaching h3 { font-size: 23px; }
-  .employee { padding: 16px 13px; }
-  .employee-head { gap: 10px; padding-bottom: 14px; }
-  .employee h3 { font-size: 23px; }
-  .employee-head .avatar { width: 56px; }
-  .track-labels { gap: 9px; }
-  .track-labels strong { font-size: 23px; }
-  .small-label { font-size: 10px; letter-spacing: 0; }
-  .formula-board { padding: 18px 8px; }
-  .formal-equation { font-size: 26px; gap: 10px; }
-  .consolidation-layout { padding: 12px 9px; gap: 18px; }
-  .choice-panel { padding: 17px 13px; }
-  .practice-visual { padding: 12px 9px; }
-  .view-switch { gap: 7px; }
-  .view-switch button { padding: 11px 12px; }
-  .context-explanation { padding: 14px 11px; }
-  .completion { margin-top: 18px; padding: 28px 14px 20px; }
-  .completion h2 { font-size: 34px; }
-  .recap-pair article { padding: 22px 14px; }
-  .transfer-note { padding: 20px 15px; }
-  .site-footer { margin: 8px 10px 0; padding: 16px 6px; }
-}
-@media (forced-colors: active) {
-  :scope, .reference-main, .masthead, .workbench, .teaching, .employee, .practice-visual,
-  .consolidation-layout, .completion, .transfer-note { background: Canvas; box-shadow: none; }
-}
+  /* Workshop surface layer: decorative texture stays outside opaque reading surfaces. */
+  :scope {
+    --desk: #e9e3d5;
+    --sheet: #fffdf7;
+    --surface-edge: #cbcdbb;
+    --surface-shadow: 0 10px 26px #33412b0c, 0 2px 3px #33412b08;
+  }
+  :scope {
+    min-height: 100vh;
+    background-color: var(--desk);
+    background-image:
+      radial-gradient(ellipse at 8% 8%, #f7eed8 0, transparent 48%),
+      radial-gradient(ellipse at 96% 40%, #dce5d5 0, transparent 55%),
+      repeating-linear-gradient(
+        0deg,
+        #52654a04 0,
+        #52654a04 1px,
+        transparent 1px,
+        transparent 5px
+      );
+    background-attachment: scroll;
+  }
+  .masthead {
+    height: 88px;
+    background: #faf7ef;
+    border-bottom: 1px solid #bdc7b0;
+    box-shadow: 0 5px 16px #33412b05;
+  }
+  .reference-main {
+    margin-top: 24px;
+    padding: 0 30px 24px;
+    min-height: 0;
+    background: #f8f6ee;
+    border: 1px solid #d2d0bf;
+    border-radius: 22px;
+    box-shadow: var(--surface-shadow);
+  }
+  .site-footer {
+    margin-top: 18px;
+    border-top: 0;
+    padding-top: 16px;
+    padding-bottom: 22px;
+  }
+  .entry {
+    padding-top: 32px;
+    padding-bottom: 26px;
+    gap: 32px;
+  }
+  .entry-copy {
+    border-left: 4px solid #b5bf9c;
+    padding: 14px 0 14px 24px;
+  }
+  .entry h2 {
+    font-size: 68px;
+  }
+  .entry-art {
+    background-color: #e1e8d3;
+    background-image:
+      radial-gradient(ellipse at 50% 10%, #f7f7e7 0, transparent 70%),
+      repeating-linear-gradient(
+        90deg,
+        transparent 0,
+        transparent 31px,
+        #a2b18a16 31px,
+        #a2b18a16 32px
+      );
+    border-color: #bfcaaa;
+    box-shadow: inset 0 -12px 25px #6c805614;
+  }
+  .pay-ticket {
+    box-shadow:
+      0 14px 20px #34422c19,
+      0 2px 2px #34422c0a;
+  }
+  .entry-bottom {
+    background: #eeeadd;
+    border: 1px solid #d9d1bc;
+    border-radius: 12px;
+    padding: 18px 22px;
+  }
+  .entry-bottom .mini-icon {
+    background: #dfe5ce;
+  }
+  .progress {
+    padding: 18px 0 0;
+    border-bottom: 1px solid #e0e1d3;
+  }
+  .progress ol {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  .lesson-heading {
+    padding: 25px 0 22px;
+  }
+  .workbench {
+    background-color: #dfe7d4;
+    background-image: linear-gradient(125deg, #eaf0e1, #dce4ce);
+    border: 1px solid #bdcaae;
+    border-top: 4px solid #9cae87;
+    box-shadow:
+      inset 0 1px 0 #ffffffa8,
+      0 4px 12px #33412b08;
+    padding: 24px;
+    border-radius: 16px;
+  }
+  .employee {
+    background: var(--sheet);
+    border-color: #c1cdb1;
+    box-shadow:
+      0 5px 13px #33412b0c,
+      0 1px 2px #33412b0a;
+  }
+  .employee-B {
+    background: #fff7ed;
+    border-color: #d9bfa3;
+  }
+  .employee-head {
+    border-bottom: 1px solid #dce2ce;
+    padding-bottom: 17px;
+  }
+  .employee-B .employee-head {
+    border-bottom-color: #e8d6c0;
+  }
+  .teaching {
+    background: var(--sheet);
+    border: 1px solid #d4d8c5;
+    border-radius: 12px;
+    padding: 24px 26px;
+    box-shadow: 0 3px 9px #33412b06;
+  }
+  .investigation {
+    gap: 24px;
+  }
+  .investigation .teaching {
+    min-width: 0;
+  }
+  .teaching h3 {
+    padding-bottom: 13px;
+    border-bottom: 1px solid #e0e4d4;
+  }
+  #supporting-detail {
+    border-color: #d6dcc9;
+  }
+  .hundred-grid {
+    background: #fffef9;
+    box-shadow: 0 3px 0 #ced5bd;
+  }
+  .formula-board {
+    background: #f5f3e5;
+    border: 1px solid #cdd0b6;
+    border-left: 4px solid #809567;
+    border-radius: 12px;
+    padding: 22px 18px;
+    max-width: 812px;
+    margin: 0 auto;
+    box-shadow: 0 3px 10px #33412b08;
+  }
+  .formula-board + .teaching {
+    max-width: 812px;
+    margin-top: 20px;
+  }
+  .lesson-nav {
+    margin-top: 20px;
+    padding: 18px 0 0;
+    border-top: 1px solid #d5d9c7;
+  }
+  .check-header {
+    padding-top: 28px;
+    padding-bottom: 24px;
+  }
+  .practice-count {
+    color: #455a44;
+  }
+  .consolidation-layout {
+    background: #e9e6d9;
+    border: 1px solid #d2ccb7;
+    border-radius: 16px;
+    padding: 24px;
+    gap: 24px;
+    align-items: start;
+  }
+  .choice-panel {
+    background: var(--sheet);
+    box-shadow: var(--surface-shadow);
+  }
+  .practice-visual {
+    background: #e0e6d4;
+    border: 1px solid #c4cfb6;
+    padding: 18px;
+    border-radius: 12px;
+  }
+  .context-explanation {
+    background: #f8f8ed;
+    border-left: 3px solid #a1b28c;
+    padding: 16px;
+    border-radius: 0 8px 8px 0;
+    margin-top: 18px;
+  }
+  .completion {
+    margin: 26px auto 0;
+    max-width: 1000px;
+    background: var(--sheet);
+    border: 1px solid #d4d6c2;
+    border-top: 5px solid #99ac80;
+    border-radius: 16px;
+    padding: 32px 36px 26px;
+    box-shadow: 0 6px 18px #33412b08;
+  }
+  .completion-seal {
+    box-shadow: 0 0 0 8px #edf1e3;
+    margin-bottom: 23px;
+  }
+  .recap-pair {
+    margin: 26px 0;
+  }
+  .recap-pair article {
+    box-shadow: 0 4px 9px #33412b09;
+  }
+  .transfer-note {
+    background: #f1f0e4;
+    border: 1px solid #d6d6bf;
+    border-radius: 12px;
+    padding: 24px 26px;
+    max-width: none;
+    margin-top: 26px;
+  }
+  .completion-actions {
+    margin-bottom: 22px;
+  }
+  @media (min-width: 1500px) {
+    .entry {
+      padding-top: 38px;
+      padding-bottom: 30px;
+    }
+    .entry-art {
+      min-height: 485px;
+    }
+  }
+  @media (max-width: 850px) {
+    .reference-main {
+      padding: 0 22px 22px;
+      margin: 18px 18px 0;
+    }
+    .masthead {
+      height: 80px;
+    }
+    .entry {
+      gap: 22px;
+    }
+    .entry-copy {
+      padding-left: 18px;
+    }
+    .entry h2 {
+      font-size: 54px;
+    }
+    .teaching {
+      padding: 20px;
+    }
+    .investigation {
+      gap: 20px;
+    }
+    .consolidation-layout {
+      padding: 18px;
+      gap: 18px;
+    }
+    .practice-visual {
+      padding: 14px;
+    }
+  }
+  @media (max-width: 620px) {
+    :scope {
+      background-attachment: scroll;
+    }
+    .masthead {
+      height: 72px;
+    }
+    .reference-main {
+      margin: 12px 10px 0;
+      padding: 0 14px 18px;
+      border-radius: 16px;
+    }
+    .entry {
+      padding-top: 22px;
+      gap: 24px;
+    }
+    .entry-copy {
+      padding: 5px 0 5px 13px;
+      border-left-width: 3px;
+    }
+    .entry h2 {
+      font-size: clamp(38px, 11.7vw, 58px);
+    }
+    .entry-art {
+      min-height: 380px;
+    }
+    .pay-ticket {
+      padding: 16px 11px;
+    }
+    .pay-ticket strong {
+      font-size: 23px;
+      white-space: nowrap;
+      letter-spacing: -1px;
+    }
+    .pay-ticket small {
+      font-size: 9px;
+      line-height: 1.6;
+    }
+    .entry-bottom {
+      padding: 16px 13px;
+      gap: 12px;
+    }
+    .entry-bottom .mini-icon {
+      width: 36px;
+      height: 40px;
+      font-size: 22px;
+    }
+    .progress {
+      padding-top: 16px;
+    }
+    .lesson-heading {
+      padding: 22px 0 20px;
+    }
+    .lesson-heading h2,
+    .check-header h2 {
+      font-size: 32px;
+    }
+    .workbench {
+      padding: 14px 10px;
+      border-radius: 12px;
+    }
+    .teaching {
+      padding: 19px 15px;
+    }
+    .teaching h3 {
+      font-size: 23px;
+    }
+    .employee {
+      padding: 16px 13px;
+    }
+    .employee-head {
+      gap: 10px;
+      padding-bottom: 14px;
+    }
+    .employee h3 {
+      font-size: 23px;
+    }
+    .employee-head .avatar {
+      width: 56px;
+    }
+    .track-labels {
+      gap: 9px;
+    }
+    .track-labels strong {
+      font-size: 23px;
+    }
+    .small-label {
+      font-size: 10px;
+      letter-spacing: 0;
+    }
+    .formula-board {
+      padding: 18px 8px;
+    }
+    .formal-equation {
+      font-size: 26px;
+      gap: 10px;
+    }
+    .consolidation-layout {
+      padding: 12px 9px;
+      gap: 18px;
+    }
+    .choice-panel {
+      padding: 17px 13px;
+    }
+    .practice-visual {
+      padding: 12px 9px;
+    }
+    .view-switch {
+      gap: 7px;
+    }
+    .view-switch button {
+      padding: 11px 12px;
+    }
+    .context-explanation {
+      padding: 14px 11px;
+    }
+    .completion {
+      margin-top: 18px;
+      padding: 28px 14px 20px;
+    }
+    .completion h2 {
+      font-size: 34px;
+    }
+    .recap-pair article {
+      padding: 22px 14px;
+    }
+    .transfer-note {
+      padding: 20px 15px;
+    }
+    .site-footer {
+      margin: 8px 10px 0;
+      padding: 16px 6px;
+    }
+  }
+  @media (forced-colors: active) {
+    :scope,
+    .reference-main,
+    .masthead,
+    .workbench,
+    .teaching,
+    .employee,
+    .practice-visual,
+    .consolidation-layout,
+    .completion,
+    .transfer-note {
+      background: Canvas;
+      box-shadow: none;
+    }
+  }
 }

@@ -186,7 +186,21 @@ test("real route: independent application, reconsider/revise/recheck, recovery a
     fullPage: true,
   });
   await page.setViewportSize({ width: 1280, height: 900 });
+  // Dismiss the inspection through its learner-visible keyboard equivalent
+  // before leaving the model, then observe the local recap transition itself.
+  await page.keyboard.press("Escape");
+  await expect(page.locator("aside")).toBeHidden();
   await page.getByRole("button", { name: /Back to recap/ }).click();
+  await expect(page.locator("[data-recap]")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /The offer,\s*in perspective\./ }),
+  ).toBeFocused();
+  await expect(page.getByRole("button", { name: /Back to recap/ })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.getByRole("button", { name: /Next activity/ }),
+  ).toBeEnabled();
   await page.getByRole("button", { name: /Next activity/ }).click();
   await expect(page.locator('[data-c04-track="C04-A04"]')).toBeVisible();
 });

@@ -51,11 +51,12 @@ it("keeps retained Review separate from fresh opening and blocks it with the des
   ).toBeNull();
 });
 
-it("T045 renders only matching C04 projections without the obsolete partial-feature note", () => {
+it("T045 routes the authorized v4 Prepare projection, withholds answers and blocks local actions", async () => {
   const presentation = {
     frame: {
       activityId: "C04-A01" as const,
       stateId: "ENTRY",
+      responseContract: { id: "C04-A01-elicit-engage-v4", version: 4 },
       contentReferences: [],
       exposedModelFacts: [],
       exposedDerivedFacts: [],
@@ -69,16 +70,48 @@ it("T045 renders only matching C04 projections without the obsolete partial-feat
     <ActivityHost activityId="C04-A01" c04Presentation={presentation} />,
   );
   expect(
-    screen.getByRole("heading", { name: "Two moments. One salary review." }),
+    screen.getByRole("heading", { name: /A review\.\s*A different salary\?/ }),
   ).toBeDefined();
+  expect(
+    view.container.querySelector('[data-prepare-contract="v4"]'),
+  ).not.toBeNull();
+  expect(view.container.textContent).not.toMatch(
+    /0%|100%|denominator|zero difference|New minus Original/,
+  );
   expect(screen.queryByRole("note")).toBeNull();
   expect(screen.queryByRole("button", { name: /check|finish/i })).toBeNull();
+  const user = userEvent.setup();
+  view.rerender(
+    <ActivityHost
+      activityId="C04-A01"
+      c04Presentation={{ ...presentation, blocked: true }}
+    />,
+  );
+  const start = screen.getByRole("button", { name: /Start with Maya/ });
+  expect((start as HTMLButtonElement).disabled).toBe(true);
+  await user.click(start);
+  expect(screen.queryByRole("slider")).toBeNull();
+  view.rerender(
+    <ActivityHost activityId="C04-A01" c04Presentation={presentation} />,
+  );
+  await user.click(screen.getByRole("button", { name: /Start with Maya/ }));
+  expect(screen.getByRole("slider")).toBeDefined();
+  expect(
+    screen.getByRole<HTMLButtonElement>("button", {
+      name: /Share your first thinking/,
+    }).disabled,
+  ).toBe(true);
+  expect(presentation.onIntent).not.toHaveBeenCalled();
+  expect(presentation.onSelect).not.toHaveBeenCalled();
   view.rerender(
     <ActivityHost activityId="C04-A03" c04Presentation={presentation} />,
   );
   expect(
-    screen.queryByRole("heading", { name: "Two moments. One salary review." }),
+    screen.queryByRole("heading", {
+      name: /A review\.\s*A different salary\?/,
+    }),
   ).toBeNull();
+  expect(view.container.querySelector("[data-c04-track]")).toBeNull();
   view.rerender(
     <ActivityHost activityId="C01-A01" c04Presentation={presentation} />,
   );

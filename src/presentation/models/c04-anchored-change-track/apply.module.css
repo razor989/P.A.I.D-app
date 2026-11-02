@@ -822,28 +822,192 @@
   }
 }
 /* Accepted type roles and model construction; scoped to Apply only. */
-.workshop :global(.lesson-heading) h2 { font:400 clamp(34px,4vw,52px)/1.1 Georgia,serif; letter-spacing:-1px; }
-.workshop h2 em,.workshop h3 em,.workshop h4 em { color:var(--green); font-style:italic; font-weight:400; }
-.heading h2 { font:400 clamp(34px,4vw,52px)/1.1 Georgia,serif; letter-spacing:-1px; }
-.reviewDraft h4 { font:400 27px/1.2 Georgia,serif; }
-.reviewDraft dd,.submitted dd { font:400 28px/1.25 Georgia,serif; }
-.quantity { position:relative; }
-.unitMark { position:absolute; top:37px; left:9px; z-index:1; font:400 24px/1.4 Georgia,serif; color:var(--muted); pointer-events:none; }
-.quantity input[type="text"] { padding-left:34px; }
-.relationship { padding:32px 0; border-top:1px solid var(--line); }
-.relationship > :global(.model-heading) h3 { font:400 clamp(28px,3vw,40px)/1.15 Georgia,serif; }
-.exploration { overflow:visible!important; margin-top:24px; }
-.salaryModel { margin:0; padding:28px; }
-.salarySvg { width:100%; display:block; overflow:visible; }
-.salarySvg .modelRole { font:700 16px Arial,sans-serif; fill:var(--ink); letter-spacing:0; }
-.salarySvg .modelAmount { font:400 25px Georgia,serif; fill:var(--ink); letter-spacing:0; }
-.salarySvg .modelNote { font:400 15px Arial,sans-serif; fill:var(--muted); letter-spacing:0; }
-.removedPortion { fill:#f1e5cd; stroke:#8b6225; stroke-width:2; stroke-dasharray:5 3; }
-.offerIdentity { display:grid; place-items:center; width:56px; height:56px; border-radius:50%; border:1px solid #879d65; background:#e8eddc; font:400 32px Georgia,serif; }
-.relationshipEquation { display:flex; flex-wrap:wrap; justify-content:center; align-items:center; gap:16px; margin:28px 0 0; font:400 clamp(20px,3vw,30px)/1.5 Georgia,serif; }
-.relationshipEquation strong { color:var(--green); font-weight:400; }
-.srOnly { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
-.relationshipView { padding-top:32px; }
-@media(max-width:600px) { .salaryModel { padding:16px 8px; } .salarySvg .modelRole { font-size:20px; } .salarySvg .modelAmount { font-size:28px; } .salarySvg .modelNote { font-size:19px; } .sourceStrip { gap:24px; } .referenceWorkspace > figure { background:transparent; border:0; padding:8px 0 24px; } }
-@media(forced-colors:active) { .removedPortion { fill:Canvas; stroke:Highlight; } .salarySvg text { fill:CanvasText!important; } }
-.salarySvg :global([data-explore="addition"]) text { pointer-events:none; } .referenceWorkspace > figure { border:0; background:transparent; padding:12px 0; } .referenceWorkspace figcaption { display:block; font:400 16px/1.6 Georgia,serif; margin-top:12px; } .workshop .heading h2 {font:400 clamp(34px,4vw,52px)/1.1 Georgia,serif;} .relationshipEquation { overflow-wrap:anywhere; }
+.workshop :global(.lesson-heading) h2 {
+  font:
+    400 clamp(34px, 4vw, 52px)/1.1 Georgia,
+    serif;
+  letter-spacing: -1px;
+}
+.workshop h2 em,
+.workshop h3 em,
+.workshop h4 em {
+  color: var(--green);
+  font-style: italic;
+  font-weight: 400;
+}
+.heading h2 {
+  font:
+    400 clamp(34px, 4vw, 52px)/1.1 Georgia,
+    serif;
+  letter-spacing: -1px;
+}
+.reviewDraft h4 {
+  font:
+    400 27px/1.2 Georgia,
+    serif;
+}
+.reviewDraft dd,
+.submitted dd {
+  font:
+    400 28px/1.25 Georgia,
+    serif;
+}
+.quantity {
+  position: relative;
+}
+.unitMark {
+  position: absolute;
+  top: 37px;
+  left: 9px;
+  z-index: 1;
+  font:
+    400 24px/1.4 Georgia,
+    serif;
+  color: var(--muted);
+  pointer-events: none;
+}
+.quantity input[type="text"] {
+  padding-left: 34px;
+}
+.relationship {
+  padding: 32px 0;
+  border-top: 1px solid var(--line);
+}
+.relationship > :global(.model-heading) h3 {
+  font:
+    400 clamp(28px, 3vw, 40px)/1.15 Georgia,
+    serif;
+}
+.exploration {
+  overflow: visible !important;
+  margin-top: 24px;
+}
+.salaryModel {
+  margin: 0;
+  padding: 28px;
+}
+.salarySvg {
+  width: 100%;
+  display: block;
+  overflow: visible;
+}
+.salarySvg .modelRole {
+  font:
+    700 16px Arial,
+    sans-serif;
+  fill: var(--ink);
+  letter-spacing: 0;
+}
+.salarySvg .modelAmount {
+  font:
+    400 25px Georgia,
+    serif;
+  fill: var(--ink);
+  letter-spacing: 0;
+}
+.salarySvg .modelNote {
+  font:
+    400 15px Arial,
+    sans-serif;
+  fill: var(--muted);
+  letter-spacing: 0;
+}
+.removedPortion {
+  fill: #f1e5cd;
+  stroke: #8b6225;
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+}
+.offerIdentity {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid #879d65;
+  background: #e8eddc;
+  font:
+    400 32px Georgia,
+    serif;
+}
+.relationshipEquation {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin: 28px 0 0;
+  font:
+    400 clamp(20px, 3vw, 30px)/1.5 Georgia,
+    serif;
+}
+.relationshipEquation strong {
+  color: var(--green);
+  font-weight: 400;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.relationshipView {
+  padding-top: 32px;
+}
+@media (max-width: 600px) {
+  .salaryModel {
+    padding: 16px 8px;
+  }
+  .salarySvg .modelRole {
+    font-size: 20px;
+  }
+  .salarySvg .modelAmount {
+    font-size: 28px;
+  }
+  .salarySvg .modelNote {
+    font-size: 19px;
+  }
+  .sourceStrip {
+    gap: 24px;
+  }
+  .referenceWorkspace > figure {
+    background: transparent;
+    border: 0;
+    padding: 8px 0 24px;
+  }
+}
+@media (forced-colors: active) {
+  .removedPortion {
+    fill: Canvas;
+    stroke: Highlight;
+  }
+  .salarySvg text {
+    fill: CanvasText !important;
+  }
+}
+.salarySvg :global([data-explore="addition"]) text {
+  pointer-events: none;
+}
+.referenceWorkspace > figure {
+  border: 0;
+  background: transparent;
+  padding: 12px 0;
+}
+.referenceWorkspace figcaption {
+  display: block;
+  font:
+    400 16px/1.6 Georgia,
+    serif;
+  margin-top: 12px;
+}
+.workshop .heading h2 {
+  font:
+    400 clamp(34px, 4vw, 52px)/1.1 Georgia,
+    serif;
+}
+.relationshipEquation {
+  overflow-wrap: anywhere;
+}

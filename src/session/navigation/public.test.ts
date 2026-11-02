@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ExactDecimal, quantity } from "@/core/public";
 import { composeStudyCatalog } from "@/study/catalog/public";
 import { createActivityMachine } from "@/engine/activity-machine/public";
+import { createCanonicalC04Runtime } from "@/engine/c04-activity-binding/public";
 import type {
   ActivityDefinition,
   ActivityPorts,
@@ -46,10 +47,13 @@ afterEach(() => {
   sessions.splice(0).forEach((actor) => actor.stop());
   vi.restoreAllMocks();
 });
-function session() {
+function session(legacyNumeric = false) {
   const actor = createAppSessionActor({
     catalog: catalog(),
     recovery: { status: "NO_CHECKPOINT" },
+    ...(legacyNumeric
+      ? { c04Runtime: createCanonicalC04Runtime("C04-A01-interpretation-v1") }
+      : {}),
   });
   sessions.push(actor);
   return actor.start();
@@ -149,8 +153,40 @@ describe("T033 real C04 Session semantic navigation", () => {
     },
   );
 
-  it("preserves real draft mathematics without inferred feedback through Review, browsing and re-entry", () => {
+  it("fresh v4 denies unsupported Review and Back retains the diagnostic draft without inventing support", () => {
     const s = session();
+    const a = open(s, "C04-A01");
+    a.send({ type: "CONTINUE" });
+    const response = {
+      kind: "COMPOSITE" as const,
+      parts: [
+        {
+          key: "original",
+          response: {
+            kind: "SINGLE_SELECTION" as const,
+            selectionId: "c04-a01-v3-original-before",
+          },
+        },
+      ],
+    };
+    expect(a.getSnapshot().context.position).toBe("ACTIVE");
+    expect(a.getSnapshot().can({ type: "OPEN_SUPPORT", mode: "REVIEW" })).toBe(
+      false,
+    );
+    a.send({ type: "RESPONSE_CHANGED", response });
+    const before = a.getSnapshot();
+    expect(before.context.response).toEqual(response);
+    a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+    expect(a.getSnapshot().matches({ support: "none" })).toBe(true);
+    expect(a.getSnapshot().context).toEqual(before.context);
+    expect(back(s)).toBe("destination-changed");
+    expect(open(s, "C04-A01")).toBe(a);
+    expect(a.getSnapshot().context).toEqual(before.context);
+    expect(a.getSnapshot().context.evaluation).toBeNull();
+  });
+
+  it("preserves historical numerical-v1 draft mathematics through supported Review, browsing and re-entry", () => {
+    const s = session(true);
     const a = open(s, "C04-A01");
     a.send({ type: "CONTINUE" });
     const money = (value: string) => ({
@@ -185,7 +221,11 @@ describe("T033 real C04 Session semantic navigation", () => {
     // A real draft is retained even before its required interpretation is supplied.
     a.send({ type: "RESPONSE_CHANGED", response });
     const draft = a.getSnapshot();
+    expect(draft.context.position).toBe("ACTIVE");
+    expect(draft.context.response).toEqual(response);
+    expect(draft.can({ type: "OPEN_SUPPORT", mode: "REVIEW" })).toBe(true);
     a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+    expect(a.getSnapshot().matches({ support: "review" })).toBe(true);
     expect(back(s)).toBe("support-closed");
     expect(a.getSnapshot().context).toEqual(draft.context);
     expect(back(s)).toBe("destination-changed");

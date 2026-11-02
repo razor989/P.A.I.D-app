@@ -110,13 +110,55 @@ test("reference bars move together, keep the added amount fixed, and respect red
         .getAnimations({ subtree: true })
         .filter((a) => a.playState === "running").length,
     }));
+  const initial = await geometry();
+  expect(initial.bars[0]).toBeCloseTo(1500 / 9, 2);
+  expect(initial.bars[1]).toBeCloseTo(initial.bars[0]!, 2);
+  expect(initial.added).toBeCloseTo(1500 / 9, 2);
+  expect(initial.shift).toBeCloseTo(initial.bars[0]!, 2);
+  // Sample the actual CSS transitions at their midpoint, not after a remote
+  // polling round trip that can already have reached the 650ms endpoint.
+  await model.evaluate((svg) => {
+    const observer = new MutationObserver(() => {
+      const transitions = svg
+        .getAnimations({ subtree: true })
+        .filter((animation) => animation instanceof CSSTransition);
+      if (transitions.length !== 3) return;
+      observer.disconnect();
+      for (const animation of transitions) {
+        animation.pause();
+        animation.currentTime =
+          Number(animation.effect!.getTiming().duration) / 2;
+      }
+    });
+    observer.observe(svg, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ["style"],
+    });
+  });
   await page.getByRole("radio", { name: "₱3,000 original" }).check();
-  await expect.poll(async () => (await geometry()).active).toBeGreaterThan(0);
+  await expect
+    .poll(() =>
+      model.evaluate(
+        (svg) =>
+          svg
+            .getAnimations({ subtree: true })
+            .filter((a) => a.playState === "paused").length,
+      ),
+    )
+    .toBe(3);
   const moving = await geometry();
-  expect(moving.bars[0]).toBeGreaterThanOrEqual(1500 / 9 - 0.1);
-  expect(moving.bars[0]).toBeLessThan(3000 / 9);
+  // A 0.01 SVG-unit margin is well above float quantization (~0.00001),
+  // while still requiring a genuinely interior model, not its terminal state.
+  expect(moving.bars[0]).toBeGreaterThan(1500 / 9 + 0.01);
+  expect(moving.bars[0]).toBeLessThan(3000 / 9 - 0.01);
+  expect(moving.bars[1]).toBeCloseTo(moving.bars[0]!, 2);
   expect(moving.added).toBeCloseTo(1500 / 9, 2);
   expect(moving.shift).toBeCloseTo(moving.bars[0]!, 1);
+  await model.evaluate((svg) => {
+    for (const animation of svg.getAnimations({ subtree: true }))
+      animation.play();
+  });
   await expect
     .poll(async () => (await geometry()).bars[0])
     .toBeCloseTo(3000 / 9, 2);

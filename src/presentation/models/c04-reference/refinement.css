@@ -1,40 +1,422 @@
 @scope (.c04-reference) {
-/* R1–R7: one quantity model, less framing, connected reading and action. */
-.salary-model{margin:0;padding:20px 18px;background:#fffdf7;border-bottom:2px solid #c7d0b8;min-width:0;color:var(--a)}
-.salary-model.employee-B{color:var(--b);background:#fff7ed;border-color:#dbc4a9}
-.model-heading{display:flex;align-items:center;gap:12px;margin-bottom:18px}.model-heading h3{font-size:25px}.model-heading>span:last-child{margin-left:auto}
-.model-labels{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink)}.model-labels strong{display:block;font-size:20px;margin:5px 0}.addition-label{text-align:right}
-.salary-svg{display:block;width:100%;height:auto;overflow:visible;margin:15px 0 0}
-.original-block{fill:#dfe8d1;stroke:#687f53;stroke-width:1.2}.employee-B .original-block{fill:#f1dfc8;stroke:#9e6947}
-.tile-divider{stroke:#889d72;stroke-width:.7}.employee-B .tile-divider{stroke:#b78b68}
-.raise-block{fill:currentColor;stroke:#fffdf7;stroke-width:1}
-.total-bracket{stroke:currentColor;fill:none;stroke-width:1.2}.total-salary{font-size:17px;line-height:1.5;margin:0 0 14px}.total-salary strong{white-space:nowrap}
-.equivalent-share{fill:none;stroke:#294428;stroke-width:3;stroke-dasharray:4 2}.match-arrow{fill:none;stroke:#657e4a;stroke-width:1.4}
-.salary-model figcaption{color:var(--ink);font-size:13px;line-height:1.7}.salary-model figcaption p+p{margin-top:12px}
-.share-equivalence{padding:12px 0;border-top:1px solid #cbd5bd}.share-equivalence strong{font-size:17px}.match-caption{font-size:12px}
-.model-tools{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}.model-tools button{font-size:12px;text-align:left;line-height:1.5;padding:10px 12px}
-.salary-model.focus-original .original-strip .original-block{stroke:#294428;stroke-width:3}.salary-model.focus-change .raise-block{stroke:#ba7e22;stroke-width:3}.salary-model.focus-new .total-bracket{stroke:#a75425;stroke-width:3}
-.salary-model.focus-new{border-bottom:3px solid #a75425}
-.investigation{grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);align-items:start}.investigation>.salary-model{position:sticky;top:18px}
-.teaching,.formula-board,.context-explanation,.practice-visual,.transfer-note{box-shadow:none;border-radius:4px}
-.teaching{padding:18px 10px;background:transparent;border:0}.teaching h3{border:0;padding-bottom:0}
-.workbench{border:0;border-radius:8px;background:#eaf0e0;box-shadow:none;padding:22px}.investigation .teaching{padding-top:0}
-.formula-investigation .formula-board{padding:15px 9px}.formula-investigation .formal-equation{font-size:28px}
-.role-builder,.repair-controls{margin:18px 0;border-left:3px solid #94a87d;padding:4px 0 4px 14px;font-size:14px;line-height:1.75}.role-builder .view-switch,.repair-controls .view-switch{margin-top:12px}.repair-controls h4{font-size:21px}
-.prediction-choices{display:flex;flex-wrap:wrap;gap:9px;margin:18px 0}.prediction-choices [aria-pressed=true]{background:var(--green);color:white}
-.stage-orientation{font-size:13px;line-height:1.6;color:var(--muted);margin:15px 0 0}.review-tools{margin-top:16px}.review-tools button{font-size:12px}.review-tools .view-switch{margin-bottom:0}
-.consolidation-layout{background:transparent;padding:0;border:0}.practice-visual{padding:12px;background:#e6edda;border:0}.choice-panel{box-shadow:none}
-.recap-models{margin-top:26px}.recap-pair{display:none}.completion .salary-model{text-align:left}
-#supporting-detail{margin-top:16px;padding-top:12px}.replay-model{margin-top:12px}
-.model-pair+.secondary{margin:16px 0 0}.model-pair .salary-svg{margin-top:10px}
-.progress li>span:last-child{line-height:1.5}
-.skip:not(:focus){width:1px;height:1px;padding:0;overflow:hidden;clip-path:inset(50%)}
-.comparison-caption{font-size:14px;line-height:1.7;margin:14px 0}.inspection-note{font-size:13px;line-height:1.6;margin-top:10px}
-.percent-intro{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-.salary-model .total-salary{font-size:17px;line-height:1.5}
-.model-pair .salary-model{padding:14px}.model-pair .model-heading{margin-bottom:10px}.model-pair .share-equivalence{padding:8px 0 0}.model-pair .total-salary{margin-bottom:8px}
-@media(max-width:850px){.percent-intro{grid-template-columns:1fr}.percent-intro .salary-model{max-width:510px}.model-pair .avatar{display:none}.model-pair .model-heading h3{font-size:22px}.model-pair .model-labels strong{font-size:18px}.model-pair .salary-model{padding:10px}.model-pair .salary-model figcaption{font-size:13px}.model-pair .salary-svg{max-height:135px}.model-pair .share-equivalence strong{font-size:15px}}
-@media(max-width:850px){.investigation{grid-template-columns:1fr}.investigation>.salary-model{position:static}.salary-svg{max-height:210px}.model-tools{gap:5px}.formula-investigation .formal-equation{font-size:27px}}
-@media(max-width:620px){.reference-main{border:0;border-radius:6px;padding-left:13px;padding-right:13px}.workbench{padding:14px 9px}.salary-model{padding:16px 11px}.model-heading h3{font-size:23px}.model-heading .avatar{width:52px;height:58px}.model-labels strong{font-size:19px}.share-equivalence strong{font-size:16px}.stage-orientation{font-weight:700}.model-pair{gap:14px}.model-pair .salary-model{padding:13px 9px}.model-pair .model-heading{margin-bottom:10px}.model-pair .salary-svg{margin:5px 0}.model-pair .salary-model figcaption{font-size:12px}.paired.recap-models{grid-template-columns:1fr}.teaching p{font-size:15px}.progress li{padding-bottom:8px}.completion{padding-left:10px;padding-right:10px}.review-tools .view-switch{gap:5px}}
-@media(forced-colors:active){.original-block,.raise-block{fill:Canvas;stroke:CanvasText}.tile-divider,.equivalent-share,.total-bracket,.match-arrow{stroke:CanvasText}.total-label{fill:CanvasText}.salary-model{background:Canvas;color:CanvasText}}
+  /* R1–R7: one quantity model, less framing, connected reading and action. */
+  .salary-model {
+    margin: 0;
+    padding: 20px 18px;
+    background: #fffdf7;
+    border-bottom: 2px solid #c7d0b8;
+    min-width: 0;
+    color: var(--a);
+  }
+  .salary-model.employee-B {
+    color: var(--b);
+    background: #fff7ed;
+    border-color: #dbc4a9;
+  }
+  .model-heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+  .model-heading h3 {
+    font-size: 25px;
+  }
+  .model-heading > span:last-child {
+    margin-left: auto;
+  }
+  .model-labels {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--ink);
+  }
+  .model-labels strong {
+    display: block;
+    font-size: 20px;
+    margin: 5px 0;
+  }
+  .addition-label {
+    text-align: right;
+  }
+  .salary-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    margin: 15px 0 0;
+  }
+  .original-block {
+    fill: #dfe8d1;
+    stroke: #687f53;
+    stroke-width: 1.2;
+  }
+  .employee-B .original-block {
+    fill: #f1dfc8;
+    stroke: #9e6947;
+  }
+  .tile-divider {
+    stroke: #889d72;
+    stroke-width: 0.7;
+  }
+  .employee-B .tile-divider {
+    stroke: #b78b68;
+  }
+  .raise-block {
+    fill: currentColor;
+    stroke: #fffdf7;
+    stroke-width: 1;
+  }
+  .total-bracket {
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.2;
+  }
+  .total-salary {
+    font-size: 17px;
+    line-height: 1.5;
+    margin: 0 0 14px;
+  }
+  .total-salary strong {
+    white-space: nowrap;
+  }
+  .equivalent-share {
+    fill: none;
+    stroke: #294428;
+    stroke-width: 3;
+    stroke-dasharray: 4 2;
+  }
+  .match-arrow {
+    fill: none;
+    stroke: #657e4a;
+    stroke-width: 1.4;
+  }
+  .salary-model figcaption {
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .salary-model figcaption p + p {
+    margin-top: 12px;
+  }
+  .share-equivalence {
+    padding: 12px 0;
+    border-top: 1px solid #cbd5bd;
+  }
+  .share-equivalence strong {
+    font-size: 17px;
+  }
+  .match-caption {
+    font-size: 12px;
+  }
+  .model-tools {
+    margin-top: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .model-tools button {
+    font-size: 12px;
+    text-align: left;
+    line-height: 1.5;
+    padding: 10px 12px;
+  }
+  .salary-model.focus-original .original-strip .original-block {
+    stroke: #294428;
+    stroke-width: 3;
+  }
+  .salary-model.focus-change .raise-block {
+    stroke: #ba7e22;
+    stroke-width: 3;
+  }
+  .salary-model.focus-new .total-bracket {
+    stroke: #a75425;
+    stroke-width: 3;
+  }
+  .salary-model.focus-new {
+    border-bottom: 3px solid #a75425;
+  }
+  .investigation {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr);
+    align-items: start;
+  }
+  .investigation > .salary-model {
+    position: sticky;
+    top: 18px;
+  }
+  .teaching,
+  .formula-board,
+  .context-explanation,
+  .practice-visual,
+  .transfer-note {
+    box-shadow: none;
+    border-radius: 4px;
+  }
+  .teaching {
+    padding: 18px 10px;
+    background: transparent;
+    border: 0;
+  }
+  .teaching h3 {
+    border: 0;
+    padding-bottom: 0;
+  }
+  .workbench {
+    border: 0;
+    border-radius: 8px;
+    background: #eaf0e0;
+    box-shadow: none;
+    padding: 22px;
+  }
+  .investigation .teaching {
+    padding-top: 0;
+  }
+  .formula-investigation .formula-board {
+    padding: 15px 9px;
+  }
+  .formula-investigation .formal-equation {
+    font-size: 28px;
+  }
+  .role-builder,
+  .repair-controls {
+    margin: 18px 0;
+    border-left: 3px solid #94a87d;
+    padding: 4px 0 4px 14px;
+    font-size: 14px;
+    line-height: 1.75;
+  }
+  .role-builder .view-switch,
+  .repair-controls .view-switch {
+    margin-top: 12px;
+  }
+  .repair-controls h4 {
+    font-size: 21px;
+  }
+  .prediction-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 18px 0;
+  }
+  .prediction-choices [aria-pressed="true"] {
+    background: var(--green);
+    color: white;
+  }
+  .stage-orientation {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--muted);
+    margin: 15px 0 0;
+  }
+  .review-tools {
+    margin-top: 16px;
+  }
+  .review-tools button {
+    font-size: 12px;
+  }
+  .review-tools .view-switch {
+    margin-bottom: 0;
+  }
+  .consolidation-layout {
+    background: transparent;
+    padding: 0;
+    border: 0;
+  }
+  .practice-visual {
+    padding: 12px;
+    background: #e6edda;
+    border: 0;
+  }
+  .choice-panel {
+    box-shadow: none;
+  }
+  .recap-models {
+    margin-top: 26px;
+  }
+  .recap-pair {
+    display: none;
+  }
+  .completion .salary-model {
+    text-align: left;
+  }
+  #supporting-detail {
+    margin-top: 16px;
+    padding-top: 12px;
+  }
+  .replay-model {
+    margin-top: 12px;
+  }
+  .model-pair + .secondary {
+    margin: 16px 0 0;
+  }
+  .model-pair .salary-svg {
+    margin-top: 10px;
+  }
+  .progress li > span:last-child {
+    line-height: 1.5;
+  }
+  .skip:not(:focus) {
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .comparison-caption {
+    font-size: 14px;
+    line-height: 1.7;
+    margin: 14px 0;
+  }
+  .inspection-note {
+    font-size: 13px;
+    line-height: 1.6;
+    margin-top: 10px;
+  }
+  .percent-intro {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .salary-model .total-salary {
+    font-size: 17px;
+    line-height: 1.5;
+  }
+  .model-pair .salary-model {
+    padding: 14px;
+  }
+  .model-pair .model-heading {
+    margin-bottom: 10px;
+  }
+  .model-pair .share-equivalence {
+    padding: 8px 0 0;
+  }
+  .model-pair .total-salary {
+    margin-bottom: 8px;
+  }
+  @media (max-width: 850px) {
+    .percent-intro {
+      grid-template-columns: 1fr;
+    }
+    .percent-intro .salary-model {
+      max-width: 510px;
+    }
+    .model-pair .avatar {
+      display: none;
+    }
+    .model-pair .model-heading h3 {
+      font-size: 22px;
+    }
+    .model-pair .model-labels strong {
+      font-size: 18px;
+    }
+    .model-pair .salary-model {
+      padding: 10px;
+    }
+    .model-pair .salary-model figcaption {
+      font-size: 13px;
+    }
+    .model-pair .salary-svg {
+      max-height: 135px;
+    }
+    .model-pair .share-equivalence strong {
+      font-size: 15px;
+    }
+  }
+  @media (max-width: 850px) {
+    .investigation {
+      grid-template-columns: 1fr;
+    }
+    .investigation > .salary-model {
+      position: static;
+    }
+    .salary-svg {
+      max-height: 210px;
+    }
+    .model-tools {
+      gap: 5px;
+    }
+    .formula-investigation .formal-equation {
+      font-size: 27px;
+    }
+  }
+  @media (max-width: 620px) {
+    .reference-main {
+      border: 0;
+      border-radius: 6px;
+      padding-left: 13px;
+      padding-right: 13px;
+    }
+    .workbench {
+      padding: 14px 9px;
+    }
+    .salary-model {
+      padding: 16px 11px;
+    }
+    .model-heading h3 {
+      font-size: 23px;
+    }
+    .model-heading .avatar {
+      width: 52px;
+      height: 58px;
+    }
+    .model-labels strong {
+      font-size: 19px;
+    }
+    .share-equivalence strong {
+      font-size: 16px;
+    }
+    .stage-orientation {
+      font-weight: 700;
+    }
+    .model-pair {
+      gap: 14px;
+    }
+    .model-pair .salary-model {
+      padding: 13px 9px;
+    }
+    .model-pair .model-heading {
+      margin-bottom: 10px;
+    }
+    .model-pair .salary-svg {
+      margin: 5px 0;
+    }
+    .model-pair .salary-model figcaption {
+      font-size: 12px;
+    }
+    .paired.recap-models {
+      grid-template-columns: 1fr;
+    }
+    .teaching p {
+      font-size: 15px;
+    }
+    .progress li {
+      padding-bottom: 8px;
+    }
+    .completion {
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+    .review-tools .view-switch {
+      gap: 5px;
+    }
+  }
+  @media (forced-colors: active) {
+    .original-block,
+    .raise-block {
+      fill: Canvas;
+      stroke: CanvasText;
+    }
+    .tile-divider,
+    .equivalent-share,
+    .total-bracket,
+    .match-arrow {
+      stroke: CanvasText;
+    }
+    .total-label {
+      fill: CanvasText;
+    }
+    .salary-model {
+      background: Canvas;
+      color: CanvasText;
+    }
+  }
 }

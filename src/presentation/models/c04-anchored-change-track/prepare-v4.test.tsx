@@ -5,6 +5,55 @@ import userEvent from "@testing-library/user-event";
 import { PrepareExperience } from "./PrepareExperience";
 import { momentDuration, projectPrepareStory } from "./prepare-story";
 afterEach(cleanup);
+it("keeps diagnostic lead text opaque throughout its positional entrance", () => {
+  const calls: { element: Element; frames: Keyframe[] }[] = [];
+  const original = Object.getOwnPropertyDescriptor(
+    Element.prototype,
+    "animate",
+  );
+  Object.defineProperty(Element.prototype, "animate", {
+    configurable: true,
+    value: function (this: Element, frames: Keyframe[]) {
+      calls.push({ element: this, frames });
+      return { cancel: vi.fn() };
+    },
+  });
+  try {
+    const frame = {
+      activityId: "C04-A01",
+      stateId: "RESPONSE",
+      allowedLearnerIntents: [],
+      contentReferences: [],
+      exposedModelFacts: [],
+      exposedDerivedFacts: [],
+    } as unknown as import("@/engine/semantic-frame/public").SemanticActivityFrame;
+    const view = render(
+      <PrepareExperience
+        frame={frame}
+        blocked={false}
+        onIntent={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+    const lead = view.container.querySelector(".check-header > .lead");
+    expect(lead).not.toBeNull();
+    const entrance = calls.find((call) => call.element === lead);
+    expect(entrance).toBeDefined();
+    expect(entrance!.frames.map((frame) => frame.opacity)).toEqual([1, 1]);
+    expect(entrance!.frames.map((frame) => frame.transform)).toEqual([
+      "translateY(15px)",
+      "none",
+    ]);
+    // Preserve accepted fading on the other entrance elements.
+    expect(
+      calls.find((call) => call.element.matches(".check-header > h2"))
+        ?.frames[0]?.opacity,
+    ).toBe(0);
+  } finally {
+    if (original) Object.defineProperty(Element.prototype, "animate", original);
+    else Reflect.deleteProperty(Element.prototype, "animate");
+  }
+});
 it("uses A02 entrance timing, cancels motion on unmount and keeps instructions out of the illustration", async () => {
   const cancel = vi.fn();
   const animate = vi.fn(() => ({ cancel }));

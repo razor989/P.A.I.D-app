@@ -878,6 +878,8 @@
     stroke: CanvasText;
   }
   .workshop .storyScreenActions button,
+  .storyInvitationPanel :global(.eyebrow),
+  .workshop .storyInvitationPanel button,
   .workshop .storyInvitationPanel h3,
   .workshop .storyInvitationPanel h3 em,
   .storyInvitationPanel p {

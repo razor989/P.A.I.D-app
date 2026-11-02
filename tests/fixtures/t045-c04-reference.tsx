@@ -33,9 +33,7 @@ const subscription = root.session.subscribe(() => {
     ) {
       const context = actor.getSnapshot().context;
       const element = document.querySelector(
-        event.type === "FEEDBACK_DELIVERED"
-          ? "[data-feedback]"
-          : "[data-terminal]",
+        event.type === "FEEDBACK_DELIVERED" ? ".feedback" : "[data-terminal]",
       );
       receipts.push({
         type: event.type,

@@ -116,7 +116,8 @@ function PrepareWorkshop(props: C04Presentation) {
           [
             {
               transform: "translateY(15px)",
-              opacity: 0,
+              // Keep diagnostic instructions readable during their entrance.
+              opacity: element.matches(".check-header > .lead") ? 1 : 0,
               clipPath: "inset(0 0 100% 0)",
             },
             { transform: "none", opacity: 1, clipPath: "inset(0)" },

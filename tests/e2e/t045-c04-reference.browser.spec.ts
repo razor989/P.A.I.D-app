@@ -10,34 +10,52 @@ async function open(page: Page, label: string) {
   await page.getByRole("button", { name: label, exact: true }).click();
   if (label === "Prepare") {
     await page.getByRole("button", { name: /Start with Maya/ }).click();
-    await page.getByRole("button", { name: /Make your comparison/ }).click();
+    await page
+      .getByRole("button", { name: /Share your first thinking/ })
+      .click();
   } else if (label === "Apply")
     await page.getByRole("button", { name: /Work on the offer/ }).click();
   else
-    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Consider the allowance →", exact: true })
+      .click();
 }
 
-async function choosePrepare(page: Page, correct = true) {
+async function choosePrepare(page: Page, alternative = false) {
   for (let q = 0; q < 4; q++) {
     await page
       .getByRole("radio")
-      .nth(q === 1 || q === 2 ? 1 : q === 3 && !correct ? 1 : 0)
+      .nth(alternative ? 2 : q === 1 || q === 2 ? 1 : 0)
       .check();
+    await expect(
+      page.getByRole("button", { name: /Next question/ }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: /Share my thinking/ }).click();
+    await expect(page.locator(".feedback")).toContainText(
+      "Thanks for sharing your idea.",
+    );
+    await expect(page.locator(".feedback")).not.toContainText(
+      /Confirmed|Reconsideration/,
+    );
+    if (q === 3) break;
     await page
       .getByRole("button", {
-        name: q === 3 ? "Review my choices" : "Next question",
-        exact: true,
+        name: /Next question/,
       })
       .click();
   }
 }
-async function fill(page: Page, fields: Record<string, string>) {
-  for (const [role, value] of Object.entries(fields))
-    await page
-      .getByRole("textbox", {
-        name: new RegExp(`^${role}(?: —| \\(optional\\))`),
-      })
-      .fill(value);
+async function primary(page: Page, wrong: boolean) {
+  await page
+    .getByRole("textbox", { name: /^Change in allowance/ })
+    .fill(wrong ? "0" : "1500");
+  const field = page
+    .locator("details")
+    .filter({ hasText: "Response for percentage change" });
+  if (!(await field.getByRole("combobox").isVisible()))
+    await field.getByText("Not a numerical value?", { exact: true }).click();
+  await field.getByRole("combobox").selectOption("UNDEFINED");
+  await page.getByRole("button", { name: "Commit my calculation →" }).click();
 }
 for (const [label, id, values] of [
   ["Prepare", "C04-A01", { original: "18000", new: "18000", difference: "0" }],
@@ -47,11 +65,11 @@ for (const [label, id, values] of [
     { original: "30000", new: "27000", difference: "-3000", percentage: "-10" },
   ],
 ] as const) {
-  test(`${id} correct response, real receipt and durable completion`, async ({
+  test(`${id} authorized response, real receipt and Session completion`, async ({
     page,
   }, info) => {
     await open(page, label);
-    await expect(page.locator("[data-feedback]")).toHaveCount(0);
+    await expect(page.locator(".feedback")).toHaveCount(0);
     if (id === "C04-A01") await choosePrepare(page);
     else {
       for (const [role, value] of Object.entries(values)) {
@@ -78,16 +96,19 @@ for (const [label, id, values] of [
         .first()
         .click();
     }
-    await page
-      .getByRole("button", {
-        name: id === "C04-A01" ? "Check my reasoning" : "Check",
-        exact: true,
-      })
-      .click();
-    await expect(page.locator("[data-feedback]")).toContainText("Confirmed");
+    if (id === "C04-A03")
+      await page
+        .getByRole("button", {
+          name: "Check",
+          exact: true,
+        })
+        .click();
+    await expect(page.locator(".feedback")).toContainText(
+      id === "C04-A01" ? "Thanks for sharing your idea." : "Confirmed",
+    );
     await expect(
       page.getByRole("button", {
-        name: id === "C04-A03" ? "See your recap →" : "Finish activity",
+        name: "See your recap →",
       }),
     ).toBeEnabled();
     const receipts = await page.evaluate(
@@ -98,7 +119,7 @@ for (const [label, id, values] of [
           }
         ).t045.inspect().receipts,
     );
-    expect(receipts.length).toBe(1);
+    expect(receipts.length).toBe(id === "C04-A01" ? 4 : 1);
     expect(receipts.every((receipt) => receipt.visible)).toBe(true);
     await page.screenshot({
       path: info.outputPath(`${id}-feedback.png`),
@@ -110,13 +131,13 @@ for (const [label, id, values] of [
     });
     await page
       .getByRole("button", {
-        name: id === "C04-A03" ? "See your recap →" : "Finish activity",
+        name: "See your recap →",
       })
       .click();
     if (id === "C04-A01")
-      await expect(
-        page.getByRole("heading", { name: "Same amounts. Distinct roles." }),
-      ).toBeVisible();
+      await expect(page.locator("[data-recap]")).toContainText(
+        "You shared your ideas on 4 of 4 questions",
+      );
     else
       await expect(
         page.getByRole("heading", {
@@ -134,7 +155,12 @@ for (const [label, id, values] of [
         ),
       )
       .toBeGreaterThan(0);
-    await page.getByRole("button", { name: "Next activity" }).click();
+    await page
+      .getByRole("button", {
+        name: id === "C04-A01" ? "Explore and Learn →" : "Next activity →",
+        exact: true,
+      })
+      .click();
     if (id === "C04-A01")
       await expect(
         page.getByRole("heading", {
@@ -144,29 +170,31 @@ for (const [label, id, values] of [
       ).toBeVisible();
     else
       await expect(
-        page.getByText("Stage: ENTRY", { exact: true }),
+        page.getByRole("heading", {
+          name: "Something new. A different start.",
+        }),
       ).toBeVisible();
   });
 }
-test("A01 reconsideration, revision, technical barrier, modal and fresh reentry", async ({
+test("A01 neutral recording, revision, technical barrier and local story review", async ({
   page,
 }) => {
   await open(page, "Prepare");
-  await choosePrepare(page, false);
-  await page
-    .getByRole("button", { name: "Check my reasoning", exact: true })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Reconsideration", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Revise response" }).click();
-  await expect(page.getByRole("radio").first()).toBeChecked();
-  await page.getByRole("button", { name: "Review", exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(
-    page.getByRole("button", { name: "Review", exact: true }),
-  ).toBeFocused();
+  await page.getByRole("radio").nth(2).check();
+  await page.getByRole("button", { name: /Share my thinking/ }).click();
+  await expect(page.locator(".feedback")).toContainText(
+    "Thanks for sharing your idea.",
+  );
+  await page.getByRole("button", { name: "Change my choice" }).click();
+  await expect(page.getByRole("radio").nth(2)).toBeChecked();
+  await expect(page.locator(".feedback")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Next question/ })).toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: /Revisit Maya’s story/ }).click();
+  await expect(page.getByRole("slider")).toBeVisible();
+  await page.getByRole("button", { name: "Return to your thinking" }).click();
+  await expect(page.getByRole("radio").nth(2)).toBeChecked();
   await page.evaluate(() =>
     (window as unknown as { t045: { block(): void } }).t045.block(),
   );
@@ -174,13 +202,15 @@ test("A01 reconsideration, revision, technical barrier, modal and fresh reentry"
   await page.evaluate(() =>
     (window as unknown as { t045: { unblock(): void } }).t045.unblock(),
   );
-  await choosePrepare(page);
-  await page
-    .getByRole("button", { name: "Check my reasoning", exact: true })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Confirmation", exact: true }),
-  ).toBeVisible();
+  await page.getByRole("radio").first().check();
+  await page.getByRole("button", { name: /Share my thinking/ }).click();
+  await expect(page.locator(".feedback")).toContainText(
+    "Thanks for sharing your idea.",
+  );
+  await page.getByRole("button", { name: "Finish here for now" }).click();
+  await expect(page.locator("[data-recap]")).toContainText(
+    "You shared your ideas on 1 of 4 questions",
+  );
 });
 test("A02 reference teaching and three guided selections retain receipts and Session continuation", async ({
   page,
@@ -249,30 +279,28 @@ for (const wrong of [false, true])
   }, info) => {
     await open(page, "Check and Transfer");
     await expect(page.getByRole("radio")).toHaveCount(0);
-    await fill(page, { difference: wrong ? "0" : "1500" });
-    await page.getByRole("checkbox", { name: "percentage: UNDEFINED" }).check();
-    await page.getByRole("button", { name: "Commit primary response" }).click();
+    await primary(page, wrong);
     await expect(page.getByRole("radio")).toHaveCount(2);
-    await page.getByRole("button", { name: "Return to primary" }).click();
+    await page.getByRole("button", { name: "← Change my calculation" }).click();
     await expect(page.getByRole("radio")).toHaveCount(0);
-    await fill(page, { difference: wrong ? "0" : "1500" });
-    await page.getByRole("checkbox", { name: "percentage: UNDEFINED" }).check();
-    await page.getByRole("button", { name: "Commit primary response" }).click();
+    await primary(page, wrong);
     await page
       .getByRole("radio")
       .nth(wrong ? 1 : 0)
       .check();
-    await page.getByRole("button", { name: "Check", exact: true }).click();
-    await expect(
-      page.getByText(`Stage: ${wrong ? "RECONSIDERATION" : "CONFIRMATION"}`, {
-        exact: true,
-      }),
-    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Check my response", exact: true })
+      .click();
+    await expect(page.locator(".feedback")).toContainText(
+      wrong ? "Do not report" : "Confirmed.",
+    );
     await expect(page.locator("[data-terminal]")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Finish activity" }),
     ).toHaveCount(0);
-    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Look at the relationship →", exact: true })
+      .click();
     await expect(page.locator("[data-terminal]")).toContainText(/undefined/i);
     const receipts = await page.evaluate(
       () =>
@@ -296,7 +324,7 @@ for (const wrong of [false, true])
     await page.getByRole("button", { name: "Finish activity" }).click();
     await expect(
       page.getByRole("heading", {
-        name: "The offer, in perspective.",
+        name: "Your recorded response",
         exact: true,
       }),
     ).toBeVisible();

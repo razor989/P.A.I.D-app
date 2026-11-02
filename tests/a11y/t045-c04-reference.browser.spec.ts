@@ -20,11 +20,11 @@ for (const profile of ["default", "reduced", "forced", "narrow"] as const) {
     await page.keyboard.press("Space");
     await page.getByRole("button", { name: /Start with Maya/ }).focus();
     await page.keyboard.press("Enter");
-    await page.getByRole("button", { name: /Make your comparison/ }).focus();
+    await page
+      .getByRole("button", { name: /Share your first thinking/ })
+      .focus();
     await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("heading", { name: "Keep the starting point in view." }),
-    ).toBeFocused();
+    await expect(page.locator(".reference-main h2")).toBeFocused();
     for (let q = 0; q < 4; q++) {
       await page
         .getByRole("radio")
@@ -33,17 +33,23 @@ for (const profile of ["default", "reduced", "forced", "narrow"] as const) {
       await page.keyboard.press("Space");
       await page
         .getByRole("button", {
-          name: q === 3 ? "Review my choices" : "Next question",
+          name: "Share my thinking →",
           exact: true,
         })
         .focus();
       await page.keyboard.press("Enter");
+      await expect(page.locator(".feedback")).toContainText(
+        "Thanks for sharing your idea.",
+      );
+      await expect(page.locator(".feedback")).not.toContainText(
+        /Confirmed|Reconsideration/,
+      );
+      if (q < 3) {
+        await page.getByRole("button", { name: /Next question/ }).focus();
+        await page.keyboard.press("Enter");
+      }
     }
-    await page
-      .getByRole("button", { name: "Check my reasoning", exact: true })
-      .focus();
-    await page.keyboard.press("Enter");
-    await expect(page.locator("[data-feedback]")).toBeVisible();
+    await expect(page.locator(".feedback")).toBeVisible();
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations).toEqual([]);
     await info.attach("AX-response-feedback", {
