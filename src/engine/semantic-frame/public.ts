@@ -1563,10 +1563,17 @@ export function projectSemanticActivityFrame(
     currentCheck &&
     (phase === "CONFIRMATION" || phase === "RECONSIDERATION") &&
     c.feedbackRevision === null;
+  // T062 B062-FEEDBACK-002: A01 delivery eligibility only, not answer reveal.
+  const pendingC03PrepareFeedback =
+    c.activityId === "C03-A01" &&
+    idle &&
+    currentCheck &&
+    (phase === "CONFIRMATION" || phase === "RECONSIDERATION") &&
+    c.feedbackRevision === null;
   const feedback = approvedMain
     ? safeText(approvedMain)
     : !floor &&
-        (currentFeedback || pendingC04Feedback) &&
+        (currentFeedback || pendingC04Feedback || pendingC03PrepareFeedback) &&
         content.feedback?.revision === c.responseRevision &&
         content.feedback.outcome === c.evaluation?.outcome
       ? safeText(content.feedback.content)
