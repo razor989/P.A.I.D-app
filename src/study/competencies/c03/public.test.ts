@@ -5,12 +5,14 @@ import {
   isScenarioChildId,
 } from "../../../core/public";
 import { composeStudyCatalog } from "../../catalog/public";
+import { actualContentBank, validateContent } from "../../validation/public";
 import {
   activityManifestSchema,
   scenarioDefinitionSchema,
 } from "../../schemas/public";
 import {
   c03Activities,
+  c03A01Diagnostic,
   c03Catalog,
   c03Competency,
   c03Copy,
@@ -56,6 +58,75 @@ const alterFact = (scenario: number, key: string, resolution: unknown) => {
 };
 
 describe("C03 source-pinned fixed definitions", () => {
+  it("retains global fixed declaration rejection for legacy, foreign and extra A01 contracts", () => {
+    expect(() => validateContent(actualContentBank)).not.toThrow();
+    for (const responseContract of [
+      {
+        contractId:
+          "C03 condition-linked overtime response semantics (task-local reference)",
+      },
+      { contractId: "C03-A01-elicit-engage-v1" },
+      { contractId: "C03-A01-elicit-engage-v2", version: 1 },
+      { contractId: "C03-A01-elicit-engage-v2", options: ["unauthorized"] },
+    ]) {
+      const parts = Object.freeze(
+        actualContentBank.parts.map((part) =>
+          part.competency.id !== "C03"
+            ? part
+            : Object.freeze({
+                ...part,
+                activities: Object.freeze(
+                  part.activities.map((activity) =>
+                    activity.id !== "C03-A01"
+                      ? activity
+                      : Object.freeze({
+                          ...activity,
+                          responseContract: Object.freeze(responseContract),
+                        }),
+                  ),
+                ),
+              }),
+        ),
+      );
+      expect(() =>
+        validateContent(Object.freeze({ ...actualContentBank, parts })),
+      ).toThrow();
+    }
+  });
+  it("T062 owns exact neutral contract identity, prompts, option membership and acknowledgment", () => {
+    expect(c03Activities[0]!.responseContract.contractId).toBe(
+      "C03-A01-elicit-engage-v2",
+    );
+    expect(c03A01Diagnostic.version).toBe(2);
+    expect(c03A01Diagnostic.expectation.prompt).toBe(
+      "How do you imagine Nico's extra hours might be paid?",
+    );
+    expect(c03A01Diagnostic.investigation.prompt).toBe(
+      "What would you want to find out before deciding Nico's extra pay?",
+    );
+    expect(c03A01Diagnostic.expectation.options.map((o) => o.id)).toEqual([
+      "c03-a01-same-rate",
+      "c03-a01-extra-rate",
+      "c03-a01-depends",
+      "c03-a01-not-sure",
+    ]);
+    expect(c03A01Diagnostic.investigation.options.map((o) => o.id)).toEqual([
+      "c03-a01-count-hours",
+      "c03-a01-day-matters",
+      "c03-a01-rate-rule",
+      "c03-a01-where-start",
+      "c03-a01-compare-ideas",
+    ]);
+    expect(c03Copy["c03/S01/confirmation"]).toBe(
+      "Your thinking is recorded. This is your starting point, not a marked answer. You can change your ideas before finishing.",
+    );
+    expect(
+      Object.entries(c03Copy)
+        .filter(([k]) => k.startsWith("c03/S01/"))
+        .map(([, v]) => v)
+        .join(" "),
+    ).not.toMatch(/1\.25|250|Confirmed\./);
+  });
   it("has precisely one competency, four ordered activity/primary scenario pairs and successors", () => {
     expect([
       c03Catalog.competencies.size,

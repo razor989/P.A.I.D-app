@@ -47,8 +47,8 @@ const response = (
 });
 const answers = [
   response({
-    condition: choice("ordinary working day"),
-    multiplier: q("1.25", true),
+    expectation: choice("c03-a01-not-sure"),
+    investigation: choice("c03-a01-compare-ideas"),
   }),
   response({
     invariants: choice("rate + hours"),
@@ -196,6 +196,62 @@ describe("C03 source-bound inspection", () => {
 });
 
 describe("C03 real checkpoint and queue reconstruction", () => {
+  it("T062 rejects legacy A01 including empty drafts without conversion or storage deletion", async () => {
+    const a = fresh(0);
+    for (const populated of [false, true]) {
+      if (populated) {
+        advance(a, "ACTIVE");
+        a.send({ type: "RESPONSE_CHANGED", response: answers[0]! });
+      }
+      const checkpoint = projectC03CheckpointV3(a);
+      expect(checkpoint.responseContract).toEqual({
+        id: "C03-A01-elicit-engage-v2",
+        version: 2,
+      });
+      const legacy = {
+        ...checkpoint,
+        responseContract: {
+          id: "C03 condition-linked overtime response semantics (task-local reference)",
+          version: 1,
+        },
+      };
+      expect(() => validateC03CheckpointV3(legacy)).toThrow();
+      expect(() =>
+        validateC03CheckpointV3({
+          ...checkpoint,
+          responseContract: { ...checkpoint.responseContract, version: 1 },
+        }),
+      ).toThrow();
+      expect(() =>
+        createC03RestoredActivityActor({
+          ...projectC03ModelCheckpoint(a),
+          context: a.getSnapshot().context,
+        }),
+      ).toThrow();
+      expect(() =>
+        createC03RestoredActivityActor({
+          ...projectC03ModelCheckpoint(a),
+          context: a.getSnapshot().context,
+          responseContract: legacy.responseContract,
+        }),
+      ).toThrow();
+      const bytes = JSON.stringify({
+        ...createRecoveryCheckpointV3(checkpoint),
+        checkpoint: legacy,
+      });
+      const saved = memory(bytes);
+      const result = await recoverC03CheckpointV3(saved.queue);
+      expect(result.status).toBe("UNUSABLE_CHECKPOINT_V3");
+      expect(saved.writes).toEqual([]);
+      expect(await saved.store.load()).toBe(bytes);
+      expect(claimRecoveryClassificationV3(saved.queue, result)).toBe(true);
+      // Existing caller can start a fresh actor, without mutating incompatible bytes.
+      const restarted = fresh(0);
+      expect(restarted.getSnapshot().context.response).toBeNull();
+      restarted.stop();
+    }
+    a.stop();
+  });
   it.each([0, 2, 3])(
     "restores static activity index %i entry, draft, checking, delivery and revision",
     async (index) => {

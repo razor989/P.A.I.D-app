@@ -2,6 +2,7 @@ import type { Quantity } from "@/core/public";
 import { ExactDecimal, isLearnerResponse } from "@/core/public";
 import {
   c03Activities,
+  c03A01Diagnostic,
   c03Competency,
   c03Copy,
   c03Evidence,
@@ -149,6 +150,12 @@ function modelDefinition(id: Id): C03ModelDefinition {
 }
 
 function definition(id: Id): ActivityDefinition {
+  if (id === "C03-A01")
+    return {
+      activityId: id,
+      edges: { ENTRY: { CONTINUE: "ACTIVE" } },
+      support: {},
+    };
   const support: ActivityDefinition["support"] = {
     ACTIVE: ["REVIEW"],
     REVISION: ["REVIEW"],
@@ -203,15 +210,15 @@ export function createC03ActivityBindings(): readonly ExecutableActivityBinding[
       const source = modelDefinition(id);
       const oracle = createC03ModelState(source);
       const ports: ActivityPorts = {
-        ready: (r) => c03ResponseReady(oracle, r),
-        evaluate: (r) => evaluateC03Response(oracle, r),
+        ready: (r) => c03ResponseReady(oracle, r, c03A01Diagnostic),
+        evaluate: (r) => evaluateC03Response(oracle, r, c03A01Diagnostic),
         completionEligible: (e) =>
           e.activityId === id &&
           e.responseRevision > 0 &&
           e.checkedRevision === e.responseRevision &&
           e.feedbackRevision === e.responseRevision &&
           (e.evaluation?.outcome === "CONFIRMED" ||
-            e.evaluation?.outcome === "RECONSIDERATION"),
+            (id !== "C03-A01" && e.evaluation?.outcome === "RECONSIDERATION")),
         sourceReviewAvailable: () => false,
         informationNeeded: () => false,
         informationReturn: () => false,
@@ -316,6 +323,7 @@ export function projectC03ActivityFrame(actor: ActivityActor) {
     c.feedbackRevision === c.responseRevision &&
     c.evaluation !== null;
   const revealed =
+    id !== "C03-A01" &&
     feedbackCurrent &&
     ["CONFIRMATION", "RECONSIDERATION", "COMPLETE"].includes(c.position);
   const taught =
@@ -356,35 +364,43 @@ export function projectC03ActivityFrame(actor: ActivityActor) {
               diagnostic === "CONDITION_MULTIPLIER"
             ? "reconsider-condition"
             : null;
-  const controls: readonly PublicResponseControl[] = c03ResponseFields[id].map(
-    (key) =>
-      Object.freeze({
-        role: key,
-        acceptedKinds: [
-          key === "condition"
-            ? "SINGLE_SELECTION"
-            : key === "invariants" || key === "changes"
-              ? "SINGLE_SELECTION"
-              : "EXACT_QUANTITY",
-        ],
-        ...(key === "condition"
-          ? {
-              options: c03ConditionOptions.map((option) => ({
-                id: option,
-                text: option,
-              })),
-            }
-          : key === "invariants" || key === "changes"
-            ? {
-                options: [
-                  "rate + hours",
-                  "condition + multiplier + overtimePay",
-                  "rate + multiplier",
-                ].map((option) => ({ id: option, text: option })),
-              }
-            : {}),
-      }),
-  );
+  const controls: readonly PublicResponseControl[] =
+    id === "C03-A01"
+      ? c03ResponseFields["C03-A01"].map((role) =>
+          Object.freeze({
+            role,
+            acceptedKinds: ["SINGLE_SELECTION" as const],
+            options: c03A01Diagnostic[role].options,
+          }),
+        )
+      : c03ResponseFields[id].map((key) =>
+          Object.freeze({
+            role: key,
+            acceptedKinds: [
+              key === "condition"
+                ? "SINGLE_SELECTION"
+                : key === "invariants" || key === "changes"
+                  ? "SINGLE_SELECTION"
+                  : "EXACT_QUANTITY",
+            ],
+            ...(key === "condition"
+              ? {
+                  options: c03ConditionOptions.map((option) => ({
+                    id: option,
+                    text: option,
+                  })),
+                }
+              : key === "invariants" || key === "changes"
+                ? {
+                    options: [
+                      "rate + hours",
+                      "condition + multiplier + overtimePay",
+                      "rate + multiplier",
+                    ].map((option) => ({ id: option, text: option })),
+                  }
+                : {}),
+          }),
+        );
   const frame = projectSemanticActivityFrame({
     context: c,
     phase: c.position,
@@ -421,7 +437,7 @@ export function projectC03ActivityFrame(actor: ActivityActor) {
           activityId: id,
           contractId:
             c03Activities[ids.indexOf(id)]!.responseContract.contractId,
-          version: 1,
+          version: id === "C03-A01" ? 2 : 1,
           stage: "RESPONSE",
           controls,
         },
@@ -449,11 +465,15 @@ export function projectC03ActivityFrame(actor: ActivityActor) {
             },
           }
         : {}),
-      review: {
-        receivingActivityId: id,
-        invokingPhase: c.position,
-        relationships: [text("relationship-help")],
-      },
+      ...(id !== "C03-A01"
+        ? {
+            review: {
+              receivingActivityId: id,
+              invokingPhase: c.position,
+              relationships: [text("relationship-help")],
+            },
+          }
+        : {}),
     },
   });
   // All non-frame mathematical channels are equally source-authenticated and
@@ -487,6 +507,7 @@ export function projectC03ActivityFrame(actor: ActivityActor) {
       : null;
   return Object.freeze({
     frame,
+    diagnosticPrompts: id === "C03-A01" ? c03A01Diagnostic : null,
     workEvidence: Object.freeze({
       scenarioId: source.scenarioId,
       evidenceMode: source.evidenceMode,
@@ -548,6 +569,7 @@ export function createC03RestoredActivityActor(input: {
   scenarioId: string;
   context: ActivityContext;
   model: unknown;
+  responseContract?: Readonly<{ id: string; version: number }>;
 }): ActivityActor {
   const data = (value: unknown, seen = new Set<object>()): void => {
     if (
@@ -590,7 +612,8 @@ export function createC03RestoredActivityActor(input: {
   data(input);
   if (
     !input ||
-    Reflect.ownKeys(input).length !== 4 ||
+    Reflect.ownKeys(input).length !==
+      (input.responseContract === undefined ? 4 : 5) ||
     !["activityId", "scenarioId", "context", "model"].every((k) => {
       const d = Object.getOwnPropertyDescriptor(input, k);
       return d && "value" in d;
@@ -598,6 +621,17 @@ export function createC03RestoredActivityActor(input: {
   )
     throw new TypeError("Invalid C03 restoration input");
   const id = identity(input.activityId);
+  const contract = input.responseContract;
+  if (id === "C03-A01" || contract !== undefined) {
+    if (
+      !contract ||
+      Reflect.ownKeys(contract).length !== 2 ||
+      contract.id !==
+        c03Activities[ids.indexOf(id)]!.responseContract.contractId ||
+      contract.version !== (id === "C03-A01" ? 2 : 1)
+    )
+      throw new TypeError("Incompatible C03 response contract");
+  }
   const source = modelDefinition(id);
   if (input.scenarioId !== source.scenarioId || input.context.activityId !== id)
     throw new TypeError("C03 restoration identity mismatch");
@@ -643,17 +677,23 @@ export function createC03RestoredActivityActor(input: {
       !response.parts.every(
         ({ key, response: r }) =>
           (c03ResponseFields[id] as readonly string[]).includes(key) &&
-          (key === "condition"
-            ? r.kind === "SINGLE_SELECTION" &&
-              c03ConditionOptions.includes(r.selectionId)
-            : key === "invariants" || key === "changes"
+          (id === "C03-A01"
+            ? (key === "expectation" || key === "investigation") &&
+              r.kind === "SINGLE_SELECTION" &&
+              c03A01Diagnostic[key].options.some(
+                (option) => option.id === r.selectionId,
+              )
+            : key === "condition"
               ? r.kind === "SINGLE_SELECTION" &&
-                [
-                  "rate + hours",
-                  "condition + multiplier + overtimePay",
-                  "rate + multiplier",
-                ].includes(r.selectionId)
-              : r.kind === "EXACT_QUANTITY"),
+                c03ConditionOptions.includes(r.selectionId)
+              : key === "invariants" || key === "changes"
+                ? r.kind === "SINGLE_SELECTION" &&
+                  [
+                    "rate + hours",
+                    "condition + multiplier + overtimePay",
+                    "rate + multiplier",
+                  ].includes(r.selectionId)
+                : r.kind === "EXACT_QUANTITY"),
       )
     )
       throw new TypeError("Invalid saved C03 response");
@@ -682,7 +722,7 @@ export function inspectC03RecoveryActor(actor: ActivityActor) {
     context,
     responseContract: {
       id: c03Activities[ids.indexOf(id)]!.responseContract.contractId,
-      version: 1 as const,
+      version: id === "C03-A01" ? (2 as const) : (1 as const),
     },
     definition: binding.definition,
     model: projectC03ModelCheckpoint(actor).model,

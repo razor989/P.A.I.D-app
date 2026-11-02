@@ -448,6 +448,7 @@ export async function recoverC03CheckpointV3(
       activityId: data.activityId,
       scenarioId: data.scenarioId,
       context: decodeC03CheckpointContext(data),
+      responseContract: data.responseContract,
       model: data.model?.evidence ?? null,
     });
     if (

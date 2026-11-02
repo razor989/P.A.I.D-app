@@ -14,6 +14,58 @@ import { c03Copy } from "./content";
 
 export { c03Copy } from "./content";
 
+/** Owner-authorized T062 neutral Prepare contract. No option is a grading key. */
+export const c03A01Diagnostic = Object.freeze({
+  id: "C03-A01-elicit-engage-v2",
+  version: 2 as const,
+  expectation: Object.freeze({
+    prompt: "How do you imagine Nico's extra hours might be paid?",
+    options: Object.freeze([
+      Object.freeze({
+        id: "c03-a01-same-rate",
+        text: "I would start with the usual pay for each hour.",
+      }),
+      Object.freeze({
+        id: "c03-a01-extra-rate",
+        text: "I think each extra hour might be paid at a higher rate.",
+      }),
+      Object.freeze({
+        id: "c03-a01-depends",
+        text: "I think it might depend on the circumstances of the extra work.",
+      }),
+      Object.freeze({
+        id: "c03-a01-not-sure",
+        text: "I'm not sure yet; I would like to find out.",
+      }),
+    ]),
+  }),
+  investigation: Object.freeze({
+    prompt: "What would you want to find out before deciding Nico's extra pay?",
+    options: Object.freeze([
+      Object.freeze({
+        id: "c03-a01-count-hours",
+        text: "Whether counting the extra hours is enough.",
+      }),
+      Object.freeze({
+        id: "c03-a01-day-matters",
+        text: "Whether the kind of day changes how extra work is paid.",
+      }),
+      Object.freeze({
+        id: "c03-a01-rate-rule",
+        text: "How the usual hourly pay connects to pay for extra work.",
+      }),
+      Object.freeze({
+        id: "c03-a01-where-start",
+        text: "Where to begin when working out extra pay.",
+      }),
+      Object.freeze({
+        id: "c03-a01-compare-ideas",
+        text: "I'm not sure yet; I would like to compare ideas.",
+      }),
+    ]),
+  }),
+});
+
 const known = (
   magnitude: string,
   kind: string,
@@ -210,7 +262,9 @@ const parsedActivities: readonly ActivityManifest[] = Object.freeze(
       ],
       responseContract: {
         contractId:
-          "C03 condition-linked overtime response semantics (task-local reference)",
+          index === 0
+            ? c03A01Diagnostic.id
+            : "C03 condition-linked overtime response semantics (task-local reference)",
       },
       modelBinding: {
         profileId: "Overtime Work Record",

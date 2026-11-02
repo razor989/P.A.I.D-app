@@ -3,6 +3,7 @@ import { ExactDecimal, quantity } from "@/core/public";
 import type { LearnerResponse } from "@/core/public";
 import {
   c03Activities,
+  c03A01Diagnostic,
   c03Competency,
   c03Copy,
   c03Evidence,
@@ -45,8 +46,8 @@ const response = (
 });
 const answers = [
   response({
-    condition: choice("ordinary working day"),
-    multiplier: q("1.25", true),
+    expectation: choice("c03-a01-not-sure"),
+    investigation: choice("c03-a01-compare-ideas"),
   }),
   response({
     invariants: choice("rate + hours"),
@@ -84,6 +85,62 @@ function inspectOrdinary(actor: ReturnType<typeof createC03ActivityActor>) {
 }
 
 describe("C03 canonical runtime", () => {
+  it("T062 accepts all twenty starting ideas without solution projection", () => {
+    for (const expectation of c03A01Diagnostic.expectation.options) {
+      for (const investigation of c03A01Diagnostic.investigation.options) {
+        const a = active(0);
+        const assertNeutral = () => {
+          const p = projectC03ActivityFrame(a);
+          expect(p.mathematicalExplanation).toBeNull();
+          expect(p.frame.review).toBeUndefined();
+          expect(JSON.stringify(p)).not.toMatch(
+            /1\.25|250|reconsider-condition/,
+          );
+        };
+        assertNeutral();
+        a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+        expect(a.getSnapshot().context.position).toBe("ACTIVE");
+        a.send({
+          type: "RESPONSE_CHANGED",
+          response: response({
+            expectation: choice(expectation.id),
+            investigation: choice(investigation.id),
+          }),
+        });
+        a.send({ type: "CHECK_RESPONSE" });
+        expect(a.getSnapshot().context.evaluation).toEqual({
+          outcome: "CONFIRMED",
+          diagnostic: null,
+        });
+        assertNeutral();
+        expect(
+          projectC03ActivityFrame(a).frame.feedbackState?.content.text,
+        ).toBe(c03Copy["c03/S01/confirmation"]);
+        a.send({
+          type: "FEEDBACK_DELIVERED",
+          revision: a.getSnapshot().context.responseRevision,
+        });
+        assertNeutral();
+        a.send({ type: "REVISE" });
+        a.send({ type: "RESPONSE_CHANGED", response: answers[0]! });
+        a.send({
+          type: "FEEDBACK_DELIVERED",
+          revision: a.getSnapshot().context.responseRevision - 1,
+        });
+        a.send({ type: "FINISH_ACTIVITY" });
+        expect(a.getSnapshot().context.position).toBe("REVISION");
+        a.send({ type: "CHECK_AGAIN" });
+        a.send({
+          type: "FEEDBACK_DELIVERED",
+          revision: a.getSnapshot().context.responseRevision,
+        });
+        a.send({ type: "FINISH_ACTIVITY" });
+        expect(a.getSnapshot().context.position).toBe("COMPLETE");
+        assertNeutral();
+        a.stop();
+      }
+    }
+  });
   it("authenticates exact source and rejects changed facts, evidence and membership", () => {
     authenticateC03BindingSource();
     const source = {
@@ -187,10 +244,11 @@ describe("C03 canonical runtime", () => {
       ).diagnostic,
     ).toBe("UNITS");
     expect(
-      bindings[0]!.ports.evaluate(
+      bindings[3]!.ports.evaluate(
         response({
           condition: choice("rest day"),
           multiplier: q("1.25", true),
+          overtimePay: q("936"),
         }),
       ).diagnostic,
     ).toBe("WORK_CONDITION");
@@ -209,7 +267,7 @@ describe("C03 canonical runtime", () => {
       ),
     ).toBe(false);
   });
-  it.each([0, 2, 3])(
+  it.each([2, 3])(
     "preserves independent exposure and invoked Help in %i",
     (i) => {
       const a = active(i);

@@ -7,7 +7,17 @@ import type {
 import { applyC03ModelIntent, deriveC03ModelState } from "../model/public";
 import type { C03ModelState } from "../model/public";
 
+/** Study-owned membership supplied by authenticated Engine composition. */
+export type C03DiagnosticMembership = Readonly<
+  Record<
+    "expectation" | "investigation",
+    Readonly<{ options: readonly Readonly<{ id: string }>[] }>
+  >
+>;
+
 export type C03ResponseField =
+  | "expectation"
+  | "investigation"
   | "condition"
   | "multiplier"
   | "overtimePay"
@@ -28,7 +38,7 @@ export type C03Evaluation = Readonly<{
     | null;
 }>;
 export const c03ResponseFields = Object.freeze({
-  "C03-A01": Object.freeze(["condition", "multiplier"] as const),
+  "C03-A01": Object.freeze(["expectation", "investigation"] as const),
   "C03-A02": Object.freeze([
     "invariants",
     "changes",
@@ -88,6 +98,7 @@ function data(value: unknown, seen = new Set<object>()): boolean {
 export function c03ResponseReady(
   state: C03ModelState,
   input: unknown,
+  diagnostic?: C03DiagnosticMembership,
 ): input is Extract<LearnerResponse, { kind: "COMPOSITE" }> {
   const view = deriveC03ModelState(state);
   if (!data(input) || !isLearnerResponse(input) || input.kind !== "COMPOSITE")
@@ -99,6 +110,13 @@ export function c03ResponseReady(
   )
     return false;
   return input.parts.every(({ key, response: r }) => {
+    if (view.state.activityId === "C03-A01")
+      return (
+        diagnostic !== undefined &&
+        (key === "expectation" || key === "investigation") &&
+        r.kind === "SINGLE_SELECTION" &&
+        diagnostic[key].options.some((option) => option.id === r.selectionId)
+      );
     if (key === "condition")
       return (
         r.kind === "SINGLE_SELECTION" &&
@@ -121,9 +139,12 @@ export function c03ResponseReady(
 export function evaluateC03Response(
   state: C03ModelState,
   input: unknown,
+  diagnostic?: C03DiagnosticMembership,
 ): C03Evaluation {
-  if (!c03ResponseReady(state, input))
+  if (!c03ResponseReady(state, input, diagnostic))
     throw new TypeError("Invalid or incomplete C03 response");
+  if (state.activityId === "C03-A01")
+    return Object.freeze({ outcome: "CONFIRMED", diagnostic: null });
   const view = deriveC03ModelState(state);
   const wrong = (
     diagnostic: NonNullable<C03Evaluation["diagnostic"]>,

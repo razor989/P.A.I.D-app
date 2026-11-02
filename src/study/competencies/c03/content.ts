@@ -10,19 +10,18 @@ export const c03Copy = Object.freeze({
   "c03/S01/scenario":
     "Nico is a covered private-sector employee with an established regular hourly rate of ₱100.00 per hour. On an ordinary working day, he finishes his regular eight hours of work and then works 2 additional hours.",
   "c03/S01/task":
-    "Before calculating overtime pay, identify the overtime condition and the multiplier that follows from it.",
+    "Choose the idea closest to your thinking. It's fine to be unsure. You do not need to calculate.",
   "c03/S01/relationship-help":
-    "The overtime condition determines the multiplier. Ordinary working-day overtime uses the approved 1.25 multiplier.",
+    "Your starting ideas are welcome; you do not need to calculate.",
   "c03/S01/confirmation":
-    "Confirmed. The condition is ordinary working-day overtime, so the multiplier is 1.25. With 2 overtime hours at ₱100.00 per hour, the corresponding overtime pay is ₱250.00.",
-  "c03/S01/reconsider-condition":
-    "Identify the work condition first. This scenario states that the overtime occurs on an ordinary working day.",
+    "Your thinking is recorded. This is your starting point, not a marked answer. You can change your ideas before finishing.",
+  "c03/S01/reconsider-condition": "You can change your ideas before finishing.",
   "c03/S01/reconsider-multiplier":
-    "Use the multiplier that belongs to the established condition. The hourly rate and the multiplier are different quantities.",
+    "Your ideas are a starting point, not a marked answer.",
   "c03/S01/completion":
-    "Activity complete. Ordinary working-day overtime uses the 1.25 multiplier in this approved scenario.",
+    "Your starting ideas are recorded. What might change if the same extra hours happened on a different kind of day? Carry that question into Explore and Learn.",
   "c03/S01/accessibility-summary":
-    "Regular hourly rate ₱100.00 per hour. Condition: ordinary working-day overtime. Multiplier 1.25. Overtime hours 2. Corresponding overtime pay ₱250.00.",
+    "Nico earns ₱100.00 per hour and works eight regular hours, then two additional hours on an ordinary working day. Your recorded ideas are a starting point, not a marked answer.",
   "c03/S02/scenario":
     "Two approved work situations use the same regular hourly rate of ₱100.00 per hour and the same 2 overtime hours. Situation A occurs on an ordinary working day. Situation B occurs on the employee's rest day.",
   "c03/S02/task":

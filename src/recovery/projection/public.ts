@@ -235,7 +235,10 @@ const c03Schema = z.strictObject({
   competencyId: z.literal("C03"),
   activityId: z.enum(["C03-A01", "C03-A02", "C03-A03", "C03-A04"]),
   scenarioId: z.enum(["C03-S01", "C03-S02", "C03-S03", "C03-S04"]),
-  responseContract: z.strictObject({ id: label, version: z.literal(1) }),
+  responseContract: z.strictObject({
+    id: label,
+    version: z.union([z.literal(1), z.literal(2)]),
+  }),
   position: z.enum([
     "ENTRY",
     "EXP-01",
@@ -310,8 +313,12 @@ export function validateC03CheckpointV3(value: unknown): C03CheckpointV3 {
   assertCheckpointData(value);
   const data = c03Schema.parse(value);
   if (
-    data.responseContract.id !==
-    "C03 condition-linked overtime response semantics (task-local reference)"
+    data.activityId === "C03-A01"
+      ? data.responseContract.id !== "C03-A01-elicit-engage-v2" ||
+        data.responseContract.version !== 2
+      : data.responseContract.id !==
+          "C03 condition-linked overtime response semantics (task-local reference)" ||
+        data.responseContract.version !== 1
   )
     fail("C03 response contract mismatch");
   if ((data.activityId === "C03-A02") !== (data.model !== null))
@@ -320,6 +327,7 @@ export function validateC03CheckpointV3(value: unknown): C03CheckpointV3 {
     activityId: data.activityId,
     scenarioId: data.scenarioId,
     context: decodeC03CheckpointContext(data),
+    responseContract: data.responseContract,
     model: data.model?.evidence ?? null,
   });
   return frozen(data);

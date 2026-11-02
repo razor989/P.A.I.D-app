@@ -389,7 +389,8 @@ export function validateContent(bank: ContentBank): Readonly<{
         current.activities[j + 1]?.id,
       );
       same(activity.id, "response contract", activity.responseContract, {
-        contractId: responses[i],
+        contractId:
+          activity.id === "C03-A01" ? "C03-A01-elicit-engage-v2" : responses[i],
       });
       same(activity.id, "model family/interaction", activity.modelBinding, {
         profileId: models[i],
