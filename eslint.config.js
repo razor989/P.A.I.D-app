@@ -262,6 +262,23 @@ export default tseslint.config(
     ...restriction("engine/c04-activity-binding", stageEPublicTargets),
     files: ["src/engine/c04-activity-binding/public.ts"],
   },
+  // T061 D226: exact production composition pairs; no owner-wide grant.
+  {
+    ...restriction("engine/c03-activity-binding", [
+      "study/competencies/c03/public",
+      "competencies/c03-overtime-pay/model/public",
+      "competencies/c03-overtime-pay/evaluators/public",
+    ]),
+    files: ["src/engine/c03-activity-binding/public.ts"],
+  },
+  // T061 adversarial source/model tests actually use both authorized targets.
+  {
+    ...restriction("engine/c03-activity-binding", [
+      "study/competencies/c03/public",
+      "competencies/c03-overtime-pay/model/public",
+    ]),
+    files: ["src/engine/c03-activity-binding/public.test.ts"],
+  },
   {
     ...restriction(
       "engine/c04-activity-binding",
