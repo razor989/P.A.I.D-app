@@ -509,6 +509,17 @@ export default tseslint.config(
     files: [`src/app/${file}`],
   })),
   // P10-T044 D226-S1: exact importer/public-target pairs, not an owner grant.
+  // T062 B062-IMPORT-001: owner-approved exact C03 facade consumers only.
+  {
+    ...restriction("presentation/models/c03-overtime-work-record", [
+      "engine/c03-activity-binding/public",
+    ]),
+    files: [
+      "src/presentation/models/c03-overtime-work-record/public.tsx",
+      "src/presentation/models/c03-overtime-work-record/preview.tsx",
+      "src/presentation/models/c03-overtime-work-record/prepare.test.tsx",
+    ],
+  },
   {
     ...restriction("presentation/models/c04-anchored-change-track", [
       "engine/semantic-frame/public",
