@@ -1,5 +1,9 @@
 import { z } from "zod";
 import {
+  inspectC06RecoveryActor,
+  validateC06RecoveryWork,
+} from "@/engine/c06-activity-binding/public";
+import {
   inspectC03RecoveryActor,
   validateC03RecoveryWork,
 } from "@/engine/c03-activity-binding/public";
@@ -273,6 +277,142 @@ const c03Schema = z.strictObject({
     .nullable(),
 });
 export type C03CheckpointV3 = z.infer<typeof c03Schema>;
+
+/** Explicit C06 family DTO; no model objects, derived answers or compatibility fallback. */
+const c06Schema = z.strictObject({
+  competencyId: z.literal("C06"),
+  activityId: z.enum(["C06-A01", "C06-A02", "C06-A03", "C06-A04"]),
+  scenarioId: z.enum(["C06-S01", "C06-S02", "C06-S03", "C06-S04"]),
+  responseContract: z.strictObject({ id: label, version: z.literal(1) }),
+  position: z.enum([
+    "ENTRY",
+    "ACTIVE",
+    "REVISION",
+    "CONFIRMATION",
+    "RECONSIDERATION",
+    "EXP-01",
+    "EXP-02",
+    "EXP-03",
+    "EXP-04",
+    "EXP-05",
+    "EXP-06",
+    "POST_CONFIRMATION_EXPLANATION",
+  ]),
+  response: responseSchema.nullable(),
+  checkedResponse: responseSchema.nullable(),
+  responseRevision: revision,
+  checkedRevision: revision.nullable(),
+  feedbackRevision: revision.nullable(),
+  hasChecked: z.boolean(),
+  evaluation: activitySchema.shape.evaluation,
+  model: z
+    .strictObject({
+      evidence: z.strictObject({
+        activityId: z.enum(["C06-A01", "C06-A02"]),
+        scenarioId: z.enum(["C06-S01", "C06-S02"]),
+        selectedChildId: z.enum([
+          "C06-S01-A",
+          "C06-S01-B",
+          "C06-S02-A",
+          "C06-S02-B",
+        ]),
+      }),
+      revision,
+    })
+    .nullable(),
+  teaching: z
+    .strictObject({
+      entryRevision: revision.nullable(),
+      deliveredRevision: revision.nullable(),
+    })
+    .nullable(),
+});
+export type C06CheckpointV4 = z.infer<typeof c06Schema>;
+export function decodeC06CheckpointContext(
+  data: C06CheckpointV4,
+): ActivityContext {
+  return {
+    activityId: data.activityId,
+    position: data.position,
+    origin: null,
+    infoOrigin: null,
+    response: data.response === null ? null : decodeResponse(data.response),
+    checkedResponse:
+      data.checkedResponse === null
+        ? null
+        : decodeResponse(data.checkedResponse),
+    responseRevision: data.responseRevision,
+    checkedRevision: data.checkedRevision,
+    feedbackRevision: data.feedbackRevision,
+    hasChecked: data.hasChecked,
+    evaluation: data.evaluation,
+    ...(data.model
+      ? {
+          model: {
+            modelId: `${data.activityId}:Modular Commission Machine`,
+            revision: data.model.revision,
+            value: {
+              selectionId: data.model.evidence.selectedChildId,
+              state: null,
+            },
+          },
+        }
+      : {}),
+    ...(data.teaching
+      ? {
+          terminalEntryRevision: data.teaching.entryRevision,
+          terminalTeachingRevision: data.teaching.deliveredRevision,
+        }
+      : {}),
+  };
+}
+export function validateC06CheckpointV4(value: unknown): C06CheckpointV4 {
+  assertCheckpointData(value);
+  const data = c06Schema.parse(value);
+  if (
+    ["C06-A01", "C06-A02"].includes(data.activityId) !==
+      (data.model !== null) ||
+    ["C06-A01", "C06-A04"].includes(data.activityId) !==
+      (data.teaching !== null)
+  )
+    fail("C06 checkpoint family membership mismatch");
+  validateC06RecoveryWork({
+    activityId: data.activityId,
+    scenarioId: data.scenarioId,
+    responseContract: data.responseContract,
+    context: decodeC06CheckpointContext(data),
+    model: data.model?.evidence ?? null,
+  });
+  return frozen(data);
+}
+export function projectC06CheckpointV4(actor: ActivityActor): C06CheckpointV4 {
+  const source = inspectC06RecoveryActor(actor);
+  const c = source.context;
+  return validateC06CheckpointV4({
+    competencyId: "C06",
+    activityId: source.activityId,
+    scenarioId: source.scenarioId,
+    responseContract: source.responseContract,
+    position: c.position,
+    response: encodeResponse(c.response),
+    checkedResponse: encodeResponse(c.checkedResponse),
+    responseRevision: c.responseRevision,
+    checkedRevision: c.checkedRevision,
+    feedbackRevision: c.feedbackRevision,
+    hasChecked: c.hasChecked,
+    evaluation: c.evaluation,
+    model: source.model
+      ? { evidence: source.model, revision: c.model!.revision }
+      : null,
+    teaching:
+      c.terminalEntryRevision !== undefined
+        ? {
+            entryRevision: c.terminalEntryRevision,
+            deliveredRevision: c.terminalTeachingRevision,
+          }
+        : null,
+  });
+}
 
 /** Decode semantic work only; source composition reissues the opaque model. */
 export function decodeC03CheckpointContext(

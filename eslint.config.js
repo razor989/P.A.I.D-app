@@ -262,6 +262,29 @@ export default tseslint.config(
     ...restriction("engine/c04-activity-binding", stageEPublicTargets),
     files: ["src/engine/c04-activity-binding/public.ts"],
   },
+  // T057 D226: exact C06 composition and adversarial consumers only.
+  {
+    ...restriction("engine/c06-activity-binding", [
+      "study/competencies/c06/public",
+      "competencies/c06-commission/model/public",
+      "competencies/c06-commission/evaluators/public",
+    ]),
+    files: ["src/engine/c06-activity-binding/public.ts"],
+  },
+  {
+    ...restriction("engine/c06-activity-binding", [
+      "study/competencies/c06/public",
+      "competencies/c06-commission/model/public",
+    ]),
+    files: ["src/engine/c06-activity-binding/public.test.ts"],
+  },
+  ...["projection", "checkpoint", "rehydration", "store"].map((module) => ({
+    ...restriction(`recovery/${module}`, [
+      "engine/c06-activity-binding/public",
+      ...(module === "rehydration" ? ["engine/activity-machine/public"] : []),
+    ]),
+    files: [`src/recovery/${module}/c06.test.ts`],
+  })),
   // T061 D226: exact production composition pairs; no owner-wide grant.
   {
     ...restriction("engine/c03-activity-binding", [
@@ -293,6 +316,7 @@ export default tseslint.config(
       "engine/activity-runtime/public",
       "engine/c04-activity-binding/public",
       "engine/c03-activity-binding/public",
+      "engine/c06-activity-binding/public",
     ]),
     files: ["src/recovery/projection/public.ts"],
   },
@@ -318,6 +342,7 @@ export default tseslint.config(
         "engine/c04-activity-binding/public",
         "engine/activity-runtime/public",
         "engine/c03-activity-binding/public",
+        "engine/c06-activity-binding/public",
       ],
       [
         {

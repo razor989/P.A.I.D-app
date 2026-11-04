@@ -4,6 +4,8 @@ import type { RecoveryCheckpointEnvelopeV1 } from "../checkpoint/public";
 import type { RecoveryCheckpointEnvelopeV2 } from "../checkpoint/public";
 import { serializeRecoveryCheckpointV3 } from "../checkpoint/public";
 import type { RecoveryCheckpointEnvelopeV3 } from "../checkpoint/public";
+import { serializeRecoveryCheckpointV4 } from "../checkpoint/public";
+import type { RecoveryCheckpointEnvelopeV4 } from "../checkpoint/public";
 
 /** One owned checkpoint target, not a general key/value store. An adapter must
  * resolve mutations only on storage acknowledgment and reject unavailable or
@@ -64,6 +66,12 @@ export interface RecoveryCheckpointQueue {
     checkpoint: RecoveryCheckpointEnvelopeV3,
   ): Promise<RecoveryMutationResult>;
   retry(): Promise<RecoveryMutationResult>;
+  replaceV4(
+    checkpoint: RecoveryCheckpointEnvelopeV4,
+  ): Promise<RecoveryMutationResult>;
+  replaceBarrierV4(
+    checkpoint: RecoveryCheckpointEnvelopeV4,
+  ): Promise<RecoveryMutationResult>;
   /** Explicit downstream authorization is the caller's responsibility. This
    * route is available only after a failed replace, never after a failed clear. */
   recoveryClear(): Promise<RecoveryMutationResult>;
@@ -312,6 +320,18 @@ export function createRecoveryCheckpointQueue(
       submit({
         operation: "replace",
         checkpoint: serializeRecoveryCheckpointV3(checkpoint),
+        barrier: true,
+      }),
+    replaceV4: (checkpoint: RecoveryCheckpointEnvelopeV4) =>
+      submit({
+        operation: "replace",
+        checkpoint: serializeRecoveryCheckpointV4(checkpoint),
+        barrier: false,
+      }),
+    replaceBarrierV4: (checkpoint: RecoveryCheckpointEnvelopeV4) =>
+      submit({
+        operation: "replace",
+        checkpoint: serializeRecoveryCheckpointV4(checkpoint),
         barrier: true,
       }),
     retry: () => recover(false),

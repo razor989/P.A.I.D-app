@@ -1,5 +1,12 @@
 import { createC04RestoredActivityActor } from "@/engine/c04-activity-binding/public";
 import { createC03RestoredActivityActor } from "@/engine/c03-activity-binding/public";
+import { createC06RestoredActivityActor } from "@/engine/c06-activity-binding/public";
+import {
+  decodeC06CheckpointContext,
+  projectC06CheckpointV4,
+} from "../projection/public";
+import { parseRecoveryCheckpointV4 } from "../checkpoint/public";
+import type { RecoveryCheckpointEnvelopeV4 } from "../checkpoint/public";
 import { parseRecoveryCheckpointV3 } from "../checkpoint/public";
 import type { RecoveryCheckpointEnvelopeV3 } from "../checkpoint/public";
 import {
@@ -524,5 +531,108 @@ export async function recoverC03CheckpointV3(
   } catch {
     actor?.stop();
     return issueC03Classification(queue, { status: "UNUSABLE_CHECKPOINT_V3" });
+  }
+}
+
+type C06Actor = ReturnType<typeof createC06RestoredActivityActor>;
+export type RecoveryClassificationV4 =
+  | Readonly<{ status: "technical-failure-v4"; error: unknown }>
+  | Readonly<{ status: "NO_CHECKPOINT_V4" | "UNUSABLE_CHECKPOINT_V4" }>
+  | Readonly<{
+      status: "VALID_C06_CHECKPOINT_V4";
+      checkpoint: RecoveryCheckpointEnvelopeV4;
+      actor: C06Actor;
+    }>;
+const c06Claims = new WeakMap<
+  object,
+  { queue: ReadQueue; untouched: () => boolean; release: () => void }
+>();
+function issueC06Classification(
+  queue: ReadQueue,
+  value: RecoveryClassificationV4,
+): RecoveryClassificationV4 {
+  Object.freeze(value);
+  const actor = value.status === "VALID_C06_CHECKPOINT_V4" ? value.actor : null;
+  const snapshot = actor?.getSnapshot();
+  const work = actor
+    ? canonicalCheckpointJSON(projectC06CheckpointV4(actor))
+    : null;
+  let emitted = false;
+  const subscription = actor?.subscribe(() => {
+    emitted = true;
+  });
+  c06Claims.set(value, {
+    queue,
+    untouched: () => {
+      if (emitted || (actor && actor.getSnapshot() !== snapshot)) return false;
+      try {
+        return (
+          !actor ||
+          canonicalCheckpointJSON(projectC06CheckpointV4(actor)) === work
+        );
+      } catch {
+        return false;
+      }
+    },
+    release: () => subscription?.unsubscribe(),
+  });
+  return value;
+}
+export function claimRecoveryClassificationV4(
+  queue: ReadQueue,
+  value: unknown,
+): value is RecoveryClassificationV4 {
+  if (value === null || typeof value !== "object") return false;
+  const proof = c06Claims.get(value);
+  if (!proof || proof.queue !== queue) return false;
+  c06Claims.delete(value);
+  const untouched = proof.untouched();
+  proof.release();
+  return untouched;
+}
+/** Headless opt-in only; does not alter Session dispatch or manufacture delivery. */
+export async function recoverC06CheckpointV4(
+  queue: ReadQueue,
+): Promise<RecoveryClassificationV4> {
+  let result: Awaited<ReturnType<ReadQueue["load"]>>;
+  try {
+    result = await queue.load();
+  } catch (error) {
+    return issueC06Classification(queue, {
+      status: "technical-failure-v4",
+      error,
+    });
+  }
+  if (result.status === "technical-failure")
+    return issueC06Classification(queue, {
+      status: "technical-failure-v4",
+      error: result.error,
+    });
+  if (result.checkpoint === null)
+    return issueC06Classification(queue, { status: "NO_CHECKPOINT_V4" });
+  let actor: C06Actor | undefined;
+  try {
+    const checkpoint = parseRecoveryCheckpointV4(result.checkpoint);
+    const d = checkpoint.checkpoint;
+    actor = createC06RestoredActivityActor({
+      activityId: d.activityId,
+      scenarioId: d.scenarioId,
+      responseContract: d.responseContract,
+      context: decodeC06CheckpointContext(d),
+      model: d.model?.evidence ?? null,
+    });
+    if (
+      canonicalCheckpointJSON(projectC06CheckpointV4(actor)) !==
+      canonicalCheckpointJSON(d)
+    )
+      throw new TypeError("Reconstructed C06 work mismatch");
+    return issueC06Classification(queue, {
+      status: "VALID_C06_CHECKPOINT_V4",
+      checkpoint,
+      actor,
+    });
+  } catch {
+    actor?.stop();
+    return issueC06Classification(queue, { status: "UNUSABLE_CHECKPOINT_V4" });
   }
 }

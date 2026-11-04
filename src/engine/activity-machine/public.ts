@@ -1871,7 +1871,10 @@ function validateActivityRestoration(
           "model",
           ...(definition.c03Inspection
             ? ["c03Inspection"]
-            : ["c04A02StageEngagement"]),
+            : definition.activityId === "C06-A01" ||
+                definition.activityId === "C06-A02"
+              ? []
+              : ["c04A02StageEngagement"]),
         ]
       : []),
     ...(definition.responseStages ? stagingKeys : []),
@@ -1883,7 +1886,7 @@ function validateActivityRestoration(
   if (
     !fields(value, keys) ||
     value.activityId !== definition.activityId ||
-    !/^C0[34]-A0[1-4]$/.test(value.activityId) ||
+    !/^C0[346]-A0[1-4]$/.test(value.activityId) ||
     value.origin !== null ||
     value.infoOrigin !== null
   )
@@ -1943,9 +1946,12 @@ function validateActivityRestoration(
   if (
     (value.position.startsWith("EXP-") &&
       value.activityId !== "C04-A02" &&
-      value.activityId !== "C03-A02") ||
+      value.activityId !== "C03-A02" &&
+      value.activityId !== "C06-A02") ||
     (value.position === "POST_CONFIRMATION_EXPLANATION" &&
-      value.activityId !== "C04-A04")
+      value.activityId !== "C04-A04" &&
+      value.activityId !== "C06-A01" &&
+      value.activityId !== "C06-A04")
   )
     reject();
   for (const response of [value.response, value.checkedResponse])
@@ -2044,6 +2050,20 @@ function validateActivityRestoration(
         (!["ENTRY", "EXP-01", "EXP-02"].includes(value.position) &&
           e.ordinaryInspectedAtRevision === null) ||
         (m!.revision === 0 && m!.value.selectionId !== "C03-S02-A")
+      )
+        reject();
+    } else if (
+      definition.activityId === "C06-A01" ||
+      definition.activityId === "C06-A02"
+    ) {
+      if (
+        (m!.revision === 0 &&
+          m!.value.selectionId !==
+            definition.modelSelection.initialSelectionId) ||
+        (m!.revision % 2 === 0) !==
+          (m!.value.selectionId ===
+            definition.modelSelection.initialSelectionId) ||
+        (value.position === "ENTRY" && m!.revision !== 0)
       )
         reject();
     } else {
@@ -2186,12 +2206,15 @@ function validateActivityRestoration(
                   value.c03Inspection!.ordinaryInspectedAtRevision,
                 ),
               }
-            : {
-                c04A02StageEngagement: stageEngagement(
-                  value.c04A02StageEngagement!["EXP-02"]["C04-S02-A"],
-                  value.c04A02StageEngagement!["EXP-03"]["C04-S02-B"],
-                ),
-              }),
+            : definition.activityId === "C06-A01" ||
+                definition.activityId === "C06-A02"
+              ? {}
+              : {
+                  c04A02StageEngagement: stageEngagement(
+                    value.c04A02StageEngagement!["EXP-02"]["C04-S02-A"],
+                    value.c04A02StageEngagement!["EXP-03"]["C04-S02-B"],
+                  ),
+                }),
         }
       : {}),
     ...(policy

@@ -10,6 +10,8 @@ import type { C04CheckpointV1 } from "../projection/public";
 import type { C02ReferenceCheckpointV2 } from "../projection/public";
 import { validateC03CheckpointV3 } from "../projection/public";
 import type { C03CheckpointV3 } from "../projection/public";
+import { validateC06CheckpointV4 } from "../projection/public";
+import type { C06CheckpointV4 } from "../projection/public";
 
 export type RecoveryCheckpointEnvelopeV1 = Readonly<{
   schemaVersion: 1;
@@ -142,4 +144,47 @@ export function parseRecoveryCheckpointV3(
 ): RecoveryCheckpointEnvelopeV3 {
   const value: unknown = JSON.parse(text);
   return validateRecoveryCheckpointV3(value);
+}
+
+/** C06 opt-in only. Existing version parsers remain closed to V4. */
+export type RecoveryCheckpointEnvelopeV4 = Readonly<{
+  schemaVersion: 4;
+  studyDefinitionRevision: typeof studyDefinitionRevision;
+  kind: "unfinished-activity";
+  checkpoint: C06CheckpointV4;
+}>;
+const envelopeV4 = z.strictObject({
+  schemaVersion: z.literal(4),
+  studyDefinitionRevision: z.literal(studyDefinitionRevision),
+  kind: z.literal("unfinished-activity"),
+  checkpoint: z.unknown(),
+});
+export function validateRecoveryCheckpointV4(
+  value: unknown,
+): RecoveryCheckpointEnvelopeV4 {
+  assertCheckpointData(value);
+  const parsed = envelopeV4.parse(value);
+  return Object.freeze({
+    ...parsed,
+    checkpoint: validateC06CheckpointV4(parsed.checkpoint),
+  });
+}
+export function createRecoveryCheckpointV4(
+  checkpoint: C06CheckpointV4,
+): RecoveryCheckpointEnvelopeV4 {
+  return validateRecoveryCheckpointV4({
+    schemaVersion: 4,
+    studyDefinitionRevision,
+    kind: "unfinished-activity",
+    checkpoint,
+  });
+}
+export function serializeRecoveryCheckpointV4(value: unknown): string {
+  return canonicalCheckpointJSON(validateRecoveryCheckpointV4(value));
+}
+export function parseRecoveryCheckpointV4(
+  text: string,
+): RecoveryCheckpointEnvelopeV4 {
+  const value: unknown = JSON.parse(text);
+  return validateRecoveryCheckpointV4(value);
 }
