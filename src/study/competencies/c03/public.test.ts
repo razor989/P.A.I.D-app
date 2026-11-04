@@ -376,17 +376,79 @@ describe("C03 source-pinned fixed definitions", () => {
     }
   });
 
-  it("attaches the exact 32 scenario roles and two canonical GLO identifiers", () => {
-    expect(c03RoleKeys.map((roles) => roles.length)).toEqual([8, 8, 8, 8]);
-    const keys = [
-      ...c03RoleKeys.flatMap((roles, i) =>
+  it("preserves 36 scenario-role references, 38 role/GLO keys and the exact 41-entry copy inventory", () => {
+    const expectedRoles = [
+      [
+        "scenario",
+        "task",
+        "relationship-help",
+        "confirmation",
+        "reconsider-condition",
+        "reconsider-multiplier",
+        "completion",
+        "accessibility-summary",
+      ],
+      [
+        "scenario",
+        "task",
+        "relationship-help",
+        "confirmation",
+        "reconsider-invariant-values",
+        "reconsider-condition",
+        "completion",
+        "accessibility-summary",
+      ],
+      [
+        "scenario",
+        "task",
+        "relationship-help",
+        "confirmation",
+        "reconsider-condition",
+        "reconsider-boundary",
+        "reconsider-arithmetic",
+        "reconsider-units",
+        "completion",
+        "accessibility-summary",
+      ],
+      [
+        "scenario",
+        "task",
+        "relationship-help",
+        "confirmation",
+        "reconsider-condition",
+        "reconsider-scope",
+        "reconsider-arithmetic",
+        "reconsider-units",
+        "completion",
+        "accessibility-summary",
+      ],
+    ];
+    expect(c03RoleKeys).toEqual(expectedRoles);
+    expect(c03RoleKeys.map((roles) => roles.length)).toEqual([8, 8, 10, 10]);
+    expect(c03RoleKeys.flat()).toHaveLength(36);
+    const referencedKeys = [
+      ...expectedRoles.flatMap((roles, i) =>
         roles.map((role) => `c03/S0${i + 1}/${role}`),
       ),
       "GLO-08-C03",
       "GLO-09-C03",
     ];
-    expect(keys).toHaveLength(34);
-    expect(Object.keys(c03Copy).sort()).toEqual(keys.sort());
+    expect(referencedKeys).toHaveLength(38);
+    // Accepted A02 diagnostic copy is binding-owned, not added to its role roster.
+    const additionalA02Keys = [
+      "c03/S02/reconsider-difference",
+      "c03/S02/reconsider-units",
+      "c03/S02/reconsider-changes",
+    ];
+    const inventoryKeys = [...referencedKeys, ...additionalA02Keys];
+    expect(inventoryKeys).toHaveLength(41);
+    expect(Object.keys(c03Copy)).toHaveLength(41);
+    expect(Object.keys(c03Copy).sort()).toEqual(inventoryKeys.sort());
+    expect(
+      Object.keys(c03Copy)
+        .filter((key) => !referencedKeys.includes(key))
+        .sort(),
+    ).toEqual(additionalA02Keys.sort());
     for (const [i, activity] of c03Activities.entries())
       expect(activity.contentReferences).toEqual([
         ...c03RoleKeys[i]!.map((role) => ({
