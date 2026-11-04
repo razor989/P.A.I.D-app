@@ -26,6 +26,7 @@ import {
   c03ResponseReady,
   deriveC03ProviderOutput,
   evaluateC03Response,
+  evaluateC03ComparisonPart,
 } from "@/competencies/c03-overtime-pay/evaluators/public";
 import type {
   ActivityContext,
@@ -217,8 +218,7 @@ export function createC03ActivityBindings(): readonly ExecutableActivityBinding[
           e.responseRevision > 0 &&
           e.checkedRevision === e.responseRevision &&
           e.feedbackRevision === e.responseRevision &&
-          (e.evaluation?.outcome === "CONFIRMED" ||
-            (id !== "C03-A01" && e.evaluation?.outcome === "RECONSIDERATION")),
+          e.evaluation?.outcome === "CONFIRMED",
         sourceReviewAvailable: () => false,
         informationNeeded: () => false,
         informationReturn: () => false,
@@ -324,6 +324,8 @@ export function projectC03ActivityFrame(actor: ActivityActor) {
     c.evaluation !== null;
   const revealed =
     id !== "C03-A01" &&
+    (!["C03-A03", "C03-A04"].includes(id) ||
+      c.evaluation?.outcome === "CONFIRMED") &&
     feedbackCurrent &&
     ["CONFIRMATION", "RECONSIDERATION", "COMPLETE"].includes(c.position);
   const taught =
@@ -359,11 +361,23 @@ export function projectC03ActivityFrame(actor: ActivityActor) {
             : diagnostic === "WORK_CONDITION" ||
                 diagnostic === "CONDITION_MULTIPLIER"
               ? "reconsider-condition"
-              : null
+              : diagnostic === "ARITHMETIC"
+                ? "reconsider-difference"
+                : diagnostic === "UNITS"
+                  ? "reconsider-units"
+                  : "reconsider-changes"
           : diagnostic === "WORK_CONDITION" ||
               diagnostic === "CONDITION_MULTIPLIER"
             ? "reconsider-condition"
-            : null;
+            : id === "C03-A03"
+              ? diagnostic === "UNITS"
+                ? "reconsider-units"
+                : "reconsider-arithmetic"
+              : diagnostic === "UNITS"
+                ? "reconsider-units"
+                : diagnostic === "SCOPE"
+                  ? "reconsider-scope"
+                  : "reconsider-arithmetic";
   const controls: readonly PublicResponseControl[] =
     id === "C03-A01"
       ? c03ResponseFields["C03-A01"].map((role) =>
@@ -525,7 +539,71 @@ export function projectC03ActivityFrame(actor: ActivityActor) {
           })
         : null,
     comparison,
+    // Final competency synthesis uses authenticated fixed records, never invented
+    // examples or a client-side oracle. Only the genuine completed A04 exposes it.
+    competencyRecords:
+      id === "C03-A04" && c.position === "COMPLETE" && revealed
+        ? ["C03-A02", "C03-A03", "C03-A04"].flatMap((activity) => {
+            const definition = modelDefinition(activity as Id);
+            const initial = createC03ModelState(definition);
+            return (
+              activity === "C03-A02" ? ["C03-S02-A", "C03-S02-B"] : [null]
+            ).map((child) => {
+              const record = deriveC03ModelState(
+                child
+                  ? applyC03ModelIntent(initial, {
+                      type: "SELECT_CHILD",
+                      childId: child as "C03-S02-A" | "C03-S02-B",
+                    })
+                  : initial,
+              );
+              return Object.freeze({
+                activityId: activity,
+                condition: record.condition,
+                rate: record.rate,
+                hours: record.hours,
+                multiplier: record.multiplier,
+                overtimePay: record.overtimePay,
+              });
+            });
+          })
+        : null,
     diagnostic: feedbackCurrent ? diagnostic : null,
+  });
+}
+
+/** Advisory checks are bound to the live response revision, not local UI answers. */
+export function checkC03ComparisonPart(actor: ActivityActor, field: string) {
+  const { id, context } = inspect(actor);
+  if (
+    id !== "C03-A02" ||
+    context.origin !== null ||
+    !["ACTIVE", "REVISION"].includes(context.position)
+  )
+    return null;
+  const result = evaluateC03ComparisonPart(
+    context.model!.value.state as C03ModelState,
+    context.response,
+    field,
+  );
+  const role =
+    result.outcome === "CONFIRMED"
+      ? null
+      : result.diagnostic === "INVARIANTS"
+        ? "reconsider-invariant-values"
+        : result.diagnostic === "CONDITION_MULTIPLIER"
+          ? "reconsider-condition"
+          : result.diagnostic === "ARITHMETIC"
+            ? "reconsider-difference"
+            : result.diagnostic === "UNITS"
+              ? "reconsider-units"
+              : "reconsider-changes";
+  return Object.freeze({
+    field,
+    revision: context.responseRevision,
+    outcome: result.outcome,
+    diagnostic: result.diagnostic,
+    text: role ? c03Copy[`c03/S02/${role}`] : "That fits the two records.",
   });
 }
 

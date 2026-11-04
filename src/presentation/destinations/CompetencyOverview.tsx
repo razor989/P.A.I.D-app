@@ -20,7 +20,9 @@ export function CompetencyOverview({
         Interactive explanatory learning precedes application and assessment.
         {competency.id === "C04"
           ? " Explore and Learn includes the integrated salary investigation."
-          : " This version provides the destination structure; instructional presentation is not yet available."}
+          : competency.id === "C03"
+            ? " Prepare introduces Nico’s overtime work record. Explore and Learn compares two overtime conditions. Apply puts your reasoning to work with James’s monthly overtime. Check and Transfer brings the ideas together with Mara’s regular-holiday overtime."
+            : " This version provides the destination structure; instructional presentation is not yet available."}
       </p>
       <ol className={styles.list}>
         {competency.activities.map((a) => (
@@ -36,8 +38,8 @@ export function CompetencyOverview({
               </button>
             </h3>
             <p className={styles.identifier}>{a.id}</p>
-            {competency.id === "C04" &&
-              a.id === "C04-A02" &&
+            {((competency.id === "C04" && a.id === "C04-A02") ||
+              (competency.id === "C03" && a.id === "C03-A01")) &&
               onReviewCompleted && (
                 <div>
                   <button
@@ -59,7 +61,15 @@ export function CompetencyOverview({
               {a.available
                 ? a.id === "C04-A02"
                   ? "Open the salary investigation and comparison."
-                  : "Activity host available; instructional presentation is not yet available."
+                  : a.id === "C03-A01"
+                    ? "Open Nico’s overtime work record and share your first thinking."
+                    : a.id === "C03-A02"
+                      ? "Investigate how the work condition changes overtime pay."
+                      : a.id === "C03-A03"
+                        ? "Use James’s monthly work record to calculate overtime pay."
+                        : a.id === "C03-A04"
+                          ? "Transfer your reasoning to a regular holiday, then bring the overtime-pay ideas together."
+                          : "Activity host available; instructional presentation is not yet available."
                 : "Not available in the current Session."}
             </p>
           </li>

@@ -14,6 +14,7 @@ import {
   isCanonicalC04Runtime,
 } from "@/engine/c04-activity-binding/public";
 import type { CanonicalC04Runtime } from "@/engine/c04-activity-binding/public";
+import { createC03ActivityActor } from "@/engine/c03-activity-binding/public";
 import type { RecoveryClassification } from "@/recovery/rehydration/public";
 import { claimRecoveryClassification } from "@/recovery/rehydration/public";
 import type { StudyCatalog } from "@/study/catalog/public";
@@ -211,11 +212,20 @@ function free(context: Context): boolean {
   );
 }
 function executable(context: Context, id: unknown): id is ActivityId {
-  // The inspected source-fixed C04 facade wires exactly these four bindings.
+  // Accepted C03 Prepare, authorized Explore and the four existing C04 bindings.
   // This availability proof constructs no actor, including during switch choice.
   return (
     activityKnown(context.catalog, id) &&
-    ["C04-A01", "C04-A02", "C04-A03", "C04-A04"].includes(id)
+    [
+      "C03-A01",
+      "C03-A02",
+      "C03-A03",
+      "C03-A04",
+      "C04-A01",
+      "C04-A02",
+      "C04-A03",
+      "C04-A04",
+    ].includes(id)
   );
 }
 function successor(context: Context): ActivityId | null {
@@ -236,7 +246,10 @@ function successor(context: Context): ActivityId | null {
 }
 function replaceActivity(context: Context, id: ActivityId) {
   context.currentActivity?.stop();
-  const currentActivity = context.createFreshActivity(id);
+  const currentActivity =
+    id === "C03-A01" || id === "C03-A02" || id === "C03-A03" || id === "C03-A04"
+      ? createC03ActivityActor(id)
+      : context.createFreshActivity(id);
   currentActivity.start();
   return {
     currentActivity,
@@ -483,9 +496,13 @@ const machine = setup({
       stateIn({ session: { technical: "idle", decision: "none" } }),
       ({ context }) =>
         context.destination?.kind === "competency" &&
-        context.destination.competencyId === "C04" &&
-        context.currentActivity?.getSnapshot().context.activityId ===
-          "C04-A02" &&
+        ((context.destination.competencyId === "C04" &&
+          context.currentActivity?.getSnapshot().context.activityId ===
+            "C04-A02") ||
+          (context.destination.competencyId === "C03" &&
+            ["C03-A01", "C03-A02", "C03-A03", "C03-A04"].includes(
+              context.currentActivity?.getSnapshot().context.activityId ?? "",
+            ))) &&
         complete(context) &&
         free(context) &&
         context.finalizedActor === context.currentActivity &&
@@ -613,7 +630,12 @@ const machine = setup({
       if (complete(context)) return replaceActivity(context, event.activityId);
       const currentActivity =
         context.currentActivity ??
-        context.createFreshActivity(event.activityId);
+        (event.activityId === "C03-A01" ||
+        event.activityId === "C03-A02" ||
+        event.activityId === "C03-A03" ||
+        event.activityId === "C03-A04"
+          ? createC03ActivityActor(event.activityId)
+          : context.createFreshActivity(event.activityId));
       currentActivity.start();
       return {
         currentActivity,
@@ -654,7 +676,7 @@ const machine = setup({
       completedReviewActor: context.currentActivity,
       destination: Object.freeze({
         kind: "activity" as const,
-        activityId: "C04-A02" as const,
+        activityId: context.currentActivity!.getSnapshot().context.activityId,
       }),
     })),
     beginFinish: assign(({ context }) => ({
@@ -1170,7 +1192,11 @@ export function acquireSessionCheckpointProducer(actor: AppSessionActor) {
   const captured = actor.getSnapshot().context;
   const current = captured.currentActivity;
   return Object.freeze({
-    replace(checkpoint: Parameters<RecoveryCheckpointQueue["replace"]>[0]) {
+    replace(
+      checkpoint:
+        | Parameters<RecoveryCheckpointQueue["replace"]>[0]
+        | Parameters<RecoveryCheckpointQueue["replaceV3"]>[0],
+    ) {
       const snapshot = actor.getSnapshot();
       const context = snapshot.context;
       if (
@@ -1187,7 +1213,9 @@ export function acquireSessionCheckpointProducer(actor: AppSessionActor) {
           current.getSnapshot().context.activityId
       )
         return null;
-      return context.queue.replace(checkpoint);
+      return checkpoint.schemaVersion === 3
+        ? context.queue.replaceV3(checkpoint)
+        : context.queue.replace(checkpoint);
     },
   });
 }

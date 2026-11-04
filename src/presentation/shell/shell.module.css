@@ -23,6 +23,8 @@
 .shell
   button:where(
     :not(
+      [data-c03-track="C03-A01"] button,
+      [data-c03-track="C03-A02"] button,
       [data-c04-track="C04-A02"] button,
       [data-c04-track="C04-A03"] button,
       [data-c04-track="C04-A04"] button,
@@ -41,7 +43,7 @@
   overflow-wrap: anywhere;
   max-inline-size: 100%;
 }
-.shell button:disabled {
+.shell button:disabled:where(:not([data-c03-track] button)) {
   color: var(--color-disabled-text);
   background: var(--color-disabled-surface);
   cursor: default;

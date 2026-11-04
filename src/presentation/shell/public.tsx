@@ -1,5 +1,7 @@
 import type { ActivityId, CompetencyId } from "@/core/public";
 import type { C04Presentation } from "../models/c04-anchored-change-track/public";
+import type { C03PreparePresentation } from "../models/c03-overtime-work-record/public";
+export type { C03PreparePresentation } from "../models/c03-overtime-work-record/public";
 
 export type { C04Presentation } from "../models/c04-anchored-change-track/public";
 /** C04 owns response and durable Session continuation callbacks as one route payload. */
@@ -25,6 +27,7 @@ export type ShellProps = Readonly<{
   completedReview?: boolean;
   onReviewCompleted?: (() => void) | undefined;
   c04Presentation?: C04Presentation | undefined;
+  c03Presentation?: C03PreparePresentation | undefined;
   destination: Destination;
   competencies: readonly CompetencySummary[];
   blocked: boolean;

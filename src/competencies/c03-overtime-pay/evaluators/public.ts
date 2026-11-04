@@ -145,6 +145,50 @@ export function evaluateC03Response(
     throw new TypeError("Invalid or incomplete C03 response");
   if (state.activityId === "C03-A01")
     return Object.freeze({ outcome: "CONFIRMED", diagnostic: null });
+  return evaluateParts(state, input);
+}
+
+/** A02 advisory field check. Validates only real submitted evidence; never fills
+ * absent answers or grants final completion. Shares the final evaluation oracle. */
+export function evaluateC03ComparisonPart(
+  state: C03ModelState,
+  input: unknown,
+  field: string,
+): C03Evaluation {
+  if (
+    state.activityId !== "C03-A02" ||
+    !c03ResponseFields["C03-A02"].some((key) => key === field) ||
+    !data(input) ||
+    !isLearnerResponse(input) ||
+    input.kind !== "COMPOSITE"
+  )
+    throw new TypeError("Invalid A02 field check");
+  const matches = input.parts.filter((part) => part.key === field);
+  if (
+    matches.length !== 1 ||
+    new Set(input.parts.map((part) => part.key)).size !== input.parts.length
+  )
+    throw new TypeError("Missing or duplicate A02 evidence");
+  const response = matches[0]!.response;
+  if (field === "invariants" || field === "changes") {
+    if (
+      response.kind !== "SINGLE_SELECTION" ||
+      ![
+        "rate + hours",
+        "condition + multiplier + overtimePay",
+        "rate + multiplier",
+      ].includes(response.selectionId)
+    )
+      throw new TypeError("Invalid A02 selection");
+  } else if (response.kind !== "EXACT_QUANTITY")
+    throw new TypeError("Invalid A02 quantity");
+  return evaluateParts(state, { kind: "COMPOSITE", parts: matches });
+}
+
+function evaluateParts(
+  state: C03ModelState,
+  input: Extract<LearnerResponse, { kind: "COMPOSITE" }>,
+): C03Evaluation {
   const view = deriveC03ModelState(state);
   const wrong = (
     diagnostic: NonNullable<C03Evaluation["diagnostic"]>,

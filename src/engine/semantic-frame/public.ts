@@ -1570,10 +1570,19 @@ export function projectSemanticActivityFrame(
     currentCheck &&
     (phase === "CONFIRMATION" || phase === "RECONSIDERATION") &&
     c.feedbackRevision === null;
+  const pendingC03ExploreFeedback =
+    ["C03-A02", "C03-A03", "C03-A04"].includes(c.activityId) &&
+    idle &&
+    currentCheck &&
+    (phase === "CONFIRMATION" || phase === "RECONSIDERATION") &&
+    c.feedbackRevision === null;
   const feedback = approvedMain
     ? safeText(approvedMain)
     : !floor &&
-        (currentFeedback || pendingC04Feedback || pendingC03PrepareFeedback) &&
+        (currentFeedback ||
+          pendingC04Feedback ||
+          pendingC03PrepareFeedback ||
+          pendingC03ExploreFeedback) &&
         content.feedback?.revision === c.responseRevision &&
         content.feedback.outcome === c.evaluation?.outcome
       ? safeText(content.feedback.content)

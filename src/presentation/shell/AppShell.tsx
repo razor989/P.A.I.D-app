@@ -37,7 +37,12 @@ export function AppShell(props: ShellProps) {
         : `${competency?.label ?? "Activity"} — ${activity?.label ?? "Activity"}`;
   const referenceActivity =
     props.destination.kind === "activity" &&
-    (props.destination.activityId === "C04-A02" ||
+    ((["C03-A01", "C03-A02", "C03-A03", "C03-A04"].includes(
+      props.destination.activityId,
+    ) &&
+      props.c03Presentation?.projection.frame.activityId ===
+        props.destination.activityId) ||
+      props.destination.activityId === "C04-A02" ||
       (props.destination.activityId === "C04-A03" &&
         props.c04Presentation?.frame.activityId === "C04-A03") ||
       (props.destination.activityId === "C04-A04" &&
@@ -51,7 +56,8 @@ export function AppShell(props: ShellProps) {
       if (
         !props.blocked &&
         props.destination.kind === "competency" &&
-        props.destination.competencyId === "C04" &&
+        (props.destination.competencyId === "C04" ||
+          props.destination.competencyId === "C03") &&
         !document.querySelector(
           'dialog[open], [role="dialog"][aria-modal="true"]',
         )

@@ -31,6 +31,19 @@ export function DestinationView(props: ShellProps) {
       return (
         <ActivityShell
           activityId={props.destination.activityId}
+          c03Presentation={
+            ["C03-A01", "C03-A02", "C03-A03", "C03-A04"].includes(
+              props.destination.activityId,
+            )
+              ? props.c03Presentation && {
+                  ...props.c03Presentation,
+                  libraryNavigation: {
+                    available: props.canReturn,
+                    onReturn: props.onReturn,
+                  },
+                }
+              : undefined
+          }
           c04Presentation={
             props.destination.activityId ===
             props.c04Presentation?.frame.activityId

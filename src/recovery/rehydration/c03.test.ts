@@ -126,6 +126,50 @@ async function roundtrip(a: Actor) {
 }
 
 describe("C03 source-bound inspection", () => {
+  it("restores A04 reconsideration without finishing or exposing answers, then requires fresh confirmed delivery", async () => {
+    const a = fresh(3);
+    advance(a, "ACTIVE");
+    a.send({
+      type: "RESPONSE_CHANGED",
+      response: response({
+        condition: choice("regular holiday"),
+        multiplier: q("2.6", true),
+        overtimePay: q("900"),
+      }),
+    });
+    a.send({ type: "CHECK_RESPONSE" });
+    a.send({
+      type: "FEEDBACK_DELIVERED",
+      revision: a.getSnapshot().context.responseRevision,
+    });
+    const restored = await roundtrip(a);
+    try {
+      restored.send({ type: "FINISH_ACTIVITY" });
+      expect(restored.getSnapshot().context.position).toBe("RECONSIDERATION");
+      expect(
+        projectC03ActivityFrame(restored).mathematicalExplanation,
+      ).toBeNull();
+      expect(projectC03ActivityFrame(restored).competencyRecords).toBeNull();
+      restored.send({ type: "REVISE" });
+      restored.send({ type: "RESPONSE_CHANGED", response: answers[3]! });
+      restored.send({ type: "CHECK_AGAIN" });
+      restored.send({
+        type: "FEEDBACK_DELIVERED",
+        revision: restored.getSnapshot().context.responseRevision - 1,
+      });
+      restored.send({ type: "FINISH_ACTIVITY" });
+      expect(restored.getSnapshot().context.position).toBe("CONFIRMATION");
+      restored.send({
+        type: "FEEDBACK_DELIVERED",
+        revision: restored.getSnapshot().context.responseRevision,
+      });
+      restored.send({ type: "FINISH_ACTIVITY" });
+      expect(restored.getSnapshot().context.position).toBe("COMPLETE");
+    } finally {
+      a.stop();
+      restored.stop();
+    }
+  });
   it("does not count entry, default selection, invalid/wrong-stage/wrong-model/stale events or support", () => {
     const a = fresh();
     const policy = createC03ActivityBindings()[1]!.definition;

@@ -15,7 +15,11 @@ import {
 } from "@/engine/c04-activity-binding/public";
 import { createRecoveryCheckpointQueue } from "@/recovery/store/public";
 import type { RecoveryCheckpointStore } from "@/recovery/store/public";
-import { recoverCheckpoint } from "@/recovery/rehydration/public";
+import { recoverApplicationCheckpoint } from "@/recovery/rehydration/public";
+import {
+  projectC03ActivityFrame,
+  checkC03ComparisonPart,
+} from "@/engine/c03-activity-binding/public";
 import {
   applySessionStartupClassification,
   beginSessionStartupReadRetry,
@@ -27,12 +31,21 @@ import { createBrowserCheckpointStore } from "./browser-checkpoint-store";
 import { projectC04Reference } from "./c04-reference-projection";
 import { projectC04Apply } from "./c04-apply-projection";
 import { projectC04Transfer } from "./c04-transfer-projection";
-import { projectC04CheckpointV1 } from "@/recovery/projection/public";
-import { createRecoveryCheckpointV1 } from "@/recovery/checkpoint/public";
+import {
+  projectC04CheckpointV1,
+  projectC03CheckpointV3,
+} from "@/recovery/projection/public";
+import {
+  createRecoveryCheckpointV1,
+  createRecoveryCheckpointV3,
+} from "@/recovery/checkpoint/public";
 import { SessionProvider, useSessionSnapshot } from "./session-provider";
 import { StartupRecoveryGateway } from "./startup-recovery-gateway";
 import { AppShell } from "@/presentation/shell/public";
-import type { C04Presentation } from "@/presentation/shell/public";
+import type {
+  C04Presentation,
+  C03PreparePresentation,
+} from "@/presentation/shell/public";
 import {
   LoadingPresentation,
   useDelayedLoading,
@@ -111,7 +124,7 @@ export function createApplicationRoot(injectedStore?: RecoveryCheckpointStore) {
     if (pending || phase !== "started") return;
     pending = true;
     const token = ++attempt;
-    void recoverCheckpoint(queue).then((result) => {
+    void recoverApplicationCheckpoint(queue).then((result) => {
       if (token !== attempt || phase !== "started") {
         if (result.status === "VALID_CHECKPOINT") result.actor.stop();
         return;
@@ -176,7 +189,10 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
   const retainedActivity = view.currentActivity;
   const actor =
     view.destination?.kind === "activity" &&
-    view.destination.activityId.startsWith("C04-")
+    (view.destination.activityId.startsWith("C04-") ||
+      ["C03-A01", "C03-A02", "C03-A03", "C03-A04"].includes(
+        view.destination.activityId,
+      ))
       ? view.currentActivity
       : null;
   const subscribeActivity = useCallback(
@@ -205,9 +221,11 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
     )
       return;
     const producer = acquireSessionCheckpointProducer(root.session);
-    const checkpoint = createRecoveryCheckpointV1(
-      projectC04CheckpointV1(actor),
-    );
+    const checkpoint = ["C03-A01", "C03-A02", "C03-A03", "C03-A04"].includes(
+      activitySnapshot.context.activityId,
+    )
+      ? createRecoveryCheckpointV3(projectC03CheckpointV3(actor))
+      : createRecoveryCheckpointV1(projectC04CheckpointV1(actor));
     void producer.replace(checkpoint);
   }, [root, actor, activitySnapshot]);
   const snapshot = root.session.getSnapshot();
@@ -246,6 +264,112 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
     actor.getSnapshot().context.activityId === view.destination.activityId
       ? composeC04ActivityFrame(actor)
       : null;
+  const c03Projection =
+    actor &&
+    activitySnapshot &&
+    ["C03-A01", "C03-A02", "C03-A03", "C03-A04"].includes(
+      activitySnapshot.context.activityId,
+    )
+      ? projectC03ActivityFrame(actor)
+      : null;
+  function currentC03() {
+    const live = selectSession(root.session);
+    if (
+      !actor ||
+      !c03Projection ||
+      !lifecycle.mounted ||
+      blocked ||
+      root.session.getSnapshot().status !== "active" ||
+      live.currentActivity !== actor ||
+      live.destination?.kind !== "activity" ||
+      live.destination.activityId !== c03Projection.frame.activityId ||
+      live.technical !== "idle" ||
+      (live.lifecyclePhase !== "idle" && live.lifecyclePhase !== "finalized") ||
+      live.decision !== "none" ||
+      actor.getSnapshot() !== activitySnapshot
+    )
+      return null;
+    return projectC03ActivityFrame(actor).frame;
+  }
+  const c03Presentation: C03PreparePresentation | undefined =
+    c03Projection && actor
+      ? {
+          projection: c03Projection,
+          blocked,
+          onSelectCondition: (selectionId) => {
+            const control = currentC03()?.modelSelectionControl;
+            if (control?.options.some((option) => option.id === selectionId))
+              actor.send({
+                type: "SELECT_MODEL_CHILD",
+                modelId: control.modelId,
+                selectionId,
+                revision: control.revision,
+                position: control.position,
+              });
+          },
+          onAction: (type) => {
+            if (currentC03()?.allowedLearnerIntents.includes(type))
+              actor.send({ type });
+          },
+          onResponse: (response) => {
+            if (
+              currentC03()?.allowedLearnerIntents.includes("RESPONSE_CHANGED")
+            )
+              actor.send({ type: "RESPONSE_CHANGED", response });
+          },
+          onCheckPart: (field) =>
+            currentC03()?.allowedLearnerIntents.includes("RESPONSE_CHANGED")
+              ? checkC03ComparisonPart(actor, field)
+              : null,
+          onHelp: () => {
+            if (currentC03()?.allowedLearnerIntents.includes("OPEN_SUPPORT"))
+              actor.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+          },
+          onCloseHelp: () => {
+            if (currentC03()?.allowedLearnerIntents.includes("CLOSE_SUPPORT"))
+              actor.send({ type: "CLOSE_SUPPORT" });
+          },
+          onFeedbackPresented: (element) => {
+            const latest = currentC03();
+            const context = actor.getSnapshot().context;
+            if (
+              latest?.feedbackState &&
+              element.isConnected &&
+              !element.closest('[hidden], [inert], [aria-hidden="true"]') &&
+              getComputedStyle(element).display !== "none" &&
+              getComputedStyle(element).visibility !== "hidden" &&
+              context.origin === null &&
+              context.feedbackRevision === null &&
+              context.checkedRevision === context.responseRevision &&
+              element.textContent?.includes(latest.feedbackState.content.text)
+            )
+              actor.send({
+                type: "FEEDBACK_DELIVERED",
+                revision: context.responseRevision,
+              });
+          },
+          sessionContinuation: {
+            available:
+              !blocked &&
+              c03Projection.frame.stateId === "COMPLETE" &&
+              view.lifecyclePhase === "finalized" &&
+              snapshot.can({ type: "SELECT_COMPETENCY", competencyId: "C03" }),
+            onContinue: () => {
+              if (
+                currentC03()?.stateId === "COMPLETE" &&
+                selectSession(root.session).lifecyclePhase === "finalized" &&
+                root.session
+                  .getSnapshot()
+                  .can({ type: "SELECT_COMPETENCY", competencyId: "C03" })
+              )
+                navigate(root.session, {
+                  type: "SELECT_COMPETENCY",
+                  competencyId: "C03",
+                });
+            },
+          },
+        }
+      : undefined;
   const renderedContext = actor?.getSnapshot().context;
   const contract =
     frame?.activityId === "C04-A01" &&
@@ -675,6 +799,7 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
               : undefined
           }
           c04Presentation={c04Presentation}
+          c03Presentation={c03Presentation}
           destination={view.destination}
           competencies={Object.freeze(
             [...root.catalog.competencies.values()].map((c) =>

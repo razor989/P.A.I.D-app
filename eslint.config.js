@@ -393,6 +393,7 @@ export default tseslint.config(
       "session/app-machine",
       [
         "engine/c04-activity-binding/public",
+        "engine/c03-activity-binding/public",
         "recovery/rehydration/public",
         "study/catalog/public",
         "recovery/store/public",
@@ -448,6 +449,7 @@ export default tseslint.config(
     [
       "composition-root.tsx",
       [
+        "engine/c03-activity-binding/public",
         "study/validation/public",
         "study/catalog/public",
         "engine/c04-activity-binding/public",
@@ -475,6 +477,15 @@ export default tseslint.config(
       ],
     ],
     ["session-provider.tsx", ["session/app-machine/public"]],
+    [
+      "c03-integration.test.tsx",
+      [
+        "session/app-machine/public",
+        "engine/c03-activity-binding/public",
+        "recovery/projection/public",
+        "recovery/checkpoint/public",
+      ],
+    ],
     ["session-provider.test.tsx", ["session/app-machine/public"]],
     ["bootstrap.test.tsx", ["session/app-machine/public"]],
     ["web-test-store.ts", ["recovery/store/public"]],

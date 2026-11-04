@@ -134,7 +134,7 @@ export type RecoveryClassification =
   | Readonly<{ status: "NO_CHECKPOINT" }>
   | Readonly<{
       status: "VALID_CHECKPOINT";
-      checkpoint: RecoveryCheckpointEnvelopeV1;
+      checkpoint: RecoveryCheckpointEnvelopeV1 | RecoveryCheckpointEnvelopeV3;
       actor: Actor;
     }>
   | Readonly<{ status: "UNUSABLE_CHECKPOINT" }>
@@ -177,12 +177,30 @@ function issueClassification(
   let emitted = false;
   const actor = value.status === "VALID_CHECKPOINT" ? value.actor : null;
   const snapshot = actor?.getSnapshot();
+  const c03Work =
+    actor &&
+    ["C03-A01", "C03-A02", "C03-A03", "C03-A04"].includes(
+      snapshot?.context.activityId ?? "",
+    )
+      ? canonicalCheckpointJSON(projectC03CheckpointV3(actor))
+      : null;
   const subscription = actor?.subscribe(() => {
     emitted = true;
   });
   classificationClaims.set(value, {
     queue,
-    untouched: () => !emitted && (!actor || actor.getSnapshot() === snapshot),
+    untouched: () => {
+      if (emitted || (actor && actor.getSnapshot() !== snapshot)) return false;
+      try {
+        return (
+          c03Work === null ||
+          (!!actor &&
+            canonicalCheckpointJSON(projectC03CheckpointV3(actor)) === c03Work)
+        );
+      } catch {
+        return false;
+      }
+    },
     release: () => subscription?.unsubscribe(),
   });
   return value;
@@ -218,6 +236,48 @@ export async function recoverCheckpoint(
   } catch {
     return issueClassification(queue, { status: "UNUSABLE_CHECKPOINT" });
   }
+}
+
+/** Application dispatch reads once and admits authorized C03-A01/A02 V3 work.
+ * Reissue through the existing one-use Session custody proof, never a raw actor.
+ */
+export async function recoverApplicationCheckpoint(
+  queue: ReadQueue,
+): Promise<RecoveryClassification> {
+  let result: Awaited<ReturnType<ReadQueue["load"]>>;
+  try {
+    result = await queue.load();
+  } catch (error) {
+    return issueClassification(queue, { status: "technical-failure", error });
+  }
+  const loaded = { load: () => Promise.resolve(result) };
+  if (result.status !== "technical-failure" && result.checkpoint !== null) {
+    try {
+      const envelope = parseRecoveryCheckpointV3(result.checkpoint);
+      if (
+        !["C03-A01", "C03-A02", "C03-A03", "C03-A04"].includes(
+          envelope.checkpoint.activityId,
+        )
+      )
+        return issueClassification(queue, { status: "UNUSABLE_CHECKPOINT" });
+      const recovered = await recoverC03CheckpointV3(loaded);
+      if (!claimRecoveryClassificationV3(loaded, recovered))
+        throw new TypeError("Unclaimed C03 recovery");
+      if (recovered.status === "VALID_C03_CHECKPOINT_V3")
+        return issueClassification(queue, {
+          status: "VALID_CHECKPOINT",
+          checkpoint: recovered.checkpoint,
+          actor: recovered.actor,
+        });
+      return issueClassification(queue, { status: "UNUSABLE_CHECKPOINT" });
+    } catch {
+      // Not an admissible V3 envelope; retain the unchanged V1 classifier.
+    }
+  }
+  const recovered = await recoverCheckpoint(loaded);
+  if (!claimRecoveryClassification(loaded, recovered))
+    throw new TypeError("Unclaimed V1 recovery");
+  return issueClassification(queue, recovered);
 }
 
 /** Distinct classification cannot enter unchanged V1 Session startup. */

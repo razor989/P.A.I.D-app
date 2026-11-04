@@ -34,6 +34,12 @@ export const c03Copy = Object.freeze({
     "Keep the ₱100.00 hourly rate and 2 overtime hours the same in both situations.",
   "c03/S02/reconsider-condition":
     "Use 1.25 for the ordinary working day and 1.69 for the rest day. The condition is what changes the multiplier.",
+  "c03/S02/reconsider-difference":
+    "Compare the two overtime amounts: ₱338.00 on the rest day and ₱250.00 on the ordinary day. Subtract the smaller amount from the larger; do not add regular pay.",
+  "c03/S02/reconsider-units":
+    "A multiplier has no peso unit. The difference between the two overtime payments is an amount in pesos.",
+  "c03/S02/reconsider-changes":
+    "Watch the day marker change. Its multiplier and overtime pay change with it; the ₱100 hourly rate and two extra hours do not.",
   "c03/S02/completion":
     "Activity complete. With the same hourly rate and overtime hours, a different approved overtime condition can produce a different multiplier and overtime-pay result.",
   "c03/S02/accessibility-summary":
@@ -50,6 +56,10 @@ export const c03Copy = Object.freeze({
     "James's overtime occurs on ordinary working days. Use the multiplier for that condition.",
   "c03/S03/reconsider-boundary":
     "Stop at overtime pay. Do not add regular pay or continue into gross income in this activity.",
+  "c03/S03/reconsider-arithmetic":
+    "Revisit the calculation: established hourly rate × applicable multiplier × all 10 overtime hours. Check each factor, then multiply again. Your target is overtime pay only.",
+  "c03/S03/reconsider-units":
+    "Express the multiplier as a dimensionless number and the overtime pay as a peso amount, not an hourly rate or a duration.",
   "c03/S03/completion": "Activity complete. James's overtime pay is ₱937.50.",
   "c03/S03/accessibility-summary":
     "Regular hourly rate ₱75.00 per hour. Ordinary working-day overtime. Multiplier 1.25. Overtime hours 10. Overtime pay ₱937.50.",
@@ -63,6 +73,10 @@ export const c03Copy = Object.freeze({
     "Confirmed. The condition is regular-holiday overtime, so the multiplier is 2.60. ₱120.00 × 2.60 × 3 = ₱936.00 overtime pay.",
   "c03/S04/reconsider-condition":
     "The scenario establishes a regular holiday. Use the overtime multiplier for that condition.",
+  "c03/S04/reconsider-arithmetic":
+    "Revisit the calculation: established hourly rate × the multiplier for the regular holiday × 3 overtime hours. Check each factor, then multiply again. Stop at overtime pay.",
+  "c03/S04/reconsider-units":
+    "Express the multiplier as a dimensionless decimal and overtime pay as a peso amount, not an hourly rate or a duration.",
   "c03/S04/reconsider-scope":
     "The ₱936.00 result is overtime pay for the three overtime hours, not total holiday earnings, gross income, or net pay.",
   "c03/S04/completion":

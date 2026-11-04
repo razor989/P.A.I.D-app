@@ -200,6 +200,8 @@ export const c03RoleKeys = Object.freeze(
       "confirmation",
       "reconsider-condition",
       "reconsider-boundary",
+      "reconsider-arithmetic",
+      "reconsider-units",
       "completion",
       "accessibility-summary",
     ],
@@ -210,6 +212,8 @@ export const c03RoleKeys = Object.freeze(
       "confirmation",
       "reconsider-condition",
       "reconsider-scope",
+      "reconsider-arithmetic",
+      "reconsider-units",
       "completion",
       "accessibility-summary",
     ],
@@ -341,7 +345,7 @@ export function validateC03Local(
         !same(snapshot(scenario), snapshot(parsedScenarios[index]!)),
     ) ||
     !same(evidence, c03Evidence) ||
-    Object.keys(copy).length !== 34 ||
+    Object.keys(copy).length !== 41 ||
     Object.keys(c03Copy).some(
       (key) => copy[key] !== c03Copy[key as keyof typeof c03Copy],
     )

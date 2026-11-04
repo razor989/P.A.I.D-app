@@ -20,6 +20,7 @@ import {
   projectC03ActivityFrame,
   projectC03ModelCheckpoint,
   readC03OvertimeProvider,
+  checkC03ComparisonPart,
 } from "./public";
 
 const q = (value: string, multiplier = false) => ({
@@ -63,6 +64,194 @@ const answers = [
     overtimePay: q("936"),
   }),
 ];
+it("A04 requires current confirmed delivery and withholds answers and synthesis on reconsideration", () => {
+  for (const [answer, role] of [
+    [
+      response({
+        condition: choice("rest day"),
+        multiplier: q("2.6", true),
+        overtimePay: q("936"),
+      }),
+      "reconsider-condition",
+    ],
+    [
+      response({
+        condition: choice("regular holiday"),
+        multiplier: q("2.6", true),
+        overtimePay: q("900"),
+      }),
+      "reconsider-arithmetic",
+    ],
+    [
+      response({
+        condition: choice("regular holiday"),
+        multiplier: q("2.6"),
+        overtimePay: q("936"),
+      }),
+      "reconsider-units",
+    ],
+  ] as const) {
+    const actor = active(3);
+    try {
+      actor.send({ type: "RESPONSE_CHANGED", response: answer });
+      actor.send({ type: "CHECK_RESPONSE" });
+      expect(
+        projectC03ActivityFrame(actor).frame.feedbackState?.content.text,
+      ).toBe(c03Copy[`c03/S04/${role}`]);
+      actor.send({
+        type: "FEEDBACK_DELIVERED",
+        revision: actor.getSnapshot().context.responseRevision,
+      });
+      let p = projectC03ActivityFrame(actor);
+      expect(p.mathematicalExplanation).toBeNull();
+      expect(p.competencyRecords).toBeNull();
+      expect(p.frame.allowedLearnerIntents).not.toContain("FINISH_ACTIVITY");
+      actor.send({ type: "FINISH_ACTIVITY" });
+      expect(actor.getSnapshot().context.position).toBe("RECONSIDERATION");
+      actor.send({ type: "REVISE" });
+      actor.send({ type: "RESPONSE_CHANGED", response: answers[3]! });
+      actor.send({ type: "CHECK_AGAIN" });
+      actor.send({
+        type: "FEEDBACK_DELIVERED",
+        revision: actor.getSnapshot().context.responseRevision - 1,
+      });
+      actor.send({ type: "FINISH_ACTIVITY" });
+      expect(actor.getSnapshot().context.position).not.toBe("COMPLETE");
+      actor.send({
+        type: "FEEDBACK_DELIVERED",
+        revision: actor.getSnapshot().context.responseRevision,
+      });
+      expect(projectC03ActivityFrame(actor).competencyRecords).toBeNull();
+      actor.send({ type: "FINISH_ACTIVITY" });
+      p = projectC03ActivityFrame(actor);
+      expect(p.frame.stateId).toBe("COMPLETE");
+      expect(p.competencyRecords).toHaveLength(4);
+      expect(p.competencyRecords?.[3]?.overtimePay.resolution).toMatchObject({
+        kind: "KNOWN",
+      });
+    } finally {
+      actor.stop();
+    }
+  }
+});
+it("exposes A03 diagnostic feedback without revealing the worked result on incorrect evidence", () => {
+  for (const [answer, role] of [
+    [
+      response({ multiplier: q("1.69", true), overtimePay: q("937.5") }),
+      "reconsider-condition",
+    ],
+    [
+      response({ multiplier: q("1.25"), overtimePay: q("937.5") }),
+      "reconsider-units",
+    ],
+  ] as const) {
+    const actor = active(2);
+    try {
+      actor.send({ type: "RESPONSE_CHANGED", response: answer });
+      actor.send({ type: "CHECK_RESPONSE" });
+      const pending = projectC03ActivityFrame(actor);
+      expect(pending.frame.feedbackState?.content.text).toBe(
+        c03Copy[`c03/S03/${role}`],
+      );
+      expect(pending.mathematicalExplanation).toBeNull();
+      expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+      actor.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      expect(
+        projectC03ActivityFrame(actor).frame.feedbackState,
+      ).toBeUndefined();
+      actor.send({ type: "CLOSE_SUPPORT" });
+      actor.send({
+        type: "FEEDBACK_DELIVERED",
+        revision: actor.getSnapshot().context.responseRevision,
+      });
+      expect(projectC03ActivityFrame(actor).mathematicalExplanation).toBeNull();
+      expect(
+        projectC03ActivityFrame(actor).frame.allowedLearnerIntents,
+      ).not.toContain("FINISH_ACTIVITY");
+      expect(
+        projectC03ActivityFrame(actor).frame.allowedLearnerIntents,
+      ).toContain("REVISE");
+    } finally {
+      actor.stop();
+    }
+  }
+});
+it("exposes authentic A02 feedback before delivery for confirmation and arithmetic reconsideration", () => {
+  for (const difference of ["88", "80"]) {
+    const actor = active(1);
+    try {
+      expect(
+        projectC03ActivityFrame(actor).frame.feedbackState,
+      ).toBeUndefined();
+      actor.send({
+        type: "RESPONSE_CHANGED",
+        response: response({
+          invariants: choice("rate + hours"),
+          changes: choice("condition + multiplier + overtimePay"),
+          multiplierA: q("1.25", true),
+          multiplierB: q("1.69", true),
+          difference: q(difference),
+        }),
+      });
+      actor.send({ type: "CHECK_RESPONSE" });
+      const pending = projectC03ActivityFrame(actor);
+      expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+      expect(pending.frame.feedbackState?.content.text).toBe(
+        difference === "88"
+          ? c03Copy["c03/S02/confirmation"]
+          : c03Copy["c03/S02/reconsider-difference"],
+      );
+      actor.send({ type: "FINISH_ACTIVITY" });
+      expect(actor.getSnapshot().context.position).not.toBe("COMPLETE");
+      actor.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      expect(
+        projectC03ActivityFrame(actor).frame.feedbackState,
+      ).toBeUndefined();
+      actor.send({ type: "CLOSE_SUPPORT" });
+      actor.send({
+        type: "FEEDBACK_DELIVERED",
+        revision: actor.getSnapshot().context.responseRevision - 1,
+      });
+      expect(actor.getSnapshot().context.feedbackRevision).toBeNull();
+      actor.send({
+        type: "FEEDBACK_DELIVERED",
+        revision: actor.getSnapshot().context.responseRevision,
+      });
+      actor.send({ type: "FINISH_ACTIVITY" });
+      expect(actor.getSnapshot().context.position).toBe(
+        difference === "88" ? "COMPLETE" : "RECONSIDERATION",
+      );
+    } finally {
+      actor.stop();
+    }
+  }
+});
+it("checks real partial A02 evidence without fabricating missing answers or checking the Actor", () => {
+  const actor = active(1);
+  try {
+    actor.send({
+      type: "RESPONSE_CHANGED",
+      response: response({ invariants: choice("rate + multiplier") }),
+    });
+    expect(checkC03ComparisonPart(actor, "invariants")?.outcome).toBe(
+      "RECONSIDERATION",
+    );
+    expect(() => checkC03ComparisonPart(actor, "difference")).toThrow();
+    expect(actor.getSnapshot().context.evaluation).toBeNull();
+    expect(actor.getSnapshot().context.checkedRevision).toBeNull();
+    actor.send({
+      type: "RESPONSE_CHANGED",
+      response: response({ invariants: choice("rate + hours") }),
+    });
+    expect(checkC03ComparisonPart(actor, "invariants")?.outcome).toBe(
+      "CONFIRMED",
+    );
+    actor.send({ type: "CHECK_RESPONSE" });
+    expect(actor.getSnapshot().context.position).toBe("ACTIVE");
+  } finally {
+    actor.stop();
+  }
+});
 function active(index: number) {
   const actor = createC03ActivityActor(`C03-A0${index + 1}`);
   actor.start();
@@ -433,7 +622,7 @@ describe("C03 canonical runtime", () => {
     expect(a.getSnapshot().context.position).toBe("EXP-03");
     a.stop();
   });
-  it("allows finish after delivered reconsideration without overwriting a response", () => {
+  it("requires confirmed current feedback for A03 completion and preserves reconsidered work", () => {
     const a = active(2);
     const wrong = response({
       multiplier: q("1.25", true),
@@ -442,14 +631,41 @@ describe("C03 canonical runtime", () => {
     a.send({ type: "RESPONSE_CHANGED", response: wrong });
     a.send({ type: "CHECK_RESPONSE" });
     expect(a.getSnapshot().context.position).toBe("RECONSIDERATION");
+    expect(projectC03ActivityFrame(a).frame.feedbackState?.content.text).toBe(
+      c03Copy["c03/S03/reconsider-arithmetic"],
+    );
+    expect(projectC03ActivityFrame(a).mathematicalExplanation).toBeNull();
     a.send({
       type: "FEEDBACK_DELIVERED",
       revision: a.getSnapshot().context.responseRevision,
     });
     expect(projectC03ActivityFrame(a).diagnostic).toBe("ARITHMETIC");
     a.send({ type: "FINISH_ACTIVITY" });
-    expect(a.getSnapshot().context.position).toBe("COMPLETE");
+    expect(a.getSnapshot().context.position).toBe("RECONSIDERATION");
     expect(a.getSnapshot().context.response).toEqual(wrong);
+    expect(projectC03ActivityFrame(a).mathematicalExplanation).toBeNull();
+    a.send({ type: "REVISE" });
+    a.send({ type: "RESPONSE_CHANGED", response: answers[2]! });
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().context.position).not.toBe("COMPLETE");
+    a.send({ type: "CHECK_AGAIN" });
+    expect(projectC03ActivityFrame(a).frame.feedbackState?.outcome).toBe(
+      "CONFIRMED",
+    );
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().context.position).not.toBe("COMPLETE");
+    a.send({
+      type: "FEEDBACK_DELIVERED",
+      revision: a.getSnapshot().context.responseRevision - 1,
+    });
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().context.position).not.toBe("COMPLETE");
+    a.send({
+      type: "FEEDBACK_DELIVERED",
+      revision: a.getSnapshot().context.responseRevision,
+    });
+    a.send({ type: "FINISH_ACTIVITY" });
+    expect(a.getSnapshot().context.position).toBe("COMPLETE");
     a.stop();
   });
 });
