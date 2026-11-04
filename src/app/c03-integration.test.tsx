@@ -57,12 +57,21 @@ it("uses the Session actor, persists V3 and returns to the overview after Prepar
   enter();
   const actor = selectSession(root.session).currentActivity!;
   expect(actor.getSnapshot().context.activityId).toBe("C03-A01");
-  for (const id of ["C03-A04"] as const)
-    expect(
-      root.session
-        .getSnapshot()
-        .can({ type: "SELECT_ACTIVITY", activityId: id }),
-    ).toBe(false);
+  expect(
+    root.session
+      .getSnapshot()
+      .can({ type: "SELECT_ACTIVITY", activityId: "C03-A04" }),
+  ).toBe(true);
+  act(() => {
+    root.session.send({ type: "SELECT_ACTIVITY", activityId: "C03-A04" });
+  });
+  expect(selectSession(root.session).decision).toBe("activitySwitchChoice");
+  expect(selectSession(root.session).currentActivity).toBe(actor);
+  expect(actor.getSnapshot().status).toBe("active");
+  fireEvent.click(
+    screen.getByRole("button", { name: "Return to unfinished activity" }),
+  );
+  expect(selectSession(root.session).currentActivity).toBe(actor);
   fireEvent.click(
     screen.getByRole("radio", {
       name: "I'm not sure yet; I would like to find out.",
@@ -189,7 +198,7 @@ it("retains C03 work across navigation and uses the existing cross-activity aban
   );
 });
 
-it("does not admit a canonical but unauthorized C03-A04 saved activity", async () => {
+it("offers recovery choice for authorized C03-A04 and restores only after consent", async () => {
   const actor = createC03ActivityActor("C03-A04");
   const store = createWebTestStore();
   try {
@@ -198,6 +207,46 @@ it("does not admit a canonical but unauthorized C03-A04 saved activity", async (
         createRecoveryCheckpointV3(projectC03CheckpointV3(actor)),
       ),
     );
+  } finally {
+    actor.stop();
+  }
+  const { root } = await mount(store);
+  expect(selectSession(root.session).startup).toBe("recovery-choice");
+  const pending = selectSession(root.session).currentActivity!;
+  expect(pending).not.toBe(actor);
+  expect(selectSession(root.session).destination).toBeNull();
+  expect(
+    acquireSessionCheckpointProducer(root.session).replace(
+      createRecoveryCheckpointV3(projectC03CheckpointV3(pending)),
+    ),
+  ).toBeNull();
+  expect(await store.load()).not.toBeNull();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Continue unfinished activity" }),
+  );
+  const restored = selectSession(root.session).currentActivity!;
+  expect(restored).toBe(pending);
+  expect(selectSession(root.session).destination).toEqual({
+    kind: "activity",
+    activityId: "C03-A04",
+  });
+  expect(restored).not.toBe(actor);
+  expect(restored.getSnapshot().context.activityId).toBe("C03-A04");
+  expect(restored.getSnapshot().context.position).toBe("ENTRY");
+  expect(restored.getSnapshot().context.response).toBeNull();
+  expect(restored.getSnapshot().context.evaluation).toBeNull();
+  expect(await store.load()).not.toBeNull();
+});
+
+it("rejects a C03 checkpoint with mismatched model identity without deleting it before discard", async () => {
+  const actor = createC03ActivityActor("C03-A04");
+  const store = createWebTestStore();
+  try {
+    const saved = serializeRecoveryCheckpointV3(
+      createRecoveryCheckpointV3(projectC03CheckpointV3(actor)),
+    );
+    // Keep the genuine A04 model while corrupting its activity binding.
+    await store.replace(saved.replace('"C03-A04"', '"C03-A03"'));
   } finally {
     actor.stop();
   }
@@ -247,42 +296,65 @@ it("runs A02 in production with authentic inspection, V3 recovery and delivered 
   fireEvent.click(screen.getByRole("button", { name: "Continue →" }));
   fireEvent.click(screen.getByRole("button", { name: "Continue →" }));
   fireEvent.click(screen.getByRole("button", { name: "Try the comparison →" }));
-  fireEvent.click(
-    screen
-      .getByRole("group", { name: "What stays the same?" })
-      .querySelectorAll("input")[0]!,
-  );
-  fireEvent.click(
-    screen
-      .getByRole("group", { name: "What changes between the situations?" })
-      .querySelectorAll("input")[1]!,
-  );
-  fireEvent.click(screen.getByRole("button", { name: /Next part/ }));
-  fireEvent.change(screen.getByLabelText("Ordinary working-day multiplier"), {
-    target: { value: "1.25" },
-  });
-  fireEvent.change(screen.getByLabelText("Rest-day multiplier"), {
-    target: { value: "1.69" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: /Next part/ }));
+  const actor = selectSession(second.root.session).currentActivity!;
+  for (const answer of [
+    "The hourly rate and overtime hours",
+    "The work condition, multiplier and overtime pay",
+    ["Ordinary working-day multiplier", "1.25"],
+    ["Rest-day multiplier", "1.69"],
+  ]) {
+    if (typeof answer === "string")
+      fireEvent.click(screen.getByRole("radio", { name: answer }));
+    else
+      fireEvent.change(screen.getByLabelText(answer[0]!), {
+        target: { value: answer[1] },
+      });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Check this answer →" }),
+    );
+    expect(screen.getByText("Yes—that fits.")).toBeVisible();
+    expect(actor.getSnapshot().context.evaluation).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Next question →" }));
+  }
   fireEvent.change(screen.getByLabelText("Difference in overtime pay (₱)"), {
     target: { value: "80" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Check my comparison" }));
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "Finish Explore and Learn" }),
-    ).toBeEnabled(),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Revise my comparison" }));
-  fireEvent.click(screen.getByRole("button", { name: /Next part/ }));
-  fireEvent.click(screen.getByRole("button", { name: /Next part/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Check this answer →" }));
+  expect(screen.getByText("Look at this part again.")).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "Finish Explore and Learn" }),
+  ).toBeNull();
+  expect(actor.getSnapshot().context.evaluation).toBeNull();
   fireEvent.change(screen.getByLabelText("Difference in overtime pay (₱)"), {
     target: { value: "88" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+  fireEvent.click(screen.getByRole("button", { name: "Check this answer →" }));
+  expect(screen.getByText("Yes—that fits.")).toBeVisible();
+  fireEvent.change(screen.getByLabelText("Difference in overtime pay (₱)"), {
+    target: { value: "80" },
+  });
+  expect(screen.queryByText("Yes—that fits.")).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Check my comparison →" }),
+  ).toBeNull();
+  fireEvent.change(screen.getByLabelText("Difference in overtime pay (₱)"), {
+    target: { value: "88" },
+  });
+  expect(
+    screen.getByRole("button", { name: "Check this answer →" }),
+  ).toBeEnabled();
+  fireEvent.click(screen.getByRole("button", { name: "Check this answer →" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Check my comparison →" }),
+  );
   await waitFor(() =>
     expect(screen.getByText("The relationship is clear.")).toBeVisible(),
+  );
+  expect(actor.getSnapshot().context.evaluation?.outcome).toBe("CONFIRMED");
+  await waitFor(() =>
+    expect(actor.getSnapshot().context.feedbackRevision).toBe(
+      actor.getSnapshot().context.responseRevision,
+    ),
   );
   fireEvent.click(
     screen.getByRole("button", { name: "Finish Explore and Learn" }),
@@ -301,5 +373,5 @@ it("runs A02 in production with authentic inspection, V3 recovery and delivered 
   fireEvent.click(
     screen.getByRole("button", { name: "Review completed activity" }),
   );
-  expect(screen.getByText("The condition makes the difference.")).toBeVisible();
+  expect(screen.getByRole("heading", { name: /Same two hours/ })).toBeVisible();
 });
