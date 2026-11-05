@@ -1576,13 +1576,21 @@ export function projectSemanticActivityFrame(
     currentCheck &&
     (phase === "CONFIRMATION" || phase === "RECONSIDERATION") &&
     c.feedbackRevision === null;
+  // Authorized C06 presentation eligibility is not delivery evidence.
+  const pendingC06PrepareFeedback =
+    ["C06-A01", "C06-A02", "C06-A03", "C06-A04"].includes(c.activityId) &&
+    idle &&
+    currentCheck &&
+    (phase === "CONFIRMATION" || phase === "RECONSIDERATION") &&
+    c.feedbackRevision === null;
   const feedback = approvedMain
     ? safeText(approvedMain)
     : !floor &&
         (currentFeedback ||
           pendingC04Feedback ||
           pendingC03PrepareFeedback ||
-          pendingC03ExploreFeedback) &&
+          pendingC03ExploreFeedback ||
+          pendingC06PrepareFeedback) &&
         content.feedback?.revision === c.responseRevision &&
         content.feedback.outcome === c.evaluation?.outcome
       ? safeText(content.feedback.content)

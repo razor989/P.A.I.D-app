@@ -420,6 +420,7 @@ export default tseslint.config(
         "engine/c04-activity-binding/public",
         "engine/c03-activity-binding/public",
         "recovery/rehydration/public",
+        "engine/c06-activity-binding/public",
         "study/catalog/public",
         "recovery/store/public",
       ],
@@ -478,6 +479,7 @@ export default tseslint.config(
         "study/validation/public",
         "study/catalog/public",
         "engine/c04-activity-binding/public",
+        "engine/c06-activity-binding/public",
         "recovery/store/public",
         "recovery/rehydration/public",
         "session/app-machine/public",
@@ -502,6 +504,7 @@ export default tseslint.config(
       ],
     ],
     ["session-provider.tsx", ["session/app-machine/public"]],
+    ["c06-integration.test.tsx", ["session/app-machine/public"]],
     [
       "c03-integration.test.tsx",
       [
@@ -545,6 +548,17 @@ export default tseslint.config(
     files: [`src/app/${file}`],
   })),
   // P10-T044 D226-S1: exact importer/public-target pairs, not an owner grant.
+  // T058 B058-IMPORT-001: owner-approved exact C06 facade consumers only.
+  {
+    ...restriction("presentation/models/c06-commission-machine", [
+      "engine/c06-activity-binding/public",
+    ]),
+    files: [
+      "src/presentation/models/c06-commission-machine/public.tsx",
+      "src/presentation/models/c06-commission-machine/preview.tsx",
+      "src/presentation/models/c06-commission-machine/prepare.test.tsx",
+    ],
+  },
   // T062 B062-IMPORT-001: owner-approved exact C03 facade consumers only.
   {
     ...restriction("presentation/models/c03-overtime-work-record", [

@@ -4544,6 +4544,126 @@ describe("T045 D226-S1 current feedback bridge", () => {
   });
 });
 
+describe.each(["C06-A01", "C06-A02", "C06-A03", "C06-A04"] as const)(
+  "%s pending feedback publication only",
+  (activityId) => {
+    it.each(["CONFIRMED", "RECONSIDERATION"] as const)(
+      "correlates %s without acknowledging delivery",
+      (outcome) => {
+        const phase =
+          outcome === "CONFIRMED" ? "CONFIRMATION" : "RECONSIDERATION";
+        const source = {
+          ...content,
+          derivedFacts: [
+            {
+              content: {
+                id: "after-delivery",
+                text: "Protected until delivery",
+              },
+              phases: ["CONFIRMATION", "RECONSIDERATION"],
+              timing: "CURRENT_FEEDBACK",
+            },
+          ],
+          feedback: { ...content.feedback!, outcome },
+        } satisfies FrameContent;
+        const base = input(
+          {
+            activityId,
+            hasChecked: true,
+            checkedRevision: 3,
+            evaluation: { outcome, diagnostic: null },
+          },
+          phase,
+          "NONE",
+          source,
+        );
+        const valid: FrameInput = {
+          ...base,
+          definition: { ...base.definition, activityId },
+        };
+        const before = JSON.stringify(valid);
+        const frame = projectSemanticActivityFrame(valid);
+        expect(frame.feedbackState?.content).toEqual(source.feedback.content);
+        expect(frame.completionActionAvailability).toBe(false);
+        expect(frame.allowedLearnerIntents).not.toContain("FINISH_ACTIVITY");
+        expect(frame.exposedDerivedFacts).toEqual([]);
+        expect(JSON.stringify(valid)).toBe(before);
+        for (const change of [
+          { hasChecked: false },
+          { checkedRevision: 2 },
+          { responseRevision: 4 },
+          { response: null },
+          { evaluation: null },
+          { feedbackRevision: 2 },
+        ]) {
+          expect(
+            projectSemanticActivityFrame({
+              ...valid,
+              context: { ...valid.context, ...change },
+            }).feedbackState,
+          ).toBeUndefined();
+        }
+        for (const revision of [2, 4]) {
+          expect(
+            projectSemanticActivityFrame({
+              ...valid,
+              content: {
+                ...source,
+                feedback: { ...source.feedback, revision },
+              },
+            }).feedbackState,
+          ).toBeUndefined();
+        }
+        expect(
+          projectSemanticActivityFrame({
+            ...valid,
+            content: {
+              ...source,
+              feedback: {
+                ...source.feedback,
+                outcome:
+                  outcome === "CONFIRMED" ? "RECONSIDERATION" : "CONFIRMED",
+              },
+            },
+          }).feedbackState,
+        ).toBeUndefined();
+        expect(
+          projectSemanticActivityFrame({
+            ...valid,
+            support: "REVIEW",
+            context: { ...valid.context, origin: phase },
+          }).feedbackState,
+        ).toBeUndefined();
+        for (const otherPhase of [
+          "ENTRY",
+          "EXP-01",
+          "ACTIVE",
+          "REVISION",
+          "INFO_NEEDED",
+          "COMPLETE",
+        ] as const) {
+          expect(
+            projectSemanticActivityFrame({
+              ...valid,
+              phase: otherPhase,
+              context: { ...valid.context, position: otherPhase },
+            }).feedbackState,
+          ).toBeUndefined();
+        }
+        for (const activityId of ["C01-A01", "C02-A02", "C05-A01"] as const) {
+          expect(
+            projectSemanticActivityFrame({
+              ...valid,
+              definition: { ...valid.definition, activityId },
+              context: { ...valid.context, activityId },
+            }).feedbackState,
+          ).toBeUndefined();
+        }
+      },
+    );
+  },
+);
+
 describe("synthetic semantic exposure enforcement", () => {
   it("omits model controls on absent or invalid evidence and rejects unsafe option labels", () => {
     const base = input();

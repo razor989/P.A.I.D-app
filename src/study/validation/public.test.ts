@@ -49,6 +49,26 @@ const withProvider = (
   );
 
 describe("T019 actual bank", () => {
+  it("admits the revised A01 thinking contract without admitting the old declaration", () => {
+    const partIndex = actualContentBank.parts.findIndex(
+      (part) => part.competency.id === "C06",
+    );
+    expect(
+      actualContentBank.parts[partIndex]!.activities[0]!.responseContract
+        .contractId,
+    ).toBe("C06-A01-first-thinking-v2");
+    expect(() =>
+      validateContent(
+        changeEntry(partIndex, "activities", 0, (activity) => ({
+          ...activity,
+          responseContract: {
+            contractId:
+              "C06 arrangement, sales, rate and conditional base (task-local reference)",
+          },
+        })),
+      ),
+    ).toThrow(/response contract/);
+  });
   it("has exact source-owned identities, 6/25 inventory, successors and primary scenarios", () => {
     expect(validateContent(actualContentBank)).toEqual({
       competencies: 6,

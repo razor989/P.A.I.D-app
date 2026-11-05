@@ -5,6 +5,9 @@ import {
   c06CommissionProvider,
   c06Competency,
   c06Copy,
+  c06PreparePrompts,
+  c06ExplorePrompts,
+  c06ApplyPrompts,
   c06Scenarios,
   validateC06Local,
 } from "@/study/competencies/c06/public";
@@ -201,7 +204,8 @@ function definition(id: Id): ActivityDefinition {
     }
   if (teaching) {
     edges.CONFIRMATION = { CONTINUE: "POST_CONFIRMATION_EXPLANATION" };
-    edges.RECONSIDERATION = { CONTINUE: "POST_CONFIRMATION_EXPLANATION" };
+    if (id === "C06-A01")
+      edges.RECONSIDERATION = { CONTINUE: "POST_CONFIRMATION_EXPLANATION" };
     support.POST_CONFIRMATION_EXPLANATION = ["REVIEW"];
   }
   const paired = id === "C06-A01" || id === "C06-A02";
@@ -214,7 +218,8 @@ function definition(id: Id): ActivityDefinition {
     ...(teaching
       ? {
           terminalTeaching: {
-            outcomes: "BOTH" as const,
+            outcomes:
+              id === "C06-A04" ? ("CONFIRMED" as const) : ("BOTH" as const),
             contentId: `c06/S0${ids.indexOf(id) + 1}/accessibility-summary`,
           },
         }
@@ -254,7 +259,7 @@ export function createC06ActivityBindings(): readonly ExecutableActivityBinding[
           e.responseRevision > 0 &&
           e.checkedRevision === e.responseRevision &&
           e.feedbackRevision === e.responseRevision &&
-          (id === "C06-A01" || id === "C06-A04"
+          (id === "C06-A01"
             ? e.evaluation !== null
             : e.evaluation?.outcome === "CONFIRMED"),
         sourceReviewAvailable: () => false,
@@ -381,9 +386,17 @@ export function projectC06ActivityFrame(actor: ActivityActor) {
             ? "reconsider-invariant-values"
             : "reconsider-formula"
           : id === "C06-A03"
-            ? c.evaluation?.diagnostic === "RATE"
-              ? "reconsider-rate"
-              : "reconsider-arrangement"
+            ? c.evaluation?.diagnostic === "ARRANGEMENT"
+              ? "reconsider-arrangement"
+              : c.evaluation?.diagnostic === "PAYMENT_MEANING"
+                ? "reconsider-meaning"
+                : c.evaluation?.diagnostic === "RATE"
+                  ? "reconsider-rate"
+                  : c.evaluation?.diagnostic === "SALES_BASE"
+                    ? "reconsider-sales"
+                    : c.evaluation?.diagnostic === "UNITS"
+                      ? "reconsider-units"
+                      : "reconsider-commission"
             : "relationship-help";
   const frame = projectSemanticActivityFrame({
     context: c,
@@ -440,21 +453,57 @@ export function projectC06ActivityFrame(actor: ActivityActor) {
           contractId: contract(id).id,
           version: 1,
           stage: "RESPONSE",
-          controls: c06ResponseFields[id].map((role) => ({
-            role,
-            acceptedKinds: role.startsWith("arrangement")
-              ? ["SINGLE_SELECTION"]
-              : role === "baseA" || role === "baseB"
-                ? ["SEMANTIC_BOUNDARY", "EXACT_QUANTITY"]
-                : ["EXACT_QUANTITY"],
-            ...(role.startsWith("arrangement")
-              ? {
-                  options: ["STRAIGHT_COMMISSION", "BASE_PLUS_COMMISSION"].map(
-                    (option) => ({ id: option, text: option }),
-                  ),
-                }
-              : {}),
-          })),
+          controls:
+            id === "C06-A01"
+              ? c06PreparePrompts.map((bank) => ({
+                  role: bank.role,
+                  acceptedKinds: ["SINGLE_SELECTION"],
+                  options: bank.options.map((option) => ({ ...option })),
+                }))
+              : id === "C06-A03"
+                ? c06ResponseFields[id].map((role) => {
+                    const bank = c06ApplyPrompts.find(
+                      (item) => item.role === role,
+                    );
+                    return bank
+                      ? {
+                          role,
+                          acceptedKinds: ["SINGLE_SELECTION"],
+                          options: bank.options.map((option) => ({
+                            ...option,
+                          })),
+                        }
+                      : { role, acceptedKinds: ["EXACT_QUANTITY"] };
+                  })
+                : id === "C06-A02"
+                  ? c06ResponseFields[id].map((role) => {
+                      const bank = c06ExplorePrompts.find(
+                        (item) => item.role === role,
+                      );
+                      return bank
+                        ? {
+                            role,
+                            acceptedKinds: ["SINGLE_SELECTION"],
+                            options: bank.options.map((option) => ({
+                              ...option,
+                            })),
+                          }
+                        : { role, acceptedKinds: ["EXACT_QUANTITY"] };
+                    })
+                  : c06ResponseFields[id].map((role) => ({
+                      role,
+                      acceptedKinds: role.startsWith("arrangement")
+                        ? ["SINGLE_SELECTION"]
+                        : ["EXACT_QUANTITY"],
+                      ...(role.startsWith("arrangement")
+                        ? {
+                            options: [
+                              "STRAIGHT_COMMISSION",
+                              "BASE_PLUS_COMMISSION",
+                            ].map((option) => ({ id: option, text: option })),
+                          }
+                        : {}),
+                    })),
         },
       ],
       ...(binding.definition.modelSelection
@@ -519,29 +568,106 @@ export function projectC06ActivityFrame(actor: ActivityActor) {
   return Object.freeze({
     frame,
     response: c.response,
+    transferDiagnostic:
+      id === "C06-A04" && feedback ? (c.evaluation?.diagnostic ?? null) : null,
+    transferFeedback:
+      id === "C06-A04" &&
+      c.position === "COMPLETE" &&
+      c.evaluation !== null &&
+      c.checkedRevision === c.responseRevision &&
+      c.feedbackRevision === c.responseRevision
+        ? Object.freeze({
+            outcome: c.evaluation.outcome,
+            content: text(feedbackRole),
+          })
+        : null,
+    applyPrompts: id === "C06-A03" ? c06ApplyPrompts : null,
+    applyDiagnostic:
+      id === "C06-A03" && feedback ? c.evaluation?.diagnostic : null,
+    preparePrompts: id === "C06-A01" ? c06PreparePrompts : null,
+    explorePrompts: id === "C06-A02" ? c06ExplorePrompts : null,
+    // Question checks are source evaluations of actual saved responses, not
+    // completion receipts. The Actor still checks the complete composite.
+    exploreChecks:
+      id === "C06-A02"
+        ? Object.freeze(
+            c06ResponseFields["C06-A02"].map((key) => {
+              const part =
+                c.response?.kind === "COMPOSITE"
+                  ? c.response.parts.find((p) => p.key === key)
+                  : undefined;
+              if (!part) return Object.freeze({ key, evaluation: null });
+              try {
+                return Object.freeze({
+                  key,
+                  evaluation: evaluateC06Response(
+                    state,
+                    { kind: "COMPOSITE", parts: [part] },
+                    key,
+                  ),
+                });
+              } catch {
+                return Object.freeze({ key, evaluation: null });
+              }
+            }),
+          )
+        : null,
+    exploreDiagnostic:
+      id === "C06-A02" && feedback ? c.evaluation?.diagnostic : null,
+    prepareGuidance:
+      id === "C06-A01" && feedback
+        ? (() => {
+            const response =
+              c.response?.kind === "COMPOSITE"
+                ? c.response.parts.find((part) => part.key === "investigation")
+                    ?.response
+                : null;
+            const selection =
+              response?.kind === "SINGLE_SELECTION"
+                ? response.selectionId
+                : "UNSURE";
+            return Object.freeze({
+              target: selection === "SALES" ? "sales" : "terms",
+              text:
+                selection === "SALES"
+                  ? "You wanted to look at how sales become pay. Open the sales record, then the commission rate. What does each tell you—and what still needs the agreement?"
+                  : selection === "AGREEMENTS"
+                    ? "You wanted to compare the agreements. Open the promises below. Follow the commission promise in both, then find the extra promise in Worker B’s."
+                    : "Let’s walk through it together. Start with the matching sales, follow the matching rates, then open the two promises. Notice where one pay story carries on after the other ends.",
+            });
+          })()
+        : null,
     model: publish(displayedState),
     comparison:
-      id === "C06-A02" &&
-      [
-        "EXP-05",
-        "EXP-06",
-        "ACTIVE",
-        "REVISION",
-        "CONFIRMATION",
-        "RECONSIDERATION",
-        "COMPLETE",
-      ].includes(c.position)
+      id === "C06-A01" && (teaching || c.position === "COMPLETE")
         ? Object.freeze(
-            ["C06-S02-A", "C06-S02-B"].map((child) =>
+            (["C06-S01-A", "C06-S01-B"] as const).map((childId) =>
               publish(
-                applyC06ModelIntent(state, {
-                  type: "SELECT_CHILD",
-                  childId: child as "C06-S02-A" | "C06-S02-B",
-                }),
+                applyC06ModelIntent(state, { type: "SELECT_CHILD", childId }),
               ),
             ),
           )
-        : null,
+        : id === "C06-A02" &&
+            [
+              "EXP-05",
+              "EXP-06",
+              "ACTIVE",
+              "REVISION",
+              "CONFIRMATION",
+              "RECONSIDERATION",
+              "COMPLETE",
+            ].includes(c.position)
+          ? Object.freeze(
+              ["C06-S02-A", "C06-S02-B"].map((child) =>
+                publish(
+                  applyC06ModelIntent(state, {
+                    type: "SELECT_CHILD",
+                    childId: child as "C06-S02-A" | "C06-S02-B",
+                  }),
+                ),
+              ),
+            )
+          : null,
   });
 }
 
@@ -641,6 +767,33 @@ export function createC06RestoredActivityActor(
         !r.parts.every(({ key, response }) => {
           if (!(c06ResponseFields[id] as readonly string[]).includes(key))
             return false;
+          if (id === "C06-A01")
+            return (
+              response.kind === "SINGLE_SELECTION" &&
+              c06PreparePrompts
+                .find((bank) => bank.role === key)
+                ?.options.some(
+                  (option) => option.id === response.selectionId,
+                ) === true
+            );
+          if (id === "C06-A03" && key === "interpretation")
+            return (
+              response.kind === "SINGLE_SELECTION" &&
+              c06ApplyPrompts
+                .find((bank) => bank.role === key)
+                ?.options.some(
+                  (option) => option.id === response.selectionId,
+                ) === true
+            );
+          if (id === "C06-A02" && key.endsWith("Reason"))
+            return (
+              response.kind === "SINGLE_SELECTION" &&
+              c06ExplorePrompts
+                .find((bank) => bank.role === key)
+                ?.options.some(
+                  (option) => option.id === response.selectionId,
+                ) === true
+            );
           if (key.startsWith("arrangement"))
             return (
               response.kind === "SINGLE_SELECTION" &&

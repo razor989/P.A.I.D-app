@@ -150,7 +150,7 @@ export type StagedResponseDefinition = Readonly<{
   optionIds: readonly string[];
 }>;
 export type TerminalTeachingDefinition = Readonly<{
-  outcomes: "BOTH";
+  outcomes: "BOTH" | "CONFIRMED";
   contentId: string;
 }>;
 /** D054/S1–S2: trusted, source-traced fixture/composition data, not a Study issuer. */
@@ -1466,7 +1466,11 @@ export function validateActivityDefinition(
   if (
     both &&
     (!fields(value.terminalTeaching, ["outcomes", "contentId"]) ||
-      value.terminalTeaching.outcomes !== "BOTH" ||
+      (value.terminalTeaching.outcomes !== "BOTH" &&
+        !(
+          value.activityId === "C06-A04" &&
+          value.terminalTeaching.outcomes === "CONFIRMED"
+        )) ||
       !identity(value.terminalTeaching.contentId))
   )
     throw new TypeError("Invalid terminal teaching");
@@ -1474,8 +1478,11 @@ export function validateActivityDefinition(
     both &&
     ((value.edges.CONFIRMATION as Record<string, unknown> | undefined)
       ?.CONTINUE !== "POST_CONFIRMATION_EXPLANATION" ||
-      (value.edges.RECONSIDERATION as Record<string, unknown> | undefined)
-        ?.CONTINUE !== "POST_CONFIRMATION_EXPLANATION")
+      ((value.terminalTeaching as TerminalTeachingDefinition).outcomes ===
+      "BOTH"
+        ? (value.edges.RECONSIDERATION as Record<string, unknown> | undefined)
+            ?.CONTINUE !== "POST_CONFIRMATION_EXPLANATION"
+        : value.edges.RECONSIDERATION !== undefined))
   )
     throw new TypeError("Missing both-outcome teaching edges");
   const nodes = new Set<Position>(["ENTRY", "ACTIVE", "INFO_NEEDED"]);
@@ -2168,6 +2175,8 @@ function validateActivityRestoration(
   if (definition.terminalTeaching) {
     if (value.position === "POST_CONFIRMATION_EXPLANATION") {
       if (
+        (definition.terminalTeaching.outcomes === "CONFIRMED" &&
+          value.evaluation?.outcome !== "CONFIRMED") ||
         value.feedbackRevision !== value.responseRevision ||
         value.terminalEntryRevision !== value.responseRevision ||
         (value.terminalTeachingRevision !== null &&
@@ -3413,6 +3422,8 @@ export function createActivityMachine(
               valid(event) &&
               event.type === "TERMINAL_TEACHING_DELIVERED" &&
               !!teaching &&
+              (teaching.outcomes === "BOTH" ||
+                context.evaluation?.outcome === "CONFIRMED") &&
               idle({ context }) &&
               context.hasChecked &&
               context.response !== null &&
@@ -3452,6 +3463,7 @@ export function createActivityMachine(
               }) =>
                 valid(event) &&
                 !!teaching &&
+                teaching.outcomes === "BOTH" &&
                 idle({ context }) &&
                 edges.RECONSIDERATION?.CONTINUE ===
                   "POST_CONFIRMATION_EXPLANATION" &&

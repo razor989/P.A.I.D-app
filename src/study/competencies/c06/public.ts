@@ -20,9 +20,139 @@ import type {
   CompetencyDefinition,
   ScenarioDefinition,
 } from "../../schemas/public";
-import { c06Copy } from "./content";
+import { c06Copy as establishedCopy } from "./content";
 
-export { c06Copy } from "./content";
+/** A01 invites a prediction, not an already-learned arrangement classification. */
+export const c06PreparePrompts = Object.freeze([
+  {
+    role: "expectation",
+    prompt: "Their sales match. What do you think about their pay?",
+    options: [
+      { id: "SAME", text: "I think they’ll receive the same pay." },
+      { id: "DIFFERENT", text: "I think their pay could be different." },
+      { id: "UNSURE", text: "I’m not sure yet. I’d like to look closer." },
+    ],
+  },
+  {
+    role: "investigation",
+    prompt: "What would you look at more closely before deciding?",
+    options: [
+      { id: "AGREEMENTS", text: "What each worker’s pay agreement promises." },
+      { id: "SALES", text: "How their sales turn into pay." },
+      { id: "UNSURE", text: "I’d like someone to walk through both with me." },
+    ],
+  },
+] as const);
+
+/** A03 decisions are source-owned commitments, not renderer-generated answers. */
+export const c06ApplyPrompts = Object.freeze([
+  {
+    role: "arrangement",
+    prompt: "Which pay structure follows this agreement?",
+    options: [
+      { id: "STRAIGHT_COMMISSION", text: "Commission only: sales × rate." },
+      { id: "BASE_PLUS_COMMISSION", text: "A fixed salary plus commission." },
+    ],
+  },
+  {
+    role: "interpretation",
+    prompt: "What does your calculated amount represent?",
+    options: [
+      {
+        id: "COMMISSION_ONLY",
+        text: "The agent’s commission earned from this sale.",
+      },
+      {
+        id: "SALE_PROCEEDS",
+        text: "The full property-sale proceeds received by the agent.",
+      },
+      {
+        id: "SALE_PLUS_COMMISSION",
+        text: "The sale price plus the agent’s commission.",
+      },
+    ],
+  },
+] as const);
+
+/** A02 commitments distinguish relationships, not just copied numerical outputs. */
+export const c06ExplorePrompts = Object.freeze([
+  {
+    role: "fixedReason",
+    prompt: "Sales rise. Which promise still comes from the same agreement?",
+    options: [
+      {
+        id: "AGREEMENT",
+        text: "The salary and rate stay fixed; sales do not rewrite the agreement.",
+      },
+      { id: "ALL_PAY", text: "Every part of pay must grow when sales grow." },
+      { id: "RATE_GROWS", text: "The commission rate grows along with sales." },
+    ],
+  },
+  {
+    role: "changeReason",
+    prompt: "Why is total pay higher in Situation B?",
+    options: [
+      {
+        id: "COMMISSION",
+        text: "More sales at the same rate produce more commission; the salary is unchanged.",
+      },
+      {
+        id: "SALARY",
+        text: "The larger sales record increases the fixed salary.",
+      },
+      {
+        id: "SALES_PAY",
+        text: "The representative receives the extra sales money as pay.",
+      },
+    ],
+  },
+  {
+    role: "orderReason",
+    prompt: "Which calculation follows the agreement—and why?",
+    options: [
+      {
+        id: "COMMISSION_FIRST",
+        text: "Find commission from sales × rate, then add salary. The rate applies only to sales.",
+      },
+      {
+        id: "SALARY_FIRST",
+        text: "Add salary to sales, then apply the rate to that whole amount.",
+      },
+      {
+        id: "COMMISSION_ONLY",
+        text: "Sales × rate is all the pay; leave out the salary.",
+      },
+    ],
+  },
+] as const);
+
+export const c06Copy = Object.freeze({
+  ...establishedCopy,
+  "c06/S01/scenario":
+    "It’s the end of the month. Worker A and Worker B have each sold ₱80,000 worth of goods. Both agreements promise commission at 5% of sales. Worker B’s agreement also promises a fixed monthly salary of ₱10,000.",
+  "c06/S01/task":
+    "You’ve seen their sales and their agreements. Share a first idea, then choose something you’d like to look at more closely. You don’t need to calculate their pay.",
+  "c06/S01/relationship-help":
+    "Start with the sales record: it tells us the value of the goods sold, not the worker’s earnings. Now follow the agreement. Commission is pay linked to those sales. A fixed monthly salary is a separate promise—look for it in each worker’s agreement before deciding whether their pay will match.",
+  "c06/S01/confirmation":
+    "You’ve noticed that matching sales might not tell the whole pay story. Keep the two agreements beside each other: what does Worker B’s promise include that Worker A’s does not? Let’s follow that difference together.",
+  "c06/S01/reconsider-arrangement":
+    "The matching sales records are a useful place to start. Now look at the agreements beneath them. Both mention commission, but only Worker B’s mentions a fixed monthly salary. Could those different promises matter, even when the sales match? You can keep your first idea while we explore it together.",
+  "c06/S01/reconsider-not-applicable":
+    "Not being sure gives us a question to investigate. Start with what matches—the sales and the commission rate—then look for a promise that appears in only one agreement. We’ll follow the two pay stories together; you don’t have to change your answer to continue.",
+  "c06/S01/completion":
+    "Matching sales are only part of the story. The pay agreement tells us what a worker receives for those sales, and whether a fixed salary belongs alongside commission.",
+  "c06/S01/accessibility-summary":
+    "Here’s where the two stories separate. Each worker earns ₱4,000 commission from ₱80,000 in sales at 5%. Worker A’s agreement ends there: there’s no fixed salary to add, rather than a salary of zero. Worker B has another promise to follow—the ₱10,000 monthly salary. Add it to the ₱4,000 commission and Worker B receives ₱14,000 in total compensation. The 5% applies to sales, not to that fixed salary. And the sales record still shows ₱80,000; calculating commission hasn’t reduced what was sold.",
+  "c06/S02/task":
+    "Keep one agreement in view while changing only sales. Follow the commission, compare the two pay pictures, then explain what caused the difference.",
+  "c06/S02/confirmation":
+    "Your comparison follows the agreement: salary and rate remain fixed. Higher sales produce more commission, which raises total compensation. Commission is calculated from sales before the salary is added.",
+  "c06/S02/reconsider-invariant-values":
+    "Return to the agreement, not the size of the sales record. It promises the same monthly salary and the same rate in both situations. Identify those two fixed promises before revising.",
+  "c06/S02/reconsider-formula":
+    "Trace the two jobs separately. First identify the sales amount the rate acts on; that produces commission. Then join commission to the fixed salary. Check which job your response describes before revising.",
+});
 
 const ids = ["C06-A01", "C06-A02", "C06-A03", "C06-A04"] as const;
 const scenarioIds = ["C06-S01", "C06-S02", "C06-S03", "C06-S04"] as const;
@@ -69,6 +199,10 @@ export const c06RoleKeys = Object.freeze(
       "confirmation",
       "reconsider-arrangement",
       "reconsider-rate",
+      "reconsider-sales",
+      "reconsider-meaning",
+      "reconsider-commission",
+      "reconsider-units",
       "completion",
       "accessibility-summary",
     ],
@@ -256,7 +390,13 @@ const parsedActivities: readonly ActivityManifest[] = Object.freeze(
       ],
       responseContract: {
         contractId:
-          "C06 arrangement, sales, rate and conditional base (task-local reference)",
+          i === 0
+            ? "C06-A01-first-thinking-v2"
+            : i === 1
+              ? "C06-A02-guided-questions-v3"
+              : i === 2
+                ? "C06-A03-commission-claim-v2"
+                : "C06 arrangement, sales, rate and conditional base (task-local reference)",
       },
       modelBinding: {
         profileId: "Modular Commission Machine",
@@ -328,7 +468,7 @@ export function validateC06Local(
     !same(provider, c06CommissionProvider) ||
     !isProviderRead(provider.read) ||
     !same(roles, c06RoleKeys) ||
-    Object.keys(copy).length !== 34 ||
+    Object.keys(copy).length !== Object.keys(c06Copy).length ||
     Object.keys(c06Copy).some(
       (key) => copy[key] !== c06Copy[key as keyof typeof c06Copy],
     ) ||

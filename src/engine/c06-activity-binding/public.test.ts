@@ -48,23 +48,19 @@ function response(id: string, wrong = false): LearnerResponse {
     id === "C06-A01"
       ? [
           {
-            key: "arrangementA",
-            response: choice(
-              wrong ? "BASE_PLUS_COMMISSION" : "STRAIGHT_COMMISSION",
-            ),
+            key: "expectation",
+            response: choice(wrong ? "SAME" : "DIFFERENT"),
           },
           {
-            key: "baseA",
-            response: {
-              kind: "SEMANTIC_BOUNDARY" as const,
-              resolution: { kind: "NOT_APPLICABLE" as const },
-            },
+            key: "investigation",
+            response: choice("AGREEMENTS"),
           },
-          { key: "arrangementB", response: choice("BASE_PLUS_COMMISSION") },
-          { key: "baseB", response: q("10000", "per month") },
         ]
       : id === "C06-A02"
         ? [
+            { key: "fixedReason", response: choice("AGREEMENT") },
+            { key: "changeReason", response: choice("COMMISSION") },
+            { key: "orderReason", response: choice("COMMISSION_FIRST") },
             { key: "rate", response: q("3", null, true) },
             { key: "base", response: q("15000", "per month") },
             { key: "commissionA", response: q("9000", "per month") },
@@ -74,6 +70,8 @@ function response(id: string, wrong = false): LearnerResponse {
           ]
         : id === "C06-A03"
           ? [
+              { key: "arrangement", response: choice("STRAIGHT_COMMISSION") },
+              { key: "interpretation", response: choice("COMMISSION_ONLY") },
               { key: "sales", response: q("2000000") },
               { key: "rate", response: q("5", null, true) },
               { key: "commission", response: q(wrong ? "1" : "100000") },
@@ -94,12 +92,201 @@ function active(a: Actor) {
   )
     a.send({ type: "CONTINUE" });
 }
+
+it.each([false, true])(
+  "publishes only actual delivered A04 feedback at COMPLETE (wrong=%s)",
+  (wrong) => {
+    const a = actor("C06-A04");
+    expect(projectC06ActivityFrame(a).transferFeedback).toBeNull();
+    active(a);
+    a.send({ type: "RESPONSE_CHANGED", response: response("C06-A04", wrong) });
+    a.send({ type: "CHECK_RESPONSE" });
+    expect(projectC06ActivityFrame(a).transferFeedback).toBeNull();
+    const revision = a.getSnapshot().context.responseRevision;
+    a.send({ type: "FEEDBACK_DELIVERED", revision });
+    a.send({ type: "CONTINUE" });
+    expect(projectC06ActivityFrame(a).transferFeedback).toBeNull();
+    a.send({
+      type: "TERMINAL_TEACHING_DELIVERED",
+      revision,
+      contentId: "c06/S04/accessibility-summary",
+    });
+    a.send({ type: "FINISH_ACTIVITY" });
+    if (wrong) {
+      expect(a.getSnapshot().context.position).toBe("RECONSIDERATION");
+      expect(projectC06ActivityFrame(a).transferFeedback).toBeNull();
+      return;
+    }
+    expect(a.getSnapshot().context.position).toBe("COMPLETE");
+    expect(projectC06ActivityFrame(a).transferFeedback).toEqual({
+      outcome: wrong ? "RECONSIDERATION" : "CONFIRMED",
+      content: {
+        id: `c06/S04/${wrong ? "relationship-help" : "confirmation"}`,
+        text: c06Copy[
+          wrong ? "c06/S04/relationship-help" : "c06/S04/confirmation"
+        ],
+      },
+    });
+  },
+);
+
+it("withholds A04 diagnostics outside current checked feedback and from other activities", () => {
+  const a = actor("C06-A04");
+  expect(projectC06ActivityFrame(a).transferDiagnostic).toBeNull();
+  active(a);
+  a.send({ type: "RESPONSE_CHANGED", response: response("C06-A04", true) });
+  a.send({ type: "CHECK_RESPONSE" });
+  expect(projectC06ActivityFrame(a).transferDiagnostic).toBe("COMMISSION");
+  expect(projectC06ActivityFrame(a).frame.allowedLearnerIntents).not.toContain(
+    "CONTINUE",
+  );
+  a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+  a.send({ type: "CONTINUE" });
+  a.send({ type: "FINISH_ACTIVITY" });
+  expect(a.getSnapshot().context.position).toBe("RECONSIDERATION");
+  a.send({ type: "REVISE" });
+  expect(projectC06ActivityFrame(a).transferDiagnostic).toBeNull();
+  for (const id of ["C06-A01", "C06-A02", "C06-A03"]) {
+    const other = actor(id);
+    active(other);
+    other.send({ type: "RESPONSE_CHANGED", response: response(id, true) });
+    other.send({ type: "CHECK_RESPONSE" });
+    expect(projectC06ActivityFrame(other).transferDiagnostic).toBeNull();
+  }
+});
+
+it.each(["ARRANGEMENT", "COMMISSION", "TOTAL_COMPENSATION", "UNITS"])(
+  "projects actual A04 %s diagnostics without changing independent entries",
+  (diagnostic) => {
+    const a = actor("C06-A04");
+    active(a);
+    const correct = response("C06-A04");
+    if (correct.kind !== "COMPOSITE") throw new Error("Composite required");
+    const submitted: LearnerResponse = {
+      ...correct,
+      parts: correct.parts.map((part) => ({
+        ...part,
+        response:
+          diagnostic === "ARRANGEMENT" && part.key === "arrangement"
+            ? choice("STRAIGHT_COMMISSION")
+            : diagnostic === "COMMISSION" && part.key === "commission"
+              ? q("1", "June")
+              : diagnostic === "TOTAL_COMPENSATION" && part.key === "total"
+                ? q("19400", "June")
+                : diagnostic === "UNITS" && part.key === "commission"
+                  ? {
+                      kind: "EXACT_QUANTITY",
+                      value: quantity(
+                        ExactDecimal.from("3600"),
+                        "MONETARY_AMOUNT",
+                        "USD",
+                        "June",
+                      ),
+                    }
+                  : part.response,
+      })),
+    };
+    a.send({ type: "RESPONSE_CHANGED", response: submitted });
+    a.send({ type: "CHECK_RESPONSE" });
+    expect(projectC06ActivityFrame(a).transferDiagnostic).toBe(diagnostic);
+    expect(projectC06ActivityFrame(a).response).toEqual(submitted);
+    a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+    expect(
+      projectC06ActivityFrame(a).frame.allowedLearnerIntents,
+    ).not.toContain("CONTINUE");
+  },
+);
+
+it("publishes source-owned partial question feedback without Actor completion evidence", () => {
+  const a = actor("C06-A02");
+  active(a);
+  const r = response("C06-A02");
+  if (r.kind !== "COMPOSITE") throw new Error("Expected composite");
+  const revision = a.getSnapshot().context.feedbackRevision;
+  a.send({
+    type: "RESPONSE_CHANGED",
+    response: { kind: "COMPOSITE", parts: [r.parts[0]!] },
+  });
+  const frame = projectC06ActivityFrame(a);
+  expect(frame.exploreChecks?.[0]?.evaluation?.outcome).toBe("CONFIRMED");
+  expect(
+    frame.exploreChecks?.slice(1).every((c) => c.evaluation === null),
+  ).toBe(true);
+  expect(a.getSnapshot().context.feedbackRevision).toBe(revision);
+  expect(a.getSnapshot().context.evaluation).toBeNull();
+  expect(frame.frame.allowedLearnerIntents).not.toContain("CHECK_RESPONSE");
+});
 function check(a: Actor, r: LearnerResponse) {
   a.send({ type: "RESPONSE_CHANGED", response: r });
   a.send({ type: "CHECK_RESPONSE" });
 }
 
 describe("C06 canonical composition and Actor delivery", () => {
+  it.each([false, true])(
+    "A01 publishes pending feedback but requires delivery and common teaching (wrong=%s)",
+    (wrong) => {
+      const a = actor("C06-A01");
+      expect(projectC06ActivityFrame(a).frame.feedbackState).toBeUndefined();
+      active(a);
+      check(a, response("C06-A01", wrong));
+      const phase = wrong ? "RECONSIDERATION" : "CONFIRMATION";
+      const pending = projectC06ActivityFrame(a);
+      expect(pending.frame.feedbackState?.outcome).toBe(
+        wrong ? "RECONSIDERATION" : "CONFIRMED",
+      );
+      expect(pending.frame.feedbackState?.content.text.length).toBeGreaterThan(
+        0,
+      );
+      expect(pending.model).not.toHaveProperty("commission");
+      expect(pending.model).not.toHaveProperty("totalCompensation");
+      expect(a.getSnapshot().context.feedbackRevision).toBeNull();
+      a.send({ type: "CONTINUE" });
+      a.send({ type: "FINISH_ACTIVITY" });
+      expect(a.getSnapshot().context.position).toBe(phase);
+      a.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+      expect(projectC06ActivityFrame(a).frame.feedbackState).toBeUndefined();
+      a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+      expect(a.getSnapshot().context.feedbackRevision).toBeNull();
+      a.send({ type: "CLOSE_SUPPORT" });
+      a.send({ type: "REVISE" });
+      expect(projectC06ActivityFrame(a).frame.feedbackState).toBeUndefined();
+      a.send({
+        type: "RESPONSE_CHANGED",
+        response: response("C06-A01", wrong),
+      });
+      a.send({ type: "CHECK_AGAIN" });
+      const revision = a.getSnapshot().context.responseRevision;
+      expect(projectC06ActivityFrame(a).frame.feedbackState?.outcome).toBe(
+        wrong ? "RECONSIDERATION" : "CONFIRMED",
+      );
+      a.send({ type: "FEEDBACK_DELIVERED", revision: revision - 1 });
+      expect(a.getSnapshot().context.feedbackRevision).toBeNull();
+      a.send({ type: "FEEDBACK_DELIVERED", revision });
+      a.send({ type: "FINISH_ACTIVITY" });
+      expect(a.getSnapshot().context.position).toBe(phase);
+      a.send({ type: "CONTINUE" });
+      const teaching = projectC06ActivityFrame(a);
+      expect(teaching.frame.stateId).toBe("POST_CONFIRMATION_EXPLANATION");
+      const passage = teaching.frame.contentReferences.find(
+        (r) => r.id === "c06/S01/accessibility-summary",
+      );
+      expect(passage?.text.length).toBeGreaterThan(0);
+      a.send({ type: "FINISH_ACTIVITY" });
+      expect(a.getSnapshot().context.position).toBe(
+        "POST_CONFIRMATION_EXPLANATION",
+      );
+      a.send({
+        type: "TERMINAL_TEACHING_DELIVERED",
+        revision,
+        contentId: passage!.id,
+      });
+      expect(projectC06ActivityFrame(a).frame.allowedLearnerIntents).toContain(
+        "FINISH_ACTIVITY",
+      );
+      a.send({ type: "FINISH_ACTIVITY" });
+      expect(a.getSnapshot().context.position).toBe("COMPLETE");
+    },
+  );
   it("authenticates all four sources and rejects altered source, accessors and unknown identities", () => {
     authenticateC06BindingSource();
     const source = {
@@ -168,7 +355,7 @@ describe("C06 canonical composition and Actor delivery", () => {
       expect(a.getSnapshot().context.position).toBe("COMPLETE");
     },
   );
-  it.each(["C06-A01", "C06-A04"])(
+  it.each(["C06-A01"])(
     "retains both-outcome teaching and direct Finish for wrong %s work",
     (id) => {
       const a = actor(id);
@@ -217,7 +404,7 @@ describe("C06 canonical composition and Actor delivery", () => {
       );
     },
   );
-  it.each(["C06-A02", "C06-A03"])(
+  it.each(["C06-A02", "C06-A03", "C06-A04"])(
     "does not equate wrong %s work with completion",
     (id) => {
       const a = actor(id);

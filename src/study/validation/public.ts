@@ -390,7 +390,15 @@ export function validateContent(bank: ContentBank): Readonly<{
       );
       same(activity.id, "response contract", activity.responseContract, {
         contractId:
-          activity.id === "C03-A01" ? "C03-A01-elicit-engage-v2" : responses[i],
+          activity.id === "C03-A01"
+            ? "C03-A01-elicit-engage-v2"
+            : activity.id === "C06-A01"
+              ? "C06-A01-first-thinking-v2"
+              : activity.id === "C06-A02"
+                ? "C06-A02-guided-questions-v3"
+                : activity.id === "C06-A03"
+                  ? "C06-A03-commission-claim-v2"
+                  : responses[i],
       });
       same(activity.id, "model family/interaction", activity.modelBinding, {
         profileId: models[i],

@@ -21,6 +21,8 @@ import { createRecoveryCheckpointQueue } from "../store/public";
 import {
   recoverC06CheckpointV4,
   claimRecoveryClassificationV4,
+  recoverApplicationCheckpoint,
+  claimRecoveryClassification,
 } from "./public";
 
 function queue(text: string | null) {
@@ -59,14 +61,173 @@ function wrong(id: "C06-A01" | "C06-A04") {
             { key: "total", response: q },
           ]
         : [
-            { key: "arrangementA", response: s },
-            { key: "baseA", response: q },
-            { key: "arrangementB", response: s },
-            { key: "baseB", response: q },
+            {
+              key: "expectation",
+              response: {
+                kind: "SINGLE_SELECTION" as const,
+                selectionId: "SAME",
+              },
+            },
+            {
+              key: "investigation",
+              response: {
+                kind: "SINGLE_SELECTION" as const,
+                selectionId: "AGREEMENTS",
+              },
+            },
           ],
   };
 }
 describe("C06 authentic reconstruction", () => {
+  it.each(["COMMISSION_ONLY", "SALE_PROCEEDS", "SALE_PLUS_COMMISSION"])(
+    "round-trips the actual partial A03 interpretation %s",
+    async (selectionId) => {
+      const actor = createC06ActivityActor("C06-A03");
+      actor.start();
+      actor.send({ type: "CONTINUE" });
+      actor.send({
+        type: "RESPONSE_CHANGED",
+        response: {
+          kind: "COMPOSITE",
+          parts: [
+            {
+              key: "interpretation",
+              response: { kind: "SINGLE_SELECTION", selectionId },
+            },
+          ],
+        },
+      });
+      const saved = json(actor);
+      actor.stop();
+      expect((await recoverC06CheckpointV4(queue(saved))).status).not.toBe(
+        "UNUSABLE_CHECKPOINT_V4",
+      );
+    },
+  );
+  it("rejects the superseded three-quantity A03 contract without inventing decisions", async () => {
+    const actor = createC06ActivityActor("C06-A03");
+    actor.start();
+    const old = json(actor).replace(
+      "C06-A03-commission-claim-v2",
+      "C06 arrangement, sales, rate and conditional base (task-local reference)",
+    );
+    actor.stop();
+    expect((await recoverC06CheckpointV4(queue(old))).status).toBe(
+      "UNUSABLE_CHECKPOINT_V4",
+    );
+  });
+  it.each(["COMMISSION", "SALARY"])(
+    "restores A02 reasoning with its authentic outcome (%s)",
+    async (selectionId) => {
+      const actor = createC06ActivityActor("C06-A02");
+      actor.start();
+      for (let i = 0; i < 7; i++) actor.send({ type: "CONTINUE" });
+      const choice = (selectionId: string) => ({
+        kind: "SINGLE_SELECTION" as const,
+        selectionId,
+      });
+      const amount = (n: string, rate = false) => ({
+        kind: "EXACT_QUANTITY" as const,
+        value: quantity(
+          ExactDecimal.from(n),
+          rate ? "PERCENTAGE_RATE" : "MONETARY_AMOUNT",
+          rate ? "%" : "PHP",
+          rate ? null : "per month",
+        ),
+      });
+      actor.send({
+        type: "RESPONSE_CHANGED",
+        response: {
+          kind: "COMPOSITE",
+          parts: [
+            { key: "fixedReason", response: choice("AGREEMENT") },
+            { key: "changeReason", response: choice(selectionId) },
+            { key: "orderReason", response: choice("COMMISSION_FIRST") },
+            { key: "rate", response: amount("3", true) },
+            { key: "base", response: amount("15000") },
+            { key: "commissionA", response: amount("9000") },
+            { key: "totalA", response: amount("24000") },
+            { key: "commissionB", response: amount("15000") },
+            { key: "totalB", response: amount("30000") },
+          ],
+        },
+      });
+      actor.send({ type: "CHECK_RESPONSE" });
+      const result = await recoverC06CheckpointV4(queue(json(actor)));
+      actor.stop();
+      expect(result.status).toBe("VALID_C06_CHECKPOINT_V4");
+      if (result.status !== "VALID_C06_CHECKPOINT_V4")
+        throw new Error("Reasoning recovery failed");
+      expect(result.actor.getSnapshot().context.evaluation).toEqual(
+        selectionId === "COMMISSION"
+          ? { outcome: "CONFIRMED", diagnostic: null }
+          : { outcome: "RECONSIDERATION", diagnostic: "CAUSAL_CHANGE" },
+      );
+      expect(result.actor.getSnapshot().context.feedbackRevision).toBeNull();
+      result.actor.stop();
+    },
+  );
+  it.each([
+    "C06 arrangement, sales, rate and conditional base (task-local reference)",
+    "C06-A02-causal-comparison-v2",
+  ])(
+    "rejects superseded A02 contract %s instead of inventing question checks",
+    async (superseded) => {
+      const actor = createC06ActivityActor("C06-A02");
+      actor.start();
+      const old = json(actor).replace(
+        "C06-A02-guided-questions-v3",
+        superseded,
+      );
+      actor.stop();
+      expect((await recoverC06CheckpointV4(queue(old))).status).toBe(
+        "UNUSABLE_CHECKPOINT_V4",
+      );
+    },
+  );
+  it("does not reinterpret a saved response under the superseded A01 contract", async () => {
+    const actor = createC06ActivityActor("C06-A01");
+    actor.start();
+    const old = json(actor).replace(
+      "C06-A01-first-thinking-v2",
+      "C06 arrangement, sales, rate and conditional base (task-local reference)",
+    );
+    actor.stop();
+    expect((await recoverC06CheckpointV4(queue(old))).status).toBe(
+      "UNUSABLE_CHECKPOINT_V4",
+    );
+  });
+  it.each(["C06-A01", "C06-A02", "C06-A03", "C06-A04"] as const)(
+    "admits %s into production and preserves queue-bound one-use custody",
+    async (id) => {
+      const actor = createC06ActivityActor(id);
+      actor.start();
+      actor.send({ type: "CONTINUE" });
+      const saved = json(actor);
+      actor.stop();
+      const original = queue(saved),
+        other = queue(saved);
+      const result = await recoverApplicationCheckpoint(original);
+      expect(result.status).toBe("VALID_CHECKPOINT");
+      expect(claimRecoveryClassification(other, result)).toBe(false);
+      expect(claimRecoveryClassification(original, result)).toBe(true);
+      expect(claimRecoveryClassification(original, result)).toBe(false);
+      if (result.status === "VALID_CHECKPOINT") result.actor.stop();
+    },
+  );
+  it("rejects production custody after restored A01 emits", async () => {
+    const actor = createC06ActivityActor("C06-A01");
+    actor.start();
+    const original = queue(json(actor));
+    actor.stop();
+    const result = await recoverApplicationCheckpoint(original);
+    expect(result.status).toBe("VALID_CHECKPOINT");
+    if (result.status !== "VALID_CHECKPOINT") return;
+    result.actor.start();
+    result.actor.send({ type: "CONTINUE" });
+    expect(claimRecoveryClassification(original, result)).toBe(false);
+    result.actor.stop();
+  });
   it.each(["C06-A01", "C06-A04"] as const)(
     "restores confirmed %s teaching and rejects forged checked evidence",
     async (id) => {
@@ -86,10 +247,10 @@ describe("C06 authentic reconstruction", () => {
           key: p.key,
           response:
             id === "C06-A01"
-              ? p.key === "arrangementA"
+              ? p.key === "expectation"
                 ? {
                     kind: "SINGLE_SELECTION",
-                    selectionId: "STRAIGHT_COMMISSION",
+                    selectionId: "DIFFERENT",
                   }
                 : p.key === "baseA"
                   ? {
@@ -128,14 +289,19 @@ describe("C06 authentic reconstruction", () => {
           expect(() => validateC06CheckpointV4({ ...p, ...patch })).toThrow();
         const bad = JSON.parse(canonicalCheckpointJSON(p)) as {
           checkedResponse: {
-            parts: { key: string; response: { value: { unit: string } } }[];
+            parts: {
+              key: string;
+              response: { value: { unit: string }; selectionId?: string };
+            }[];
           };
           response: unknown;
         };
-        bad.checkedResponse.parts.find(
+        const altered = bad.checkedResponse.parts.find(
           (part: { key: string }) =>
-            part.key === (id === "C06-A01" ? "baseB" : "commission"),
-        )!.response.value.unit = "USD";
+            part.key === (id === "C06-A01" ? "expectation" : "commission"),
+        )!.response;
+        if (id === "C06-A01") altered.selectionId = "INVENTED";
+        else altered.value.unit = "USD";
         bad.response = bad.checkedResponse;
         expect(() => validateC06CheckpointV4(bad)).toThrow();
         a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
@@ -293,6 +459,27 @@ describe("C06 authentic reconstruction", () => {
         checked.actor.stop();
         a.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
         a.send({ type: "CONTINUE" });
+        if (id === "C06-A04") {
+          expect(a.getSnapshot().context.position).toBe("RECONSIDERATION");
+          const recovered = await recoverC06CheckpointV4(queue(json(a)));
+          expect(recovered.status).toBe("VALID_C06_CHECKPOINT_V4");
+          if (recovered.status === "VALID_C06_CHECKPOINT_V4") {
+            recovered.actor.start();
+            recovered.actor.send({ type: "FINISH_ACTIVITY" });
+            expect(recovered.actor.getSnapshot().context.position).toBe(
+              "RECONSIDERATION",
+            );
+            recovered.actor.send({ type: "REVISE" });
+            expect(recovered.actor.getSnapshot().context.position).toBe(
+              "REVISION",
+            );
+            expect(recovered.actor.getSnapshot().context.response).toEqual(
+              wrong(id),
+            );
+            recovered.actor.stop();
+          }
+          return;
+        }
         for (const delivered of [false, true]) {
           if (delivered)
             a.send({
@@ -322,6 +509,21 @@ describe("C06 authentic reconstruction", () => {
     },
   );
   it("rejects detached model state, wrong response membership and incompatible revisions", () => {
+    const legacy = createC06ActivityActor("C06-A04");
+    legacy.start();
+    legacy.send({ type: "CONTINUE" });
+    legacy.send({ type: "RESPONSE_CHANGED", response: wrong("C06-A04") });
+    legacy.send({ type: "CHECK_RESPONSE" });
+    legacy.send({ type: "FEEDBACK_DELIVERED", revision: 1 });
+    const checkpoint = projectC06CheckpointV4(legacy);
+    expect(() =>
+      validateC06CheckpointV4({
+        ...checkpoint,
+        position: "POST_CONFIRMATION_EXPLANATION",
+        teaching: { entryRevision: 1, deliveredRevision: 1 },
+      }),
+    ).toThrow();
+    legacy.stop();
     const a = createC06ActivityActor("C06-A01");
     try {
       const p = projectC06CheckpointV4(a);

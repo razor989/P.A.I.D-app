@@ -12,16 +12,45 @@ import { ReferenceExperience } from "../models/c04-reference/ReferenceExperience
 import { PrepareExperience } from "../models/c04-anchored-change-track/PrepareExperience";
 import { ApplyExperience } from "../models/c04-anchored-change-track/ApplyExperience";
 import { TransferExperience } from "../models/c04-anchored-change-track/TransferExperience";
+import {
+  PrepareExperience as CommissionPrepare,
+  ExploreExperience as CommissionExplore,
+  ApplyExperience as CommissionApply,
+  TransferExperience as CommissionTransfer,
+} from "../models/c06-commission-machine/public";
+import type { C06PreparePresentation } from "../models/c06-commission-machine/public";
 
 export function ActivityHost({
   activityId,
   c04Presentation,
   c03Presentation,
+  c06Presentation,
 }: {
   activityId: ActivityId;
   c04Presentation?: C04Presentation | undefined;
   c03Presentation?: C03PreparePresentation | undefined;
+  c06Presentation?: C06PreparePresentation | undefined;
 }) {
+  if (
+    activityId === "C06-A04" &&
+    c06Presentation?.projection.frame.activityId === activityId
+  )
+    return <CommissionTransfer {...c06Presentation} />;
+  if (
+    activityId === "C06-A03" &&
+    c06Presentation?.projection.frame.activityId === activityId
+  )
+    return <CommissionApply {...c06Presentation} />;
+  if (
+    activityId === "C06-A02" &&
+    c06Presentation?.projection.frame.activityId === activityId
+  )
+    return <CommissionExplore {...c06Presentation} />;
+  if (
+    activityId === "C06-A01" &&
+    c06Presentation?.projection.frame.activityId === activityId
+  )
+    return <CommissionPrepare {...c06Presentation} />;
   if (
     activityId === "C03-A04" &&
     c03Presentation?.projection.frame.activityId === activityId

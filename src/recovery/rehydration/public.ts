@@ -141,7 +141,10 @@ export type RecoveryClassification =
   | Readonly<{ status: "NO_CHECKPOINT" }>
   | Readonly<{
       status: "VALID_CHECKPOINT";
-      checkpoint: RecoveryCheckpointEnvelopeV1 | RecoveryCheckpointEnvelopeV3;
+      checkpoint:
+        | RecoveryCheckpointEnvelopeV1
+        | RecoveryCheckpointEnvelopeV3
+        | RecoveryCheckpointEnvelopeV4;
       actor: Actor;
     }>
   | Readonly<{ status: "UNUSABLE_CHECKPOINT" }>
@@ -194,11 +197,23 @@ function issueClassification(
   const subscription = actor?.subscribe(() => {
     emitted = true;
   });
+  const c06Work =
+    actor &&
+    ["C06-A01", "C06-A02", "C06-A03", "C06-A04"].includes(
+      snapshot?.context.activityId ?? "",
+    )
+      ? canonicalCheckpointJSON(projectC06CheckpointV4(actor))
+      : null;
   classificationClaims.set(value, {
     queue,
     untouched: () => {
       if (emitted || (actor && actor.getSnapshot() !== snapshot)) return false;
       try {
+        if (c06Work !== null)
+          return (
+            !!actor &&
+            canonicalCheckpointJSON(projectC06CheckpointV4(actor)) === c06Work
+          );
         return (
           c03Work === null ||
           (!!actor &&
@@ -245,7 +260,7 @@ export async function recoverCheckpoint(
   }
 }
 
-/** Application dispatch reads once and admits authorized C03-A01/A02 V3 work.
+/** Application dispatch reads once and admits C03 V3 and bounded C06-A01 V4 work.
  * Reissue through the existing one-use Session custody proof, never a raw actor.
  */
 export async function recoverApplicationCheckpoint(
@@ -259,6 +274,27 @@ export async function recoverApplicationCheckpoint(
   }
   const loaded = { load: () => Promise.resolve(result) };
   if (result.status !== "technical-failure" && result.checkpoint !== null) {
+    try {
+      const envelope = parseRecoveryCheckpointV4(result.checkpoint);
+      if (
+        !["C06-A01", "C06-A02", "C06-A03", "C06-A04"].includes(
+          envelope.checkpoint.activityId,
+        )
+      )
+        return issueClassification(queue, { status: "UNUSABLE_CHECKPOINT" });
+      const recovered = await recoverC06CheckpointV4(loaded);
+      if (!claimRecoveryClassificationV4(loaded, recovered))
+        throw new TypeError("Unclaimed C06 recovery");
+      if (recovered.status === "VALID_C06_CHECKPOINT_V4")
+        return issueClassification(queue, {
+          status: "VALID_CHECKPOINT",
+          checkpoint: recovered.checkpoint,
+          actor: recovered.actor,
+        });
+      return issueClassification(queue, { status: "UNUSABLE_CHECKPOINT" });
+    } catch {
+      // Not admissible A01 V4 work; retain the existing V3/V1 dispatch below.
+    }
     try {
       const envelope = parseRecoveryCheckpointV3(result.checkpoint);
       if (

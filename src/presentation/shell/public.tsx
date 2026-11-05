@@ -1,6 +1,8 @@
 import type { ActivityId, CompetencyId } from "@/core/public";
 import type { C04Presentation } from "../models/c04-anchored-change-track/public";
 import type { C03PreparePresentation } from "../models/c03-overtime-work-record/public";
+import type { C06PreparePresentation } from "../models/c06-commission-machine/public";
+export type { C06PreparePresentation } from "../models/c06-commission-machine/public";
 export type { C03PreparePresentation } from "../models/c03-overtime-work-record/public";
 
 export type { C04Presentation } from "../models/c04-anchored-change-track/public";
@@ -28,6 +30,7 @@ export type ShellProps = Readonly<{
   onReviewCompleted?: (() => void) | undefined;
   c04Presentation?: C04Presentation | undefined;
   c03Presentation?: C03PreparePresentation | undefined;
+  c06Presentation?: C06PreparePresentation | undefined;
   destination: Destination;
   competencies: readonly CompetencySummary[];
   blocked: boolean;

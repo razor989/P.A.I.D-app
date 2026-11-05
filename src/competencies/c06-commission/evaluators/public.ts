@@ -23,6 +23,9 @@ export type C06Evaluation = Readonly<{
     | "UNITS"
     | "COMMISSION"
     | "TOTAL_COMPENSATION"
+    | "CAUSAL_CHANGE"
+    | "CALCULATION_ORDER"
+    | "PAYMENT_MEANING"
     | null;
 }>;
 
@@ -30,13 +33,11 @@ export type C06Evaluation = Readonly<{
  * Canonical source membership is authenticated by the future Engine issuer.
  */
 export const c06ResponseFields = Object.freeze({
-  "C06-A01": Object.freeze([
-    "arrangementA",
-    "baseA",
-    "arrangementB",
-    "baseB",
-  ] as const),
+  "C06-A01": Object.freeze(["expectation", "investigation"] as const),
   "C06-A02": Object.freeze([
+    "fixedReason",
+    "changeReason",
+    "orderReason",
     "rate",
     "base",
     "commissionA",
@@ -44,7 +45,13 @@ export const c06ResponseFields = Object.freeze({
     "commissionB",
     "totalB",
   ] as const),
-  "C06-A03": Object.freeze(["sales", "rate", "commission"] as const),
+  "C06-A03": Object.freeze([
+    "arrangement",
+    "sales",
+    "rate",
+    "commission",
+    "interpretation",
+  ] as const),
   "C06-A04": Object.freeze(["arrangement", "commission", "total"] as const),
 });
 
@@ -105,12 +112,37 @@ export function c06ResponseReady(
   )
     return false;
   return input.parts.every(({ key, response }) => {
+    if (state.activityId === "C06-A01")
+      return (
+        response.kind === "SINGLE_SELECTION" &&
+        (key === "expectation"
+          ? ["SAME", "DIFFERENT", "UNSURE"]
+          : ["AGREEMENTS", "SALES", "UNSURE"]
+        ).includes(response.selectionId)
+      );
+    if (state.activityId === "C06-A03" && key === "interpretation")
+      return (
+        response.kind === "SINGLE_SELECTION" &&
+        ["COMMISSION_ONLY", "SALE_PROCEEDS", "SALE_PLUS_COMMISSION"].includes(
+          response.selectionId,
+        )
+      );
     if (key.startsWith("arrangement"))
       return (
         response.kind === "SINGLE_SELECTION" &&
         ["STRAIGHT_COMMISSION", "BASE_PLUS_COMMISSION"].includes(
           response.selectionId,
         )
+      );
+    if (state.activityId === "C06-A02" && key.endsWith("Reason"))
+      return (
+        response.kind === "SINGLE_SELECTION" &&
+        (key === "fixedReason"
+          ? ["AGREEMENT", "ALL_PAY", "RATE_GROWS"]
+          : key === "changeReason"
+            ? ["COMMISSION", "SALARY", "SALES_PAY"]
+            : ["COMMISSION_FIRST", "SALARY_FIRST", "COMMISSION_ONLY"]
+        ).includes(response.selectionId)
       );
     if (key === "baseA" || key === "baseB")
       return (
@@ -145,19 +177,82 @@ function amount(view: View, role: "base" | "commission" | "total"): Quantity {
 export function evaluateC06Response(
   state: C06ModelState,
   input: unknown,
+  question?: string,
 ): C06Evaluation {
-  if (!c06ResponseReady(state, input))
+  const partial = question !== undefined;
+  if (
+    partial &&
+    (state.activityId !== "C06-A02" ||
+      !(c06ResponseFields["C06-A02"] as readonly string[]).includes(question))
+  )
+    throw new TypeError("Unknown C06 question");
+  if (
+    partial
+      ? !data(input) ||
+        !isLearnerResponse(input) ||
+        input.kind !== "COMPOSITE" ||
+        input.parts.length !== 1 ||
+        input.parts[0]?.key !== question
+      : !c06ResponseReady(state, input)
+  )
     throw new TypeError("Invalid or incomplete C06 response");
+  if (!isLearnerResponse(input) || input.kind !== "COMPOSITE")
+    throw new TypeError("Invalid C06 response");
   const view = deriveC06ModelState(state);
   const wrong = (
     diagnostic: NonNullable<C06Evaluation["diagnostic"]>,
   ): C06Evaluation => Object.freeze({ outcome: "RECONSIDERATION", diagnostic });
+  if (state.activityId === "C06-A01") {
+    const expectation = input.parts.find(
+      (part) => part.key === "expectation",
+    )!.response;
+    return expectation.kind === "SINGLE_SELECTION" &&
+      expectation.selectionId === "DIFFERENT"
+      ? Object.freeze({ outcome: "CONFIRMED", diagnostic: null })
+      : wrong(
+          expectation.kind === "SINGLE_SELECTION" &&
+            expectation.selectionId === "UNSURE"
+            ? "NOT_APPLICABLE"
+            : "ARRANGEMENT",
+        );
+  }
   // Source-defined field order makes diagnoses independent of payload ordering.
   for (const key of c06ResponseFields[state.activityId]) {
+    if (partial && key !== question) continue;
     const response = input.parts.find((part) => part.key === key)!.response;
+    if (state.activityId === "C06-A03" && key === "interpretation") {
+      if (
+        response.kind !== "SINGLE_SELECTION" ||
+        response.selectionId !== "COMMISSION_ONLY"
+      )
+        return wrong("PAYMENT_MEANING");
+      continue;
+    }
+    if (state.activityId === "C06-A02" && key.endsWith("Reason")) {
+      const expected =
+        key === "fixedReason"
+          ? "AGREEMENT"
+          : key === "changeReason"
+            ? "COMMISSION"
+            : "COMMISSION_FIRST";
+      if (
+        response.kind !== "SINGLE_SELECTION" ||
+        response.selectionId !== expected
+      )
+        return wrong(
+          key === "fixedReason"
+            ? "INVARIANTS"
+            : key === "changeReason"
+              ? "CAUSAL_CHANGE"
+              : "CALCULATION_ORDER",
+        );
+      continue;
+    }
     if (key.startsWith("arrangement")) {
       const expected =
-        key === "arrangementA" ? "STRAIGHT_COMMISSION" : "BASE_PLUS_COMMISSION";
+        state.activityId === "C06-A03"
+          ? "STRAIGHT_COMMISSION"
+          : "BASE_PLUS_COMMISSION";
       if (
         response.kind !== "SINGLE_SELECTION" ||
         response.selectionId !== expected
@@ -165,23 +260,10 @@ export function evaluateC06Response(
         return wrong("ARRANGEMENT");
       continue;
     }
-    if (key === "baseA") {
-      if (
-        response.kind !== "SEMANTIC_BOUNDARY" ||
-        response.resolution.kind !== "NOT_APPLICABLE"
-      )
-        return wrong("NOT_APPLICABLE");
-      continue;
-    }
     if (response.kind !== "EXACT_QUANTITY") return wrong("ARRANGEMENT");
     let selected = view;
-    if (state.activityId === "C06-A01" || state.activityId === "C06-A02") {
-      const childId =
-        state.activityId === "C06-A01"
-          ? "C06-S01-B"
-          : key.endsWith("B")
-            ? "C06-S02-B"
-            : "C06-S02-A";
+    if (state.activityId === "C06-A02") {
+      const childId = key.endsWith("B") ? "C06-S02-B" : "C06-S02-A";
       selected = deriveC06ModelState(
         applyC06ModelIntent(state, { type: "SELECT_CHILD", childId }),
       );

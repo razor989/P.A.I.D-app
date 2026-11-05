@@ -265,7 +265,7 @@ describe("C06 fixed source bank", () => {
     ]);
   });
 
-  it("binds all four literal R7 profiles and exactly its own eight roles plus two GLOs", () => {
+  it("binds all four literal R7 profiles and exact source roles including A03 correction plus two GLOs", () => {
     expect(c06Activities.map((a) => a.modelBinding)).toEqual([
       {
         profileId: "Modular Commission Machine",
@@ -284,8 +284,8 @@ describe("C06 fixed source bank", () => {
         interactionProfileId: "Static semantic — base plus commission",
       },
     ]);
-    expect(Object.keys(c06Copy)).toHaveLength(34);
-    expect(c06RoleKeys.map((roles) => roles.length)).toEqual([8, 8, 8, 8]);
+    expect(Object.keys(c06Copy)).toHaveLength(38);
+    expect(c06RoleKeys.map((roles) => roles.length)).toEqual([8, 8, 12, 8]);
     for (const [i, activity] of c06Activities.entries()) {
       expect(activity.contentReferences.map((ref) => ref.contentId)).toEqual([
         ...c06RoleKeys[i]!.map((role) => `c06/S0${i + 1}/${role}`),

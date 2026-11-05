@@ -22,7 +22,9 @@ export function CompetencyOverview({
           ? " Explore and Learn includes the integrated salary investigation."
           : competency.id === "C03"
             ? " Prepare introduces Nico’s overtime work record. Explore and Learn compares two overtime conditions. Apply puts your reasoning to work with James’s monthly overtime. Check and Transfer brings the ideas together with Mara’s regular-holiday overtime."
-            : " This version provides the destination structure; instructional presentation is not yet available."}
+            : competency.id === "C06"
+              ? " Prepare compares two pay agreements. Explore and Learn follows changing sales under one agreement. Apply uses a property sale to determine straight commission."
+              : " This version provides the destination structure; instructional presentation is not yet available."}
       </p>
       <ol className={styles.list}>
         {competency.activities.map((a) => (
@@ -61,15 +63,19 @@ export function CompetencyOverview({
               {a.available
                 ? a.id === "C04-A02"
                   ? "Open the salary investigation and comparison."
-                  : a.id === "C03-A01"
-                    ? "Open Nico’s overtime work record and share your first thinking."
-                    : a.id === "C03-A02"
-                      ? "Investigate how the work condition changes overtime pay."
-                      : a.id === "C03-A03"
-                        ? "Use James’s monthly work record to calculate overtime pay."
-                        : a.id === "C03-A04"
-                          ? "Transfer your reasoning to a regular holiday, then bring the overtime-pay ideas together."
-                          : "Activity host available; instructional presentation is not yet available."
+                  : a.id === "C06-A01"
+                    ? "Compare the workers’ agreements and share your first thinking about each pay structure."
+                    : a.id === "C06-A02"
+                      ? "Change sales and follow what happens to commission and total pay."
+                      : a.id === "C03-A01"
+                        ? "Open Nico’s overtime work record and share your first thinking."
+                        : a.id === "C03-A02"
+                          ? "Investigate how the work condition changes overtime pay."
+                          : a.id === "C03-A03"
+                            ? "Use James’s monthly work record to calculate overtime pay."
+                            : a.id === "C03-A04"
+                              ? "Transfer your reasoning to a regular holiday, then bring the overtime-pay ideas together."
+                              : "Activity host available; instructional presentation is not yet available."
                 : "Not available in the current Session."}
             </p>
           </li>

@@ -78,20 +78,17 @@ const select = (selectionId: string): AtomicResponse => ({
   kind: "SINGLE_SELECTION",
   selectionId,
 });
-const na: AtomicResponse = {
-  kind: "SEMANTIC_BOUNDARY",
-  resolution: { kind: "NOT_APPLICABLE" },
-};
 function answers(index: 1 | 2 | 3 | 4): Record<string, AtomicResponse> {
   return index === 1
     ? {
-        arrangementA: select("STRAIGHT_COMMISSION"),
-        baseA: na,
-        arrangementB: select("BASE_PLUS_COMMISSION"),
-        baseB: exact(money("10000", "per month")),
+        expectation: select("DIFFERENT"),
+        investigation: select("AGREEMENTS"),
       }
     : index === 2
       ? {
+          fixedReason: select("AGREEMENT"),
+          changeReason: select("COMMISSION"),
+          orderReason: select("COMMISSION_FIRST"),
           rate: exact(percent("3")),
           base: exact(money("15000", "per month")),
           commissionA: exact(money("9000", "per month")),
@@ -101,6 +98,8 @@ function answers(index: 1 | 2 | 3 | 4): Record<string, AtomicResponse> {
         }
       : index === 3
         ? {
+            arrangement: select("STRAIGHT_COMMISSION"),
+            interpretation: select("COMMISSION_ONLY"),
             sales: exact(money("2000000")),
             rate: exact(percent("5")),
             commission: exact(money("100000")),
@@ -119,6 +118,59 @@ const composite = (
 });
 
 describe("C06 evidence-based evaluators", () => {
+  it("requires A03 structure and meaning commitments and diagnoses them independently", () => {
+    const state = createC06ModelState(fixture(3));
+    const correct = answers(3);
+    const legacy = Object.fromEntries(
+      Object.entries(correct).filter(
+        ([key]) => key !== "arrangement" && key !== "interpretation",
+      ),
+    );
+    expect(c06ResponseReady(state, composite(legacy))).toBe(false);
+    expect(
+      evaluateC06Response(
+        state,
+        composite({ ...correct, arrangement: select("BASE_PLUS_COMMISSION") }),
+      ),
+    ).toEqual({ outcome: "RECONSIDERATION", diagnostic: "ARRANGEMENT" });
+    expect(
+      evaluateC06Response(
+        state,
+        composite({ ...correct, interpretation: select("SALE_PROCEEDS") }),
+      ),
+    ).toEqual({ outcome: "RECONSIDERATION", diagnostic: "PAYMENT_MEANING" });
+    expect(evaluateC06Response(state, composite(correct)).outcome).toBe(
+      "CONFIRMED",
+    );
+  });
+  it("checks each A02 role using source mathematics without completing a composite", () => {
+    const state = createC06ModelState(fixture(2));
+    for (const [key, response] of Object.entries(answers(2))) {
+      const input = { kind: "COMPOSITE" as const, parts: [{ key, response }] };
+      expect(c06ResponseReady(state, input)).toBe(false);
+      expect(evaluateC06Response(state, input, key).outcome).toBe("CONFIRMED");
+      const wrong = key.endsWith("Reason")
+        ? select("WRONG")
+        : exact(key === "rate" ? percent("1") : money("1", "per month"));
+      expect(
+        evaluateC06Response(
+          state,
+          { kind: "COMPOSITE", parts: [{ key, response: wrong }] },
+          key,
+        ).outcome,
+      ).toBe("RECONSIDERATION");
+    }
+    expect(() =>
+      evaluateC06Response(state, composite(answers(2)), "totalA"),
+    ).toThrow();
+    expect(() =>
+      evaluateC06Response(
+        createC06ModelState(fixture(1)),
+        composite(answers(1)),
+        "expectation",
+      ),
+    ).toThrow();
+  });
   it.each([1, 2, 3, 4] as const)(
     "accepts complete known answers for A0%s without changing work or model",
     (index) => {
@@ -135,9 +187,8 @@ describe("C06 evidence-based evaluators", () => {
     },
   );
   it.each([
-    [1, "arrangementA", select("BASE_PLUS_COMMISSION"), "ARRANGEMENT"],
-    [1, "baseA", exact(money("0")), "NOT_APPLICABLE"],
-    [1, "baseB", na, "ARRANGEMENT"],
+    [1, "expectation", select("SAME"), "ARRANGEMENT"],
+    [1, "expectation", select("UNSURE"), "NOT_APPLICABLE"],
     [2, "rate", exact(percent("5")), "INVARIANTS"],
     [2, "base", exact(money("9000", "per month")), "INVARIANTS"],
     [2, "commissionB", exact(money("16500", "per month")), "COMMISSION"],
@@ -189,6 +240,22 @@ describe("C06 evidence-based evaluators", () => {
       "C06-S02-B",
     );
   });
+  it.each([
+    ["fixedReason", "ALL_PAY", "INVARIANTS"],
+    ["changeReason", "SALARY", "CAUSAL_CHANGE"],
+    ["orderReason", "SALARY_FIRST", "CALCULATION_ORDER"],
+  ])(
+    "checks A02 reasoning %s even when every number is correct",
+    (key, choice, diagnostic) => {
+      const state = createC06ModelState(fixture(2));
+      const response = composite({ ...answers(2), [key]: select(choice) });
+      expect(c06ResponseReady(state, response)).toBe(true);
+      expect(evaluateC06Response(state, response)).toEqual({
+        outcome: "RECONSIDERATION",
+        diagnostic,
+      });
+    },
+  );
   it.each([1, 2, 3, 4] as const)(
     "rejects incomplete, duplicate, unknown and extra A0%s evidence",
     (index) => {
@@ -228,7 +295,7 @@ describe("C06 evidence-based evaluators", () => {
       expect(
         c06ResponseReady(
           state,
-          composite({ ...answers(1), arrangementA: replacement }),
+          composite({ ...answers(1), expectation: replacement }),
         ),
       ).toBe(false);
     const forged = Object.create(ExactDecimal.prototype) as ExactDecimal;

@@ -42,6 +42,11 @@ export function AppShell(props: ShellProps) {
     ) &&
       props.c03Presentation?.projection.frame.activityId ===
         props.destination.activityId) ||
+      (["C06-A01", "C06-A02", "C06-A03", "C06-A04"].includes(
+        props.destination.activityId,
+      ) &&
+        props.c06Presentation?.projection.frame.activityId ===
+          props.destination.activityId) ||
       props.destination.activityId === "C04-A02" ||
       (props.destination.activityId === "C04-A03" &&
         props.c04Presentation?.frame.activityId === "C04-A03") ||

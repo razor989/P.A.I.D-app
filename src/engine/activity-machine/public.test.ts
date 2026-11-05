@@ -1,5 +1,39 @@
 import { createActor } from "xstate";
 import { describe, expect, it, vi } from "vitest";
+
+it("bounds confirmed-only terminal teaching to C06-A04 and rejects a reconsideration edge", () => {
+  const definition = {
+    activityId: "C06-A04",
+    edges: {
+      ENTRY: { CONTINUE: "ACTIVE" },
+      CONFIRMATION: { CONTINUE: "POST_CONFIRMATION_EXPLANATION" },
+    },
+    support: {},
+    terminalTeaching: {
+      outcomes: "CONFIRMED",
+      contentId: "c06/S04/accessibility-summary",
+    },
+  };
+  expect(() => validateActivityDefinition(definition)).not.toThrow();
+  expect(() =>
+    validateActivityDefinition({ ...definition, activityId: "C06-A01" }),
+  ).toThrow();
+  expect(() =>
+    validateActivityDefinition({
+      ...definition,
+      edges: {
+        ...definition.edges,
+        RECONSIDERATION: { CONTINUE: "POST_CONFIRMATION_EXPLANATION" },
+      },
+    }),
+  ).toThrow();
+  expect(() =>
+    validateActivityDefinition({
+      ...definition,
+      terminalTeaching: { ...definition.terminalTeaching, outcomes: "BOTH" },
+    }),
+  ).toThrow();
+});
 import {
   createActivityMachine,
   createActivityRestoration,

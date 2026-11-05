@@ -31,6 +31,13 @@ export function DestinationView(props: ShellProps) {
       return (
         <ActivityShell
           activityId={props.destination.activityId}
+          c06Presentation={
+            ["C06-A01", "C06-A02", "C06-A03", "C06-A04"].includes(
+              props.destination.activityId,
+            )
+              ? props.c06Presentation
+              : undefined
+          }
           c03Presentation={
             ["C03-A01", "C03-A02", "C03-A03", "C03-A04"].includes(
               props.destination.activityId,

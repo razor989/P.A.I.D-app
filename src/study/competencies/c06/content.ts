@@ -42,8 +42,16 @@ export const c06Copy = Object.freeze({
     "Confirmed. ₱2,000,000.00 × 5% = ₱100,000.00 commission. Base salary is not applicable.",
   "c06/S03/reconsider-arrangement":
     "This is a straight-commission arrangement. Do not add a base-salary branch.",
+  "c06/S03/reconsider-meaning":
+    "Commission is the agent’s payment for making the sale. The property’s price is the sales base, not another payment to add to commission.",
   "c06/S03/reconsider-rate":
     "Convert 5% to 0.05 when using multiplication, then apply it to the ₱2,000,000.00 sales base.",
+  "c06/S03/reconsider-sales":
+    "Use the full ₱2,000,000.00 property sale as the sales base. Sales is the reference for commission, not another payment to the agent.",
+  "c06/S03/reconsider-commission":
+    "Apply 5% to the full property sale: commission = sales × 0.05. This agreement ends at commission; do not add another payment or subtract commission from sales.",
+  "c06/S03/reconsider-units":
+    "Record sales and commission in pesos, and the rate as a percentage. This property sale has no monthly pay period.",
   "c06/S03/completion":
     "Activity complete. The agent's commission is ₱100,000.00.",
   "c06/S03/accessibility-summary":

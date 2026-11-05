@@ -28,16 +28,19 @@ import {
   acquireSessionCheckpointProducer,
 } from "@/session/app-machine/public";
 import { createBrowserCheckpointStore } from "./browser-checkpoint-store";
+import { projectC06ActivityFrame } from "@/engine/c06-activity-binding/public";
 import { projectC04Reference } from "./c04-reference-projection";
 import { projectC04Apply } from "./c04-apply-projection";
 import { projectC04Transfer } from "./c04-transfer-projection";
 import {
   projectC04CheckpointV1,
   projectC03CheckpointV3,
+  projectC06CheckpointV4,
 } from "@/recovery/projection/public";
 import {
   createRecoveryCheckpointV1,
   createRecoveryCheckpointV3,
+  createRecoveryCheckpointV4,
 } from "@/recovery/checkpoint/public";
 import { SessionProvider, useSessionSnapshot } from "./session-provider";
 import { StartupRecoveryGateway } from "./startup-recovery-gateway";
@@ -45,6 +48,7 @@ import { AppShell } from "@/presentation/shell/public";
 import type {
   C04Presentation,
   C03PreparePresentation,
+  C06PreparePresentation,
 } from "@/presentation/shell/public";
 import {
   LoadingPresentation,
@@ -190,6 +194,9 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
   const actor =
     view.destination?.kind === "activity" &&
     (view.destination.activityId.startsWith("C04-") ||
+      ["C06-A01", "C06-A02", "C06-A03", "C06-A04"].includes(
+        view.destination.activityId,
+      ) ||
       ["C03-A01", "C03-A02", "C03-A03", "C03-A04"].includes(
         view.destination.activityId,
       ))
@@ -225,7 +232,11 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
       activitySnapshot.context.activityId,
     )
       ? createRecoveryCheckpointV3(projectC03CheckpointV3(actor))
-      : createRecoveryCheckpointV1(projectC04CheckpointV1(actor));
+      : ["C06-A01", "C06-A02", "C06-A03", "C06-A04"].includes(
+            activitySnapshot.context.activityId,
+          )
+        ? createRecoveryCheckpointV4(projectC06CheckpointV4(actor))
+        : createRecoveryCheckpointV1(projectC04CheckpointV1(actor));
     void producer.replace(checkpoint);
   }, [root, actor, activitySnapshot]);
   const snapshot = root.session.getSnapshot();
@@ -365,6 +376,144 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
                 navigate(root.session, {
                   type: "SELECT_COMPETENCY",
                   competencyId: "C03",
+                });
+            },
+          },
+        }
+      : undefined;
+  const c06Projection =
+    actor &&
+    ["C06-A01", "C06-A02", "C06-A03", "C06-A04"].includes(
+      activitySnapshot?.context.activityId ?? "",
+    )
+      ? projectC06ActivityFrame(actor)
+      : null;
+  function currentC06() {
+    const live = selectSession(root.session);
+    if (
+      !actor ||
+      !c06Projection ||
+      !lifecycle.mounted ||
+      blocked ||
+      root.session.getSnapshot().status !== "active" ||
+      live.currentActivity !== actor ||
+      live.destination?.kind !== "activity" ||
+      live.destination.activityId !== c06Projection.frame.activityId ||
+      live.technical !== "idle" ||
+      live.decision !== "none" ||
+      (live.lifecyclePhase !== "idle" && live.lifecyclePhase !== "finalized") ||
+      actor.getSnapshot() !== activitySnapshot
+    )
+      return null;
+    return projectC06ActivityFrame(actor).frame;
+  }
+  const c06Presentation: C06PreparePresentation | undefined =
+    c06Projection && actor
+      ? {
+          projection: c06Projection,
+          blocked,
+          onResponse: (response) => {
+            if (
+              currentC06()?.allowedLearnerIntents.includes("RESPONSE_CHANGED")
+            )
+              actor.send({ type: "RESPONSE_CHANGED", response });
+          },
+          onAction: (type) => {
+            if (currentC06()?.allowedLearnerIntents.includes(type))
+              actor.send({ type });
+          },
+          onSelectWorker: (selectionId) => {
+            const control = currentC06()?.modelSelectionControl;
+            if (control?.options.some((option) => option.id === selectionId))
+              actor.send({
+                type: "SELECT_MODEL_CHILD",
+                modelId: control.modelId,
+                revision: control.revision,
+                position: control.position,
+                selectionId,
+              });
+          },
+          onHelp: () => {
+            if (currentC06()?.allowedLearnerIntents.includes("OPEN_SUPPORT"))
+              actor.send({ type: "OPEN_SUPPORT", mode: "REVIEW" });
+          },
+          onCloseHelp: () => {
+            if (currentC06()?.allowedLearnerIntents.includes("CLOSE_SUPPORT"))
+              actor.send({ type: "CLOSE_SUPPORT" });
+          },
+          onPresented: (kind, element) => {
+            const latest = currentC06();
+            const context = actor.getSnapshot().context;
+            if (
+              !latest ||
+              context.origin !== null ||
+              !element.isConnected ||
+              element.closest('[hidden], [inert], [aria-hidden="true"]') ||
+              getComputedStyle(element).display === "none" ||
+              getComputedStyle(element).visibility === "hidden" ||
+              context.checkedRevision !== context.responseRevision
+            )
+              return;
+            if (
+              kind === "feedback" &&
+              latest.feedbackState &&
+              context.feedbackRevision === null &&
+              element.textContent?.includes(latest.feedbackState.content.text)
+            )
+              actor.send({
+                type: "FEEDBACK_DELIVERED",
+                revision: context.responseRevision,
+              });
+            const contentId =
+              latest.activityId === "C06-A04"
+                ? "c06/S04/accessibility-summary"
+                : "c06/S01/accessibility-summary";
+            const teaching = latest.contentReferences.find(
+              (item) => item.id === contentId,
+            );
+            if (
+              kind === "teaching" &&
+              latest.stateId === "POST_CONFIRMATION_EXPLANATION" &&
+              teaching &&
+              context.terminalTeachingRevision !== context.responseRevision &&
+              element.textContent?.includes(teaching.text)
+            )
+              actor.send({
+                type: "TERMINAL_TEACHING_DELIVERED",
+                revision: context.responseRevision,
+                contentId,
+              });
+          },
+          libraryNavigation: {
+            available:
+              !blocked &&
+              snapshot.can({ type: "SELECT_COMPETENCY", competencyId: "C06" }),
+            onReturn: () => {
+              if (
+                currentC06() &&
+                navigate(root.session, { type: "SYSTEM_BACK" }) ===
+                  "destination-changed"
+              )
+                navigate(root.session, { type: "RETURN_TO_LIBRARY" });
+            },
+          },
+          sessionContinuation: {
+            available:
+              !blocked &&
+              c06Projection.frame.stateId === "COMPLETE" &&
+              view.lifecyclePhase === "finalized" &&
+              snapshot.can({ type: "SELECT_COMPETENCY", competencyId: "C06" }),
+            onContinue: () => {
+              if (
+                currentC06()?.stateId === "COMPLETE" &&
+                selectSession(root.session).lifecyclePhase === "finalized" &&
+                root.session
+                  .getSnapshot()
+                  .can({ type: "SELECT_COMPETENCY", competencyId: "C06" })
+              )
+                navigate(root.session, {
+                  type: "SELECT_COMPETENCY",
+                  competencyId: "C06",
                 });
             },
           },
@@ -800,6 +949,7 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
           }
           c04Presentation={c04Presentation}
           c03Presentation={c03Presentation}
+          c06Presentation={c06Presentation}
           destination={view.destination}
           competencies={Object.freeze(
             [...root.catalog.competencies.values()].map((c) =>

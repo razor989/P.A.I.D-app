@@ -15,6 +15,7 @@ import {
 } from "@/engine/c04-activity-binding/public";
 import type { CanonicalC04Runtime } from "@/engine/c04-activity-binding/public";
 import { createC03ActivityActor } from "@/engine/c03-activity-binding/public";
+import { createC06ActivityActor } from "@/engine/c06-activity-binding/public";
 import type { RecoveryClassification } from "@/recovery/rehydration/public";
 import { claimRecoveryClassification } from "@/recovery/rehydration/public";
 import type { StudyCatalog } from "@/study/catalog/public";
@@ -212,7 +213,7 @@ function free(context: Context): boolean {
   );
 }
 function executable(context: Context, id: unknown): id is ActivityId {
-  // Accepted C03 Prepare, authorized Explore and the four existing C04 bindings.
+  // Accepted C03/C04 bindings and the owner-authorized C06 activities.
   // This availability proof constructs no actor, including during switch choice.
   return (
     activityKnown(context.catalog, id) &&
@@ -225,6 +226,10 @@ function executable(context: Context, id: unknown): id is ActivityId {
       "C04-A02",
       "C04-A03",
       "C04-A04",
+      "C06-A01",
+      "C06-A02",
+      "C06-A03",
+      "C06-A04",
     ].includes(id)
   );
 }
@@ -249,7 +254,12 @@ function replaceActivity(context: Context, id: ActivityId) {
   const currentActivity =
     id === "C03-A01" || id === "C03-A02" || id === "C03-A03" || id === "C03-A04"
       ? createC03ActivityActor(id)
-      : context.createFreshActivity(id);
+      : id === "C06-A01" ||
+          id === "C06-A02" ||
+          id === "C06-A03" ||
+          id === "C06-A04"
+        ? createC06ActivityActor(id)
+        : context.createFreshActivity(id);
   currentActivity.start();
   return {
     currentActivity,
@@ -635,7 +645,12 @@ const machine = setup({
         event.activityId === "C03-A03" ||
         event.activityId === "C03-A04"
           ? createC03ActivityActor(event.activityId)
-          : context.createFreshActivity(event.activityId));
+          : event.activityId === "C06-A01" ||
+              event.activityId === "C06-A02" ||
+              event.activityId === "C06-A03" ||
+              event.activityId === "C06-A04"
+            ? createC06ActivityActor(event.activityId)
+            : context.createFreshActivity(event.activityId));
       currentActivity.start();
       return {
         currentActivity,
@@ -1195,7 +1210,8 @@ export function acquireSessionCheckpointProducer(actor: AppSessionActor) {
     replace(
       checkpoint:
         | Parameters<RecoveryCheckpointQueue["replace"]>[0]
-        | Parameters<RecoveryCheckpointQueue["replaceV3"]>[0],
+        | Parameters<RecoveryCheckpointQueue["replaceV3"]>[0]
+        | Parameters<RecoveryCheckpointQueue["replaceV4"]>[0],
     ) {
       const snapshot = actor.getSnapshot();
       const context = snapshot.context;
@@ -1215,7 +1231,9 @@ export function acquireSessionCheckpointProducer(actor: AppSessionActor) {
         return null;
       return checkpoint.schemaVersion === 3
         ? context.queue.replaceV3(checkpoint)
-        : context.queue.replace(checkpoint);
+        : checkpoint.schemaVersion === 4
+          ? context.queue.replaceV4(checkpoint)
+          : context.queue.replace(checkpoint);
     },
   });
 }
