@@ -17,6 +17,7 @@ import { navigate } from "../navigation/public";
 import {
   acquireSessionCheckpointProducer,
   selectCompletionProgress,
+  selectLearnerContinuation,
 } from "./public";
 
 const ids = ["C04-A01", "C04-A02", "C04-A03", "C04-A04"] as const;
@@ -829,4 +830,63 @@ describe("T034 focused independent audit corrections", () => {
       );
     },
   );
+});
+
+describe("Learning Library continuation view (read-only)", () => {
+  it("reports no continuation for unknown history and never invents one", () => {
+    const s = session();
+    expect(selectLearnerContinuation(s)).toEqual({
+      resume: null,
+      upNext: null,
+      completedThisSession: [],
+    });
+  });
+  it("reports the live unfinished activity as resumable without changing Session state", () => {
+    const q = controlled();
+    const s = session(q.queue);
+    const a = open(s, "C04-A02");
+    navigate(s, { type: "SYSTEM_BACK" });
+    const before = s.getSnapshot();
+    const view = selectLearnerContinuation(s);
+    expect(view.resume).toEqual({ competencyId: "C04", activityId: "C04-A02" });
+    expect(view.upNext).toBeNull();
+    expect(s.getSnapshot()).toBe(before);
+    expect(selectSession(s).currentActivity).toBe(a);
+    expect(q.calls).toHaveLength(0);
+  });
+  it("suggests the catalog successor only after a confirmed finish, never while it settles", async () => {
+    const q = controlled();
+    const s = session(q.queue, { kind: "known", activityIds: [] });
+    open(s);
+    finish(s);
+    expect(selectSession(s).lifecyclePhase).toBe("finish-clear-in-flight");
+    expect(selectLearnerContinuation(s)).toEqual({
+      resume: null,
+      upNext: null,
+      completedThisSession: [],
+    });
+    q.calls[0]!.gate.resolve();
+    await tick();
+    const view = selectLearnerContinuation(s);
+    expect(view.resume).toBeNull();
+    expect(view.upNext).toEqual({ competencyId: "C04", activityId: "C04-A02" });
+    expect(view.completedThisSession).toEqual(["C04-A01"]);
+  });
+  it("does not suggest a successor that already finished or that is not executable", () => {
+    const done = session(undefined, {
+      kind: "known",
+      activityIds: ["C04-A02", "C04-A01"],
+    });
+    expect(selectLearnerContinuation(done).upNext).toBeNull();
+    const last = session(undefined, {
+      kind: "partial",
+      activityIds: ["C04-A04"],
+    });
+    expect(selectLearnerContinuation(last).upNext).toBeNull();
+    const other = session(undefined, {
+      kind: "partial",
+      activityIds: ["C01-A01"],
+    });
+    expect(selectLearnerContinuation(other).upNext).toBeNull();
+  });
 });

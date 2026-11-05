@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { openC04Activity } from "../helpers/c04-gallery";
 
 test("axe accepts the genuinely resolved Session destination shell", async ({
   page,
@@ -18,9 +19,7 @@ test("axe accepts the genuinely resolved Session destination shell", async ({
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
-  await page
-    .getByRole("button", { name: "Explore and Learn", exact: true })
-    .click();
+  await openC04Activity(page, "Explore and Learn");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await expect(page.getByRole("main")).toHaveCount(1);
 });

@@ -180,7 +180,9 @@ it("retains C03 work across navigation and uses the existing cross-activity aban
   fireEvent.click(screen.getByRole("button", { name: "Back" }));
   fireEvent.click(screen.getByRole("button", { name: "Learning Library" }));
   fireEvent.click(screen.getByRole("button", { name: "Percentage Change" }));
-  fireEvent.click(screen.getByRole("button", { name: "Prepare" }));
+  // C04 gallery: select the Prepare cover, then open it from the panel.
+  fireEvent.click(screen.getByRole("radio", { name: "Prepare" }));
+  fireEvent.click(screen.getByRole("button", { name: "Start Prepare" }));
   expect(selectSession(root.session).decision).toBe("activitySwitchChoice");
   expect(selectSession(root.session).currentActivity).toBe(actor);
   fireEvent.click(

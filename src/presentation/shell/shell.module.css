@@ -28,7 +28,8 @@
       [data-c04-track="C04-A02"] button,
       [data-c04-track="C04-A03"] button,
       [data-c04-track="C04-A04"] button,
-      [data-c04-track="C04-A01"][data-prepare-contract="v4"] button
+      [data-c04-track="C04-A01"][data-prepare-contract="v4"] button,
+      [data-paid-nav]
     )
   ) {
   min-block-size: 44px;
@@ -43,7 +44,7 @@
   overflow-wrap: anywhere;
   max-inline-size: 100%;
 }
-.shell button:disabled:where(:not([data-c03-track] button)) {
+.shell button:disabled:where(:not([data-c03-track] button, [data-paid-nav])) {
   color: var(--color-disabled-text);
   background: var(--color-disabled-surface);
   cursor: default;
@@ -86,4 +87,156 @@
 }
 .shell[data-reference-activity] > .header {
   padding-inline: var(--layout-gutter);
+}
+
+/* Redesigned navigation surfaces (Learning Library and activity gallery).
+   Scoped by data-destination so activity screens are unaffected. */
+.shell[data-destination] .brand {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: #203c33;
+}
+.shell[data-destination] .header nav button {
+  min-block-size: 44px;
+  padding: var(--space-2) var(--space-4);
+  border: 1.5px solid rgb(38 49 40 / 0.28);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-weight: var(--font-weight-heading);
+  font-size: var(--text-support);
+}
+.shell[data-destination] .header nav button:hover:not(:disabled) {
+  border-color: var(--color-text);
+  background: var(--color-surface);
+}
+
+/* Library: centred wordmark masthead, full-bleed editorial page. */
+.shell[data-destination="library"] {
+  max-inline-size: none;
+  min-block-size: 100vh;
+  padding-inline: 0;
+  padding-block-start: var(--space-6);
+  background: var(--color-canvas);
+}
+.shell[data-destination="library"] > .header {
+  justify-content: center;
+  border-block-end: 0;
+  padding-inline: var(--layout-gutter);
+}
+.shell[data-destination="library"] > .header > .brand {
+  position: relative;
+  font-size: 3rem;
+  line-height: 1;
+}
+.shell[data-destination="library"] > .header > .brand::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 0.1em;
+  inset-inline-end: -0.42em;
+  inline-size: 0.28em;
+  block-size: 0.28em;
+  border-radius: 50%;
+  background: #d8ac4d;
+  box-shadow: 0.2em -0.12em 0 -0.06em #879d65;
+}
+.shell[data-destination="library"] > .header > nav:empty {
+  display: none;
+}
+.shell[data-destination="library"] > .main {
+  padding-block-start: var(--space-2);
+}
+.shell[data-destination="library"] > .main > h1 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  margin: 0 0 var(--space-8);
+  padding-inline: var(--layout-gutter);
+  font-size: 0.875rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+}
+.shell[data-destination="library"] > .main > h1::before,
+.shell[data-destination="library"] > .main > h1::after {
+  content: "";
+  inline-size: 1.5rem;
+  block-size: 1.5px;
+  background: currentColor;
+}
+
+/* Gallery: a sheet resting on a two-tone desk, as in the gallery reference. */
+.shell[data-destination="gallery"] {
+  max-inline-size: none;
+  min-block-size: 100vh;
+  padding: clamp(0.75rem, 2.5vw, 2.5rem);
+  background: linear-gradient(90deg, #f1ece0 0 50%, #e6dfcf 50% 100%);
+}
+.shell[data-destination="gallery"] > .header,
+.shell[data-destination="gallery"] > .main {
+  max-inline-size: 84rem;
+  margin-inline: auto;
+}
+.shell[data-destination="gallery"] > .header {
+  padding: var(--space-4) clamp(1rem, 4vw, 3.5rem);
+  border-block-end: 0;
+  border-start-start-radius: 1.75rem;
+  border-start-end-radius: 1.75rem;
+  background: #fdfaf3;
+}
+.shell[data-destination="gallery"] > .header > .brand {
+  font-size: 1.6rem;
+}
+.shell[data-destination="gallery"] > .main {
+  padding: var(--space-4) clamp(1rem, 4vw, 3.5rem) clamp(1.5rem, 3vw, 2.5rem);
+  border-end-start-radius: 1.75rem;
+  border-end-end-radius: 1.75rem;
+  background: #fdfaf3;
+  box-shadow: 0 30px 60px -40px rgb(38 49 40 / 0.45);
+}
+.shell[data-destination="gallery"] > .main > h1 {
+  margin: 0 0 var(--space-4);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  font-size: clamp(2.25rem, 4vw, 3.5rem);
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: #203c33;
+  overflow-wrap: anywhere;
+}
+/* Short landscape phones: give the gallery's covers and open action the
+   height instead of the sheet margins and masthead. */
+@media (max-height: 30rem) and (min-width: 40rem) {
+  .shell[data-destination="gallery"] {
+    padding: 0.5rem;
+  }
+  .shell[data-destination="gallery"] > .header {
+    padding-block: var(--space-2);
+  }
+  .shell[data-destination="gallery"] > .main {
+    padding-block-start: 0;
+  }
+  .shell[data-destination="gallery"] > .main > h1 {
+    margin-block-end: var(--space-2);
+    font-size: 1.75rem;
+  }
+}
+@media (max-width: 40rem) {
+  .shell[data-destination="library"] > .header > .brand {
+    /* Viewport-capped so enlarged text (200%) never widens the page. */
+    font-size: min(2.25rem, 11vw);
+  }
+  .shell[data-destination="gallery"] {
+    padding: 0;
+    background: #fdfaf3;
+  }
+  .shell[data-destination="gallery"] > .header,
+  .shell[data-destination="gallery"] > .main {
+    border-radius: 0;
+    box-shadow: none;
+  }
 }

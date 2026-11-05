@@ -3,6 +3,7 @@ import {
   enterReference,
   readToPractice,
 } from "../helpers/c04-reference-journey";
+import { openC04Activity } from "../helpers/c04-gallery";
 
 test.setTimeout(90_000);
 
@@ -115,9 +116,7 @@ test("real browser checkpoint reload, departure and re-entry retain genuine A02 
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(
     "Percentage Change",
   );
-  await page
-    .getByRole("button", { name: "Explore and Learn", exact: true })
-    .click();
+  await openC04Activity(page, "Explore and Learn");
   await expect(page.locator(".practice-count")).toContainText("2 of 3");
   await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
 });

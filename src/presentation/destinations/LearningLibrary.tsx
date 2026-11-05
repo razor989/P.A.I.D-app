@@ -1,35 +1,45 @@
-import type { CompetencyId } from "@/core/public";
-import type { CompetencySummary } from "../shell/public";
-import styles from "./destinations.module.css";
+import type { ActivityId, CompetencyId } from "@/core/public";
+import type { CompetencySummary, LearnerContinuation } from "../shell/public";
+import { HeroSlideshow } from "./library/HeroSlideshow";
+import { CompetencyCollection } from "./library/CompetencyCollection";
+import { ContinueLearning } from "./library/ContinueLearning";
+import styles from "./library/library.module.css";
 
+/** Discover → Choose → Continue. Only offered competencies are shown; the
+ * catalog and its other destinations are untouched. */
 export function LearningLibrary({
   competencies,
+  continuation,
   blocked,
   onSelect,
+  onActivity,
 }: Readonly<{
   competencies: readonly CompetencySummary[];
+  continuation?: LearnerContinuation | undefined;
   blocked: boolean;
   onSelect: (id: CompetencyId) => void;
+  onActivity?: ((id: ActivityId) => void) | undefined;
 }>) {
+  const offered = competencies.filter((c) => c.offered !== false);
   return (
-    <section aria-label="Competencies">
-      <p>Choose a competency to explore its learning activities.</p>
-      <ul className={styles.list}>
-        {competencies.map((c) => (
-          <li key={c.id}>
-            <h2>
-              <button
-                type="button"
-                disabled={blocked || !c.available}
-                onClick={() => onSelect(c.id)}
-              >
-                {c.label}
-              </button>
-            </h2>
-            <p className={styles.identifier}>{c.id}</p>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <div className={styles.library}>
+      <HeroSlideshow
+        competencies={offered}
+        blocked={blocked}
+        onSelect={onSelect}
+      />
+      <CompetencyCollection
+        competencies={offered}
+        blocked={blocked}
+        onSelect={onSelect}
+      />
+      <ContinueLearning
+        competencies={offered}
+        continuation={continuation}
+        blocked={blocked}
+        onActivity={onActivity ?? (() => undefined)}
+        onCompetency={onSelect}
+      />
+    </div>
   );
 }

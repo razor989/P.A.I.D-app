@@ -4,6 +4,7 @@ import {
   enterReference,
   readToPractice,
 } from "../helpers/c04-reference-journey";
+import { openC04Activity } from "../helpers/c04-gallery";
 
 test.setTimeout(300_000);
 for (const scenario of ["early-correct", "early-incorrect", "full"] as const) {
@@ -125,9 +126,7 @@ test("retained completed review, reading return, Back, Library, fresh Replay and
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
   await expect(review).toBeVisible();
-  await page
-    .getByRole("button", { name: "Explore and Learn", exact: true })
-    .click();
+  await openC04Activity(page, "Explore and Learn");
   await expect(page.locator("[data-recap]")).toHaveCount(0);
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(review).toHaveCount(0);

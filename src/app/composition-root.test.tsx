@@ -212,7 +212,11 @@ it("T045 denies stale, blocked, modal, duplicate, wrong-route and unmounted deli
     </StrictMode>,
   );
   await user.click(screen.getByRole("button", { name: "Percentage Change" }));
-  await user.click(screen.getByRole("button", { name: "Prepare" }));
+  // C04 gallery: select the cover, then open it from the panel.
+  await user.click(screen.getByRole("radio", { name: "Prepare" }));
+  await user.click(
+    screen.getByRole("button", { name: /^(Start|Resume) Prepare/ }),
+  );
   await user.click(screen.getByRole("button", { name: /Start with Maya/ }));
   await user.click(
     screen.getByRole("button", { name: /Share your first thinking/ }),
@@ -272,7 +276,11 @@ it("T045 real root acknowledges only feedback already mounted and preserves rece
     </SessionProvider>,
   );
   await user.click(screen.getByRole("button", { name: "Percentage Change" }));
-  await user.click(screen.getByRole("button", { name: "Prepare" }));
+  // C04 gallery: select the cover, then open it from the panel.
+  await user.click(screen.getByRole("radio", { name: "Prepare" }));
+  await user.click(
+    screen.getByRole("button", { name: /^(Start|Resume) Prepare/ }),
+  );
   await user.click(screen.getByRole("button", { name: /Start with Maya/ }));
   await user.click(
     screen.getByRole("button", { name: /Share your first thinking/ }),
@@ -316,7 +324,10 @@ it("T044 mounts the production frame, reprojects actor stages/selections and rel
     </SessionProvider>,
   );
   await user.click(screen.getByRole("button", { name: "Percentage Change" }));
-  await user.click(screen.getByRole("button", { name: "Explore and Learn" }));
+  await user.click(screen.getByRole("radio", { name: "Explore and Learn" }));
+  await user.click(
+    screen.getByRole("button", { name: /^(Start|Resume) Explore and Learn/ }),
+  );
   const actor = selectSession(root.session).currentActivity!;
   expect(screen.getByRole("heading", { name: /Making sense/ })).toBeDefined();
   await user.click(screen.getByRole("button", { name: /Explore the raises/ }));
@@ -367,7 +378,15 @@ describe("T039 production Session presentation handoff", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
       "Learning Library",
     );
-    await user.click(screen.getByRole("button", { name: "Gross Income" }));
+    // The Library lists only offered competencies; C01 remains a catalog
+    // destination reachable through the Session.
+    expect(screen.queryByRole("button", { name: "Gross Income" })).toBeNull();
+    act(() => {
+      navigate(root.session, {
+        type: "SELECT_COMPETENCY",
+        competencyId: "C01",
+      });
+    });
     expect(selectSession(root.session).destination).toEqual({
       kind: "competency",
       competencyId: "C01",
@@ -386,7 +405,10 @@ describe("T039 production Session presentation handoff", () => {
     ).toBe(4);
     await user.click(screen.getByRole("button", { name: "Back" }));
     await user.click(screen.getByRole("button", { name: "Percentage Change" }));
-    await user.click(screen.getByRole("button", { name: "Explore and Learn" }));
+    await user.click(screen.getByRole("radio", { name: "Explore and Learn" }));
+    await user.click(
+      screen.getByRole("button", { name: /^(Start|Resume) Explore and Learn/ }),
+    );
     const actor = selectSession(root.session).currentActivity;
     expect(selectSession(root.session).destination).toEqual({
       kind: "activity",
@@ -397,7 +419,17 @@ describe("T039 production Session presentation handoff", () => {
     );
     await user.click(screen.getByRole("button", { name: "Back" }));
     expect(selectSession(root.session).currentActivity).toBe(actor);
-    await user.click(screen.getByRole("button", { name: "Prepare" }));
+    // The gallery features the live unfinished activity and offers a resume.
+    expect(
+      screen
+        .getByRole("radio", { name: "Explore and Learn" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(
+      screen.getByRole("button", { name: /^Resume Explore and Learn/ }),
+    ).toBeDefined();
+    await user.click(screen.getByRole("radio", { name: "Prepare" }));
+    await user.click(screen.getByRole("button", { name: /^Start Prepare/ }));
     expect(selectSession(root.session).decision).toBe("activitySwitchChoice");
     expect(selectSession(root.session).currentActivity).toBe(actor);
     await user.click(screen.getByRole("button", { name: "Back" }));

@@ -6,6 +6,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -229,7 +230,14 @@ describe("T036 bounded Recovery gateway", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(
       "Learning Library",
     );
-    expect(screen.getAllByRole("button")).toHaveLength(6);
+    // One Library instance: the three offered competencies, the hero entrance,
+    // previous/next/pause controls, and one continue-learning action.
+    expect(
+      within(screen.getByRole("list", { name: "Competencies" })).getAllByRole(
+        "button",
+      ),
+    ).toHaveLength(3);
+    expect(screen.getAllByRole("button")).toHaveLength(8);
   });
 });
 

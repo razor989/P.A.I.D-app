@@ -1,13 +1,14 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
+import { openC04Activity } from "../helpers/c04-gallery";
 test.setTimeout(120_000);
 async function enter(page: Page) {
   await page.goto("/");
   await page
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
-  await page.getByRole("button", { name: "Apply", exact: true }).click();
+  await openC04Activity(page, "Apply");
   await expect(
     page.getByRole("heading", { name: /An offer,\s*revised/ }),
   ).toBeVisible();
@@ -307,7 +308,7 @@ test("accepted identity, keyboard investigation, touch emulation and forced colo
   await page
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
-  await page.getByRole("button", { name: "Prepare", exact: true }).click();
+  await openC04Activity(page, "Prepare");
   const accepted = await page
     .locator('[data-c04-track="C04-A01"] .primary')
     .first()
@@ -372,7 +373,7 @@ test("accepted identity, keyboard investigation, touch emulation and forced colo
   await touchPage
     .getByRole("button", { name: "Percentage Change", exact: true })
     .tap();
-  await touchPage.getByRole("button", { name: "Apply", exact: true }).tap();
+  await openC04Activity(touchPage, "Apply", "tap");
   await touchPage.getByRole("button", { name: /Work on the offer/ }).tap();
   await touchPage
     .getByRole("button", { name: "Work out the change", exact: true })

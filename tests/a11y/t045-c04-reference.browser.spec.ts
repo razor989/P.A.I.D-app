@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { openC04Activity } from "../helpers/c04-gallery";
 test.setTimeout(90_000);
 for (const profile of ["default", "reduced", "forced", "narrow"] as const) {
   test(`production response keyboard/AX/axe ${profile}`, async ({
@@ -16,8 +17,7 @@ for (const profile of ["default", "reduced", "forced", "narrow"] as const) {
       .getByRole("button", { name: "Percentage Change", exact: true })
       .focus();
     await page.keyboard.press("Enter");
-    await page.getByRole("button", { name: "Prepare", exact: true }).focus();
-    await page.keyboard.press("Space");
+    await openC04Activity(page, "Prepare", "keyboard");
     await page.getByRole("button", { name: /Start with Maya/ }).focus();
     await page.keyboard.press("Enter");
     await page

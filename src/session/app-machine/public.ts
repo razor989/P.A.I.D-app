@@ -213,10 +213,17 @@ function free(context: Context): boolean {
   );
 }
 function executable(context: Context, id: unknown): id is ActivityId {
+  return isExecutableActivity(context.catalog, id);
+}
+/** Pure availability proof shared with read-only navigation selectors. */
+export function isExecutableActivity(
+  catalog: StudyCatalog,
+  id: unknown,
+): id is ActivityId {
   // Accepted C03/C04 bindings and the owner-authorized C06 activities.
   // This availability proof constructs no actor, including during switch choice.
   return (
-    activityKnown(context.catalog, id) &&
+    activityKnown(catalog, id) &&
     [
       "C03-A01",
       "C03-A02",

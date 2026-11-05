@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openC04Activity } from "../helpers/c04-gallery";
 
 test("production shell initial skip and genuine destination heading focus", async ({
   page,
@@ -17,9 +18,7 @@ test("production shell initial skip and genuine destination heading focus", asyn
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
   await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
-  await page
-    .getByRole("button", { name: "Explore and Learn", exact: true })
-    .click();
+  await openC04Activity(page, "Explore and Learn");
   await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toBeFocused();

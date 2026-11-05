@@ -269,7 +269,10 @@ it("keeps technical barriers and switch decisions separate from the destination"
     />,
   );
   const user = userEvent.setup();
-  await user.click(screen.getByRole("button", { name: "Explore and Learn" }));
+  await user.click(screen.getByRole("radio", { name: "Explore and Learn" }));
+  await user.click(
+    screen.getByRole("button", { name: /^Start Explore and Learn/ }),
+  );
   expect(p.onActivity).not.toHaveBeenCalled();
   await user.click(screen.getByRole("button", { name: "Back" }));
   expect(onCancel).toHaveBeenCalledOnce();

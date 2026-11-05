@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { AccessibilityCoordinator } from "@/presentation/accessibility/public";
 import type { ShellProps } from "./public";
 import { DestinationView } from "./DestinationView";
+import { galleryCompetencies } from "./galleryCompetencies";
 import styles from "./shell.module.css";
 
 export function AppShell(props: ShellProps) {
@@ -88,10 +89,30 @@ export function AppShell(props: ShellProps) {
       document.title = previous;
     };
   }, [heading]);
+  const layout =
+    props.destination.kind === "library"
+      ? "library"
+      : props.destination.kind === "competency" &&
+          galleryCompetencies.includes(props.destination.competencyId)
+        ? "gallery"
+        : undefined;
+  // The Library and gallery are taller than one screen. Moving into or out of
+  // them starts the next destination at the top instead of inheriting the
+  // previous page's scroll offset. Runs before the coordinator moves focus.
+  const previous = useRef({ identity: destinationIdentity, layout });
+  useLayoutEffect(() => {
+    const before = previous.current;
+    previous.current = { identity: destinationIdentity, layout };
+    if (before.identity === destinationIdentity) return;
+    if (before.layout === undefined && layout === undefined) return;
+    const root = document.scrollingElement ?? document.documentElement;
+    root.scrollTop = 0;
+  }, [destinationIdentity, layout]);
   return (
     <div
       className={styles.shell}
       data-reference-activity={referenceActivity || undefined}
+      data-destination={layout}
     >
       <a
         className={styles.skip}

@@ -1,7 +1,9 @@
 import type { ShellProps } from "./public";
 import { LearningLibrary } from "../destinations/LearningLibrary";
 import { CompetencyOverview } from "../destinations/CompetencyOverview";
+import { ActivityGallery } from "../destinations/gallery/ActivityGallery";
 import { ActivityShell } from "./ActivityShell";
+import { galleryCompetencies } from "./galleryCompetencies";
 
 export function DestinationView(props: ShellProps) {
   switch (props.destination.kind) {
@@ -9,13 +11,26 @@ export function DestinationView(props: ShellProps) {
       return (
         <LearningLibrary
           competencies={props.competencies}
+          continuation={props.continuation}
           blocked={props.blocked}
           onSelect={props.onCompetency}
+          onActivity={props.onActivity}
         />
       );
     case "competency": {
       const id = props.destination.competencyId;
       const competency = props.competencies.find((c) => c.id === id);
+      if (competency && galleryCompetencies.includes(competency.id))
+        return (
+          <ActivityGallery
+            key={competency.id}
+            competency={competency}
+            continuation={props.continuation}
+            blocked={props.blocked}
+            onSelect={props.onActivity}
+            onReviewCompleted={props.onReviewCompleted}
+          />
+        );
       return competency ? (
         <CompetencyOverview
           competency={competency}

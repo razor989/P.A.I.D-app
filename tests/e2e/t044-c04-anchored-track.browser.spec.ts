@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { enterReference, readingBeats } from "../helpers/c04-reference-journey";
+import { openC04Activity } from "../helpers/c04-gallery";
 
 test.setTimeout(90_000);
 
@@ -48,9 +49,7 @@ test("real production destination, five stages, fixed selections and barriers", 
   );
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(track).toHaveCount(0);
-  await page
-    .getByRole("button", { name: "Explore and Learn", exact: true })
-    .click();
+  await openC04Activity(page, "Explore and Learn");
   await expect(page.getByRole("radio")).toHaveCount(3);
   expect(
     await page.evaluate(() =>
@@ -79,7 +78,7 @@ for (const [label, id] of [
     await page
       .getByRole("button", { name: "Percentage Change", exact: true })
       .click();
-    await page.getByRole("button", { name: label, exact: true }).click();
+    await openC04Activity(page, label);
     const track = page.locator("[data-c04-track]");
     await expect(track).toHaveAttribute("data-c04-track", id!);
     if (id === "C04-A01")

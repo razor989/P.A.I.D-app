@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
+import { openC04Activity } from "../helpers/c04-gallery";
 test.setTimeout(90_000);
 for (const width of [1366, 390])
   test(`everyday visual story ${width}px: learner pacing, replay and static parity`, async ({
@@ -183,9 +184,7 @@ async function enter(page: Page, fixture = false) {
   await page
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Check and Transfer", exact: true })
-    .click();
+  await openC04Activity(page, "Check and Transfer");
   await expect(
     page.getByRole("heading", { name: /Something new/ }),
   ).toBeVisible();

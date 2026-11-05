@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { enterReference, readingBeats } from "../helpers/c04-reference-journey";
+import { openC04Activity } from "../helpers/c04-gallery";
 test.setTimeout(120_000);
 test.use({ hasTouch: true });
 test("revision 2: A02 then A01 screen comparison, normal motion and action hierarchy", async ({
@@ -79,7 +80,7 @@ test("revision 2: A02 then A01 screen comparison, normal motion and action hiera
   await page
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
-  await page.getByRole("button", { name: "Prepare", exact: true }).click();
+  await openC04Activity(page, "Prepare");
   const prepareShell = await page.locator(".c04-reference").evaluate((root) => {
     const rectangle = root.getBoundingClientRect();
     const main = document.getElementById("paid-main")!;
@@ -180,7 +181,7 @@ async function enter(page: Page) {
   await page
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
-  await page.getByRole("button", { name: "Prepare", exact: true }).click();
+  await openC04Activity(page, "Prepare");
   await expect(
     page.getByRole("heading", { name: "A review. A different salary?" }),
   ).toBeVisible();

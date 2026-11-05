@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openC04Activity } from "../helpers/c04-gallery";
 
 test("Session destinations, real keyboard skip, guarded availability and Back survive responsive reflow", async ({
   page,
@@ -13,20 +14,18 @@ test("Session destinations, real keyboard skip, guarded availability and Back su
   ).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
-  await page.getByRole("button", { name: "Gross Income", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(
-    "Gross Income",
-  );
-  for (const button of await page.getByRole("main").getByRole("button").all())
-    await expect(button).toBeDisabled();
-  await page.getByRole("button", { name: "Back", exact: true }).click();
-  await expect(page).toHaveTitle("P.A.I.D. — Learning Library");
+  // The Library lists the offered competencies only; catalog-only
+  // competencies remain Session destinations but are not learner-facing here.
+  await expect(
+    page.getByRole("list", { name: "Competencies" }).getByRole("button"),
+  ).toHaveText(["Overtime Pay", "Percentage Change", "Commission"]);
+  await expect(
+    page.getByRole("button", { name: "Gross Income", exact: true }),
+  ).toHaveCount(0);
   await page
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Explore and Learn", exact: true })
-    .click();
+  await openC04Activity(page, "Explore and Learn");
   await expect(page).toHaveTitle(
     "P.A.I.D. — Percentage Change — Explore and Learn",
   );

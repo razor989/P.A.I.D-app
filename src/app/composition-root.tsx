@@ -24,9 +24,11 @@ import {
   applySessionStartupClassification,
   beginSessionStartupReadRetry,
   createAppSessionActor,
+  isExecutableActivity,
   selectSession,
   acquireSessionCheckpointProducer,
 } from "@/session/app-machine/public";
+import { selectLearnerContinuation } from "@/session/completion/public";
 import { createBrowserCheckpointStore } from "./browser-checkpoint-store";
 import { projectC06ActivityFrame } from "@/engine/c06-activity-binding/public";
 import { projectC04Reference } from "./c04-reference-projection";
@@ -962,6 +964,9 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
                     type: "SELECT_COMPETENCY",
                     competencyId: c.id,
                   }),
+                offered: c.activityIds.some((id) =>
+                  isExecutableActivity(root.catalog, id),
+                ),
                 activities: Object.freeze(
                   c.activityIds.map((id) =>
                     Object.freeze({
@@ -980,6 +985,7 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
               }),
             ),
           )}
+          continuation={selectLearnerContinuation(root.session)}
           blocked={blocked}
           notice={
             view.lifecyclePhase === "failed"

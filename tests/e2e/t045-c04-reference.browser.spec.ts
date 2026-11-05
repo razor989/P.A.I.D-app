@@ -1,13 +1,14 @@
 import { expect, test } from "@playwright/test";
 import { readToPractice } from "../helpers/c04-reference-journey";
 import type { Page } from "@playwright/test";
+import { openC04Activity } from "../helpers/c04-gallery";
 test.setTimeout(90_000);
 async function open(page: Page, label: string) {
   await page.goto("/tests/fixtures/t045-c04-reference.html");
   await page
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
-  await page.getByRole("button", { name: label, exact: true }).click();
+  await openC04Activity(page, label);
   if (label === "Prepare") {
     await page.getByRole("button", { name: /Start with Maya/ }).click();
     await page
@@ -219,9 +220,7 @@ test("A02 reference teaching and three guided selections retain receipts and Ses
   await page
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Explore and Learn", exact: true })
-    .click();
+  await openC04Activity(page, "Explore and Learn");
   await readToPractice(page);
   for (let q = 0; q < 3; q++) {
     await expect(page.getByRole("radio")).toHaveCount(3);

@@ -1,5 +1,6 @@
 import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
+import { openC04Activity } from "./c04-gallery";
 
 // Reference reading beats remain presentation-local; phase assertions observe
 // the existing fixture's real actor, never infer engagement from display copy.
@@ -7,9 +8,7 @@ export async function enterReference(page: Page) {
   await page
     .getByRole("button", { name: "Percentage Change", exact: true })
     .click();
-  await page
-    .getByRole("button", { name: "Explore and Learn", exact: true })
-    .click();
+  await openC04Activity(page, "Explore and Learn");
   await expect(page.getByRole("heading", { level: 1 })).toBeFocused();
   await expect(page.locator(".c04-reference h1")).toHaveCount(0);
   await expect(

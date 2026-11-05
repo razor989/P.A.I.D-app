@@ -19,7 +19,25 @@ export type CompetencySummary = Readonly<{
   id: CompetencyId;
   label: string;
   available: boolean;
+  /** Part of the current learner-facing offering (it has executable
+   * activities). `false` keeps the catalog destination intact but omits it
+   * from the Learning Library. Absent means offered. */
+  offered?: boolean;
   activities: readonly ActivitySummary[];
+}>;
+export type ActivityReference = Readonly<{
+  competencyId: CompetencyId;
+  activityId: ActivityId;
+}>;
+/** Read-only navigation view of authoritative Session state. Presentation
+ * never writes it; gallery or slideshow selection never feeds back into it. */
+export type LearnerContinuation = Readonly<{
+  /** The live unfinished activity held by the Session (re-entering resumes it). */
+  resume: ActivityReference | null;
+  /** Catalog successor of the activity most recently finished in this run. */
+  upNext: ActivityReference | null;
+  /** Activities whose finish was confirmed in this run (never a full history). */
+  completedThisSession: readonly ActivityId[];
 }>;
 export type Destination =
   | Readonly<{ kind: "library" }>
@@ -33,6 +51,7 @@ export type ShellProps = Readonly<{
   c06Presentation?: C06PreparePresentation | undefined;
   destination: Destination;
   competencies: readonly CompetencySummary[];
+  continuation?: LearnerContinuation | undefined;
   blocked: boolean;
   notice: string | null;
   canBack: boolean;
