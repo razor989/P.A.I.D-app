@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { C06PreparePresentation } from "./public";
 import { ExploreComparison, ExploreModel } from "./ExploreModel";
-import { exploreChapters, exploreDuration, exploreMoment } from "./explore-story";
+import { exploreChapters, exploreMoment } from "./explore-story";
 import { ExploreNarration } from "./ExploreNarration";
 import { MomentThumbnail } from "./MomentThumbnail";
 import styles from "./commission.module.css";
@@ -134,12 +134,7 @@ export function ExploreStory({
               data-current={i === cue}
             >
               <h4>{label}</h4>
-              <ExploreNarration
-                text={text}
-                elapsed={time - starts[i]!}
-                duration={exploreDuration(text)}
-                immediate={full || reduced || i < cue}
-              />
+              <ExploreNarration text={text} />
             </div>
           ))}
           {stage === 3 && cue > 0 && (

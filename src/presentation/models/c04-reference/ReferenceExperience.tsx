@@ -5,7 +5,7 @@ import "./styles.css";
 import "./atmosphere.css";
 import "./refinement.css";
 import "./instructional-enhancement.css";
-import { LessonExit, LessonMasthead } from "../../navigation/public";
+import { LessonMasthead } from "../../navigation/public";
 
 /** React owns route/lifecycle; the source-preserved renderer owns only reading/view state. */
 export function ReferenceExperience(props: C04Presentation) {
@@ -37,20 +37,6 @@ export function ReferenceExperience(props: C04Presentation) {
           <span className="edition">Grade 11</span>
         </header>
       </LessonMasthead>
-      <LessonExit
-        className="lesson-destination"
-        hint="Lesson Back revisits an idea. Leave here to return to your activities."
-      >
-        <button
-          type="button"
-          disabled={props.blocked}
-          onClick={props.onReturnToLibrary}
-        >
-          {props.frame.stateId === "COMPLETE"
-            ? "Return to Learning Library"
-            : "Leave lesson for Learning Library"}
-        </button>
-      </LessonExit>
       <div className="reference-main" ref={host} />
       {props.frame.stateId === "COMPLETE" && props.canContinueSession && (
         <button

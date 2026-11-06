@@ -47,6 +47,8 @@ function props(extra: Partial<ShellProps> = {}) {
     canReturn: false,
     onBack: vi.fn(),
     onReturn: vi.fn(),
+    canLeaveLesson: true,
+    onLeaveLesson: vi.fn(),
     onCompetency: vi.fn(),
     onActivity: vi.fn(),
     switchChoice: null,
@@ -88,6 +90,27 @@ describe("floating lesson navigation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Learning Library" }));
     expect(p.onReturn).toHaveBeenCalledOnce();
   });
+
+  it.each(steps.map((_, i) => `C04-A0${i + 1}` as ActivityId))(
+    "presents one consistent lesson exit in %s, following the Session",
+    async (activityId) => {
+      const p = props({ destination: { kind: "activity", activityId } });
+      const view = render(<AppShell {...p} />);
+      const exit = await screen.findByRole("button", {
+        name: "Return to Learning Library",
+      });
+      expect(exit).toBeEnabled();
+      expect(exit).toHaveAccessibleDescription(
+        /Unfinished work stays ready to resume\./,
+      );
+      fireEvent.click(exit);
+      expect(p.onLeaveLesson).toHaveBeenCalledOnce();
+      view.rerender(<AppShell {...p} canLeaveLesson={false} />);
+      expect(
+        screen.getByRole("button", { name: "Return to Learning Library" }),
+      ).toBeDisabled();
+    },
+  );
 
   it("keeps the accepted header on the Library and galleries", () => {
     render(

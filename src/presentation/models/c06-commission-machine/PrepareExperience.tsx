@@ -10,7 +10,7 @@ import {
 } from "./CommissionIllustrations";
 import { useWorkRecordMotion } from "./use-commission-motion";
 import styles from "./commission.module.css";
-import { LessonExit, LessonMasthead } from "../../navigation/public";
+import { LessonMasthead } from "../../navigation/public";
 
 /** A01: the Actor retains response, feedback, teaching and completion authority. */
 export function PrepareExperience(props: C06PreparePresentation) {
@@ -102,19 +102,6 @@ export function PrepareExperience(props: C06PreparePresentation) {
           <span className={styles.edition}>Grade 11</span>
         </header>
       </LessonMasthead>
-      {props.libraryNavigation && (
-        <LessonExit
-          className={styles.lessonDestination}
-          hint="Commission · Prepare"
-        >
-          <button
-            disabled={blocked || !props.libraryNavigation.available}
-            onClick={props.libraryNavigation.onReturn}
-          >
-            Leave lesson for Learning Library
-          </button>
-        </LessonExit>
-      )}
       <div className={styles.sheet}>
         <p className={styles.eyebrow}>Prepare · Notice and wonder</p>
         <h2 id={title} ref={heading} tabIndex={-1}>

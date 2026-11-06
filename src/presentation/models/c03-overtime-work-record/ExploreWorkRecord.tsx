@@ -9,7 +9,7 @@ import { exploreStages } from "./explore-story";
 import { useWorkRecordMotion } from "./use-work-record-motion";
 import styles from "./work-record.module.css";
 import explore from "./explore.module.css";
-import { LessonExit, LessonMasthead } from "../../navigation/public";
+import { LessonMasthead } from "../../navigation/public";
 
 export function ExploreWorkRecord(props: C03PreparePresentation) {
   const { projection, blocked, onFeedbackPresented } = props;
@@ -89,30 +89,6 @@ export function ExploreWorkRecord(props: C03PreparePresentation) {
           <span className={styles.edition}>Grade 11</span>
         </header>
       </LessonMasthead>
-      {props.libraryNavigation && (
-        <LessonExit
-          className={styles.lessonDestination}
-          hint="Lesson Back revisits an idea. Leave here to return to your activities."
-        >
-          <button
-            disabled={
-              disabled ||
-              (complete
-                ? !props.sessionContinuation?.available
-                : !props.libraryNavigation.available)
-            }
-            onClick={
-              complete
-                ? props.sessionContinuation?.onContinue
-                : props.libraryNavigation.onReturn
-            }
-          >
-            {complete
-              ? "Leave lesson for Overtime Pay"
-              : "Leave lesson for Learning Library"}
-          </button>
-        </LessonExit>
-      )}
       <div className={styles.sheet}>
         <div inert={supporting}>
           {entry ? (

@@ -21,6 +21,7 @@ export function TransferCompletion(props: C06PreparePresentation) {
     if (props.blocked) return;
     heading.current?.focus({ preventScroll: true });
     surface.current?.scrollIntoView?.({ block: "start" });
+    if (typeof window.matchMedia !== "function") return;
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (media.matches || view === "conclusion") return;
     const animation = surface.current?.animate?.(

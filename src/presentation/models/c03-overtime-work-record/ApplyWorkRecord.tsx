@@ -9,7 +9,7 @@ import { ApplyResponse } from "./ApplyResponse";
 import { useWorkRecordMotion } from "./use-work-record-motion";
 import base from "./work-record.module.css";
 import styles from "./apply.module.css";
-import { LessonExit, LessonMasthead } from "../../navigation/public";
+import { LessonMasthead } from "../../navigation/public";
 
 export function ApplyWorkRecord(props: C03PreparePresentation) {
   const { projection, blocked, onFeedbackPresented } = props;
@@ -76,19 +76,6 @@ export function ApplyWorkRecord(props: C03PreparePresentation) {
           <span className={base.edition}>Grade 11</span>
         </header>
       </LessonMasthead>
-      {props.libraryNavigation && (
-        <LessonExit
-          className={base.lessonDestination}
-          hint="Apply · Overtime pay"
-        >
-          <button
-            disabled={blocked || !props.libraryNavigation.available}
-            onClick={props.libraryNavigation.onReturn}
-          >
-            Return to Learning Library
-          </button>
-        </LessonExit>
-      )}
       <div className={`${base.sheet} ${styles.sheet}`}>
         <div inert={supporting} aria-hidden={supporting || undefined}>
           {entry ? (

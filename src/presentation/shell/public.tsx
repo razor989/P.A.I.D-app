@@ -60,6 +60,11 @@ export type ShellProps = Readonly<{
   canReturn: boolean;
   onBack: () => void;
   onReturn: () => void;
+  /** Leaving an activity for the Learning Library. One rule for every lesson:
+   * available whenever Session may leave the activity (unfinished work stays
+   * resumable); the path is the activity's competency, then the Library. */
+  canLeaveLesson: boolean;
+  onLeaveLesson: () => void;
   onCompetency: (id: CompetencyId) => void;
   onActivity: (id: ActivityId) => void;
   switchChoice: Readonly<{

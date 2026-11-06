@@ -292,7 +292,7 @@ it("runs all six A02 teaching states, real selection, reconsideration, revision 
 
 function enterApply() {
   fireEvent.click(screen.getByRole("button", { name: "Commission" }));
-  expectOffered("Check and Transfer", false);
+  expectOffered("Check and Transfer");
   openActivity("Apply");
   fireEvent.click(
     screen.getByRole("button", { name: "Work out the agent’s commission →" }),
@@ -404,7 +404,7 @@ it("runs A03 through production checks, contextual correction, Help, and durable
   fireEvent.click(
     screen.getByRole("button", { name: "Back to Commission activities" }),
   );
-  expectOffered("Check and Transfer", false);
+  expectOffered("Check and Transfer");
 }, 20000);
 
 function enterTransfer() {
@@ -415,6 +415,10 @@ function enterTransfer() {
   );
 }
 function fillTransfer(wrong: boolean) {
+  // Revision reopens the panel being revised; start from the agreement.
+  fireEvent.click(
+    screen.getByRole("button", { name: /01.*Read the agreement/ }),
+  );
   fireEvent.click(screen.getByRole("radio", { name: "Base-plus-commission" }));
   fireEvent.click(
     screen.getByRole("button", { name: /02.*Determine commission/ }),
@@ -615,4 +619,19 @@ it("restores A02's explanation position and selected sales record through produc
     selectSession(restored.root.session).currentActivity?.getSnapshot().context
       .position,
   ).toBe("EXP-04");
+}, 20000);
+
+it("leaves mid-explanation for the Library in one press, keeping the activity resumable", async () => {
+  const { root } = await mount();
+  enterExplore();
+  fireEvent.click(screen.getByRole("button", { name: "Next idea →" }));
+  const actor = selectSession(root.session).currentActivity!;
+  expect(actor.getSnapshot().context.position).toBe("EXP-02");
+  // The lesson exit leaves; it never steps the explanation back.
+  fireEvent.click(
+    screen.getByRole("button", { name: "Return to Learning Library" }),
+  );
+  expect(selectSession(root.session).destination).toEqual({ kind: "library" });
+  expect(actor.getSnapshot().context.position).toBe("EXP-02");
+  expect(selectSession(root.session).currentActivity).toBe(actor);
 }, 20000);

@@ -13,7 +13,7 @@ import "../c04-reference/atmosphere.css";
 import "../c04-reference/refinement.css";
 import "../c04-reference/instructional-enhancement.css";
 import styles from "./prepare.module.css";
-import { LessonExit, LessonMasthead } from "../../navigation/public";
+import { LessonMasthead } from "../../navigation/public";
 
 export function PrepareExperience(props: C04Presentation) {
   if (props.prepareContractId === "C04-A01-interpretation-v1")
@@ -207,20 +207,6 @@ function PrepareWorkshop(props: C04Presentation) {
           <span className="edition">Grade 11</span>
         </header>
       </LessonMasthead>
-      <LessonExit
-        className="lesson-destination"
-        hint="Lesson Back revisits an idea. Leave here to return to your activities."
-      >
-        <button
-          type="button"
-          disabled={blocked}
-          onClick={props.onReturnToLibrary}
-        >
-          {complete
-            ? "Return to Learning Library"
-            : "Leave lesson for Learning Library"}
-        </button>
-      </LessonExit>
       <div className="reference-main" ref={surface}>
         {showLanding ? (
           <>

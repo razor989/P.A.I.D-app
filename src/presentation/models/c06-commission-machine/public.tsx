@@ -31,7 +31,6 @@ export type C06PreparePresentation = Readonly<{
   onCloseHelp: () => void;
   /** Only genuinely rendered current feedback/teaching may receive a receipt. */
   onPresented: (kind: "feedback" | "teaching", element: HTMLElement) => void;
-  libraryNavigation?: Readonly<{ available: boolean; onReturn: () => void }>;
   sessionContinuation?: Readonly<{
     available: boolean;
     onContinue: () => void;

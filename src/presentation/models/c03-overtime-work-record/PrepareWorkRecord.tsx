@@ -6,7 +6,7 @@ import { Observation } from "./Observation";
 import { NicoIllustration } from "./NicoIllustration";
 import { useWorkRecordMotion } from "./use-work-record-motion";
 import styles from "./work-record.module.css";
-import { LessonExit, LessonMasthead } from "../../navigation/public";
+import { LessonMasthead } from "../../navigation/public";
 
 export function PrepareWorkRecord(props: C03PreparePresentation) {
   const { projection, blocked, onAction, onFeedbackPresented } = props;
@@ -78,31 +78,6 @@ export function PrepareWorkRecord(props: C03PreparePresentation) {
           <span className={styles.edition}>Grade 11</span>
         </header>
       </LessonMasthead>
-      {props.libraryNavigation && (
-        <LessonExit
-          className={styles.lessonDestination}
-          hint="Lesson Back revisits an idea. Leave here to return to your activities."
-        >
-          <button
-            type="button"
-            disabled={
-              blocked ||
-              (complete && props.sessionContinuation
-                ? !props.sessionContinuation.available
-                : !props.libraryNavigation.available)
-            }
-            onClick={
-              complete && props.sessionContinuation
-                ? props.sessionContinuation.onContinue
-                : props.libraryNavigation.onReturn
-            }
-          >
-            {complete && props.sessionContinuation
-              ? "Leave lesson for Overtime Pay"
-              : "Leave lesson for Learning Library"}
-          </button>
-        </LessonExit>
-      )}
       <div className={styles.sheet}>
         {entry && !observing ? (
           <>

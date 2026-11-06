@@ -57,13 +57,7 @@ export function DestinationView(props: ShellProps) {
             ["C03-A01", "C03-A02", "C03-A03", "C03-A04"].includes(
               props.destination.activityId,
             )
-              ? props.c03Presentation && {
-                  ...props.c03Presentation,
-                  libraryNavigation: {
-                    available: props.canReturn,
-                    onReturn: props.onReturn,
-                  },
-                }
+              ? props.c03Presentation
               : undefined
           }
           c04Presentation={

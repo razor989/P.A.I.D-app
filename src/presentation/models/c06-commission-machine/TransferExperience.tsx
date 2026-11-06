@@ -10,7 +10,7 @@ import { TransferDiagram } from "./TransferDiagram";
 import { useWorkRecordMotion } from "./use-commission-motion";
 import base from "./commission.module.css";
 import t from "./transfer.module.css";
-import { LessonExit, LessonMasthead } from "../../navigation/public";
+import { LessonMasthead } from "../../navigation/public";
 
 /** Real Session-owned Actor; confirmed current work and delivered teaching precede Finish. */
 export function TransferExperience(props: C06PreparePresentation) {
@@ -72,19 +72,6 @@ export function TransferExperience(props: C06PreparePresentation) {
           <span className={base.edition}>Grade 11</span>
         </header>
       </LessonMasthead>
-      {props.libraryNavigation && (
-        <LessonExit
-          className={base.lessonDestination}
-          hint="Check and Transfer · Commission"
-        >
-          <button
-            disabled={props.blocked || !props.libraryNavigation.available}
-            onClick={props.libraryNavigation.onReturn}
-          >
-            Return to Learning Library
-          </button>
-        </LessonExit>
-      )}
       <div className={`${base.sheet} ${t.sheet}`}>
         <h2
           id={id}

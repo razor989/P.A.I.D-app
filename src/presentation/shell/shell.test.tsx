@@ -204,6 +204,8 @@ function props(): ShellProps {
     canReturn: true,
     onBack: vi.fn(),
     onReturn: vi.fn(),
+    canLeaveLesson: true,
+    onLeaveLesson: vi.fn(),
     onCompetency: vi.fn(),
     onActivity: vi.fn(),
     switchChoice: null,

@@ -23,10 +23,6 @@ export type C03PreparePresentation = Readonly<{
   blocked: boolean;
   onSelectCondition?: (selectionId: string) => void;
   onCheckPart?: (field: string) => ReturnType<typeof checkC03ComparisonPart>;
-  libraryNavigation?: Readonly<{
-    available: boolean;
-    onReturn: () => void;
-  }>;
   sessionContinuation?: Readonly<{
     available: boolean;
     onContinue: () => void;

@@ -496,19 +496,6 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
                 contentId,
               });
           },
-          libraryNavigation: {
-            available:
-              !blocked &&
-              snapshot.can({ type: "SELECT_COMPETENCY", competencyId: "C06" }),
-            onReturn: () => {
-              if (
-                currentC06() &&
-                navigate(root.session, { type: "SYSTEM_BACK" }) ===
-                  "destination-changed"
-              )
-                navigate(root.session, { type: "RETURN_TO_LIBRARY" });
-            },
-          },
           sessionContinuation: {
             available:
               !blocked &&
@@ -1015,6 +1002,31 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
           }}
           onReturn={() => {
             navigate(root.session, { type: "RETURN_TO_LIBRARY" });
+          }}
+          canLeaveLesson={
+            !blocked &&
+            view.destination.kind === "activity" &&
+            snapshot.can({
+              type: "SELECT_COMPETENCY",
+              competencyId: root.catalog.activities.get(
+                view.destination.activityId,
+              )!.competencyId,
+            })
+          }
+          onLeaveLesson={() => {
+            // Session authorizes the Library from the competency intermediary,
+            // never directly from an activity: use its real path and guards.
+            const destination = selectSession(root.session).destination;
+            if (destination?.kind !== "activity") return;
+            if (
+              navigate(root.session, {
+                type: "SELECT_COMPETENCY",
+                competencyId: root.catalog.activities.get(
+                  destination.activityId,
+                )!.competencyId,
+              }) === "destination-changed"
+            )
+              navigate(root.session, { type: "RETURN_TO_LIBRARY" });
           }}
           onCompetency={(competencyId) => {
             navigate(root.session, { type: "SELECT_COMPETENCY", competencyId });

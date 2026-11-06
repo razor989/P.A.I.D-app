@@ -24,20 +24,23 @@ describe("C06 strict durable projection", () => {
     },
   );
   it("round-trips partial responses and selected-child revision, rejecting cross-family/shape corruption", () => {
-    const a = createC06ActivityActor("C06-A01");
+    // Prepare (A01) now records choices only; Explore (A02) keeps both a
+    // selectable model and exact-quantity responses.
+    const a = createC06ActivityActor("C06-A02");
     a.start();
-    a.send({ type: "CONTINUE" });
+    // Six explanation stages (EXP-01…EXP-06), then the response stage.
+    for (let stage = 0; stage < 7; stage++) a.send({ type: "CONTINUE" });
     a.send({
       type: "RESPONSE_CHANGED",
       response: {
         kind: "COMPOSITE",
         parts: [
           {
-            key: "baseB",
+            key: "base",
             response: {
               kind: "EXACT_QUANTITY",
               value: quantity(
-                ExactDecimal.from("10000"),
+                ExactDecimal.from("15000"),
                 "MONETARY_AMOUNT",
                 "PHP",
                 "per month",
@@ -51,7 +54,7 @@ describe("C06 strict durable projection", () => {
     a.send({
       type: "SELECT_MODEL_CHILD",
       modelId: c.model!.modelId,
-      selectionId: "C06-S01-B",
+      selectionId: "C06-S02-B",
       revision: 0,
       position: "ACTIVE",
     });
@@ -66,12 +69,12 @@ describe("C06 strict durable projection", () => {
       ).toBe(canonicalCheckpointJSON(p));
       for (const patch of [
         { activityId: "C03-A01" },
-        { scenarioId: "C06-S02" },
-        { position: "EXP-01" },
+        { scenarioId: "C06-S01" },
+        { position: "APP-01" },
         { cache: "4000" },
         { responseRevision: -1 },
         { model: null },
-        { teaching: null },
+        { teaching: { contentId: "c06/S01/teaching" } },
         { feedbackRevision: 1 },
         { responseContract: { id: "wrong", version: 1 } },
       ])
@@ -88,7 +91,7 @@ describe("C06 strict durable projection", () => {
         ...p,
         model: {
           ...p.model!,
-          evidence: { ...p.model!.evidence, selectedChildId: "C06-S02-A" },
+          evidence: { ...p.model!.evidence, selectedChildId: "C06-S01-A" },
         },
       };
       expect(() => validateC06CheckpointV4(wrongChild)).toThrow();

@@ -602,6 +602,8 @@ describe("C03 and C06 activity galleries", () => {
         canReturn: false,
         onBack: vi.fn(),
         onReturn: vi.fn(),
+        canLeaveLesson: true,
+        onLeaveLesson: vi.fn(),
         onCompetency: vi.fn(),
         onActivity: vi.fn(),
         switchChoice: null,

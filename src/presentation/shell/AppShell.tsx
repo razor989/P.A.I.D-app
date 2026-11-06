@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { AccessibilityCoordinator } from "@/presentation/accessibility/public";
 import {
   FloatingLessonNav,
+  LessonExit,
   LessonNavigationProvider,
   UnfinishedActivityDialog,
 } from "@/presentation/navigation/public";
@@ -208,6 +209,21 @@ export function AppShell(props: ShellProps) {
                 )}
               </nav>
             </header>
+          )}
+          {lesson && (
+            <LessonExit
+              hint={`${activity?.label ?? "This activity"}${
+                competency ? ` · ${competency.label}` : ""
+              }. Unfinished work stays ready to resume.`}
+            >
+              <button
+                type="button"
+                disabled={!props.canLeaveLesson}
+                onClick={props.onLeaveLesson}
+              >
+                Return to Learning Library
+              </button>
+            </LessonExit>
           )}
           <main
             id="paid-main"
