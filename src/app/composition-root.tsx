@@ -1039,6 +1039,10 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
                     root.session.send({
                       type: "ABANDON_AND_OPEN_SELECTED_ACTIVITY",
                     }),
+                  unfinishedActivityId:
+                    view.currentActivity?.getSnapshot().context.activityId ??
+                    null,
+                  selectedActivityId: view.pendingTargetActivityId,
                 }
               : null
           }

@@ -9,6 +9,7 @@ import "../c04-reference/atmosphere.css";
 import "../c04-reference/refinement.css";
 import "../c04-reference/instructional-enhancement.css";
 import styles from "./transfer.module.css";
+import { LessonMasthead } from "../../navigation/public";
 
 export function TransferExperience(props: C04Presentation) {
   const { frame, blocked, onIntent, onPresented } = props;
@@ -65,11 +66,13 @@ export function TransferExperience(props: C04Presentation) {
       aria-labelledby={title}
       data-c04-track="C04-A04"
     >
-      <header className="masthead">
-        <span className="brand">p.a.i.d.</span>
-        <span className="mast-label">The money &amp; math workshop</span>
-        <span className="edition">Grade 11</span>
-      </header>
+      <LessonMasthead>
+        <header className="masthead">
+          <span className="brand">p.a.i.d.</span>
+          <span className="mast-label">The money &amp; math workshop</span>
+          <span className="edition">Grade 11</span>
+        </header>
+      </LessonMasthead>
       <div className="reference-main" ref={surface}>
         {entry ? (
           <div className="entry">

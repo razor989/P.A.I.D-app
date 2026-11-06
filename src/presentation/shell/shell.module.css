@@ -240,3 +240,36 @@
     box-shadow: none;
   }
 }
+
+/* Lessons: the floating navigation hovers above the lesson rather than
+   occupying a header strip. Leave just enough room for its resting position,
+   and keep keyboard-focused content clear of it. */
+.shell[data-lesson-nav] {
+  --lesson-nav-space: 5.5rem;
+}
+.shell[data-lesson-nav]:has([data-lesson-spacer]) {
+  padding-block-start: 0;
+}
+.shell[data-lesson-nav]:not(:has([data-lesson-spacer])) > .main {
+  padding-block-start: calc(
+    var(--lesson-nav-space) + env(safe-area-inset-top, 0px)
+  );
+}
+:root:has(.shell[data-lesson-nav]) {
+  scroll-padding-block-start: calc(
+    var(--lesson-nav-scroll, 5.5rem) + env(safe-area-inset-top, 0px)
+  );
+}
+@media (max-width: 64rem), (max-height: 30rem) {
+  .shell[data-lesson-nav] {
+    --lesson-nav-space: 4.75rem;
+  }
+}
+@media (max-width: 45rem) {
+  .shell[data-lesson-nav] {
+    --lesson-nav-space: 8.25rem;
+  }
+  :root:has(.shell[data-lesson-nav]) {
+    --lesson-nav-scroll: 8.25rem;
+  }
+}

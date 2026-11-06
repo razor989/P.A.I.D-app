@@ -6,6 +6,7 @@ import { Observation } from "./Observation";
 import { NicoIllustration } from "./NicoIllustration";
 import { useWorkRecordMotion } from "./use-work-record-motion";
 import styles from "./work-record.module.css";
+import { LessonExit, LessonMasthead } from "../../navigation/public";
 
 export function PrepareWorkRecord(props: C03PreparePresentation) {
   const { projection, blocked, onAction, onFeedbackPresented } = props;
@@ -68,17 +69,20 @@ export function PrepareWorkRecord(props: C03PreparePresentation) {
       aria-labelledby={title}
       data-c03-track="C03-A01"
     >
-      <header className={styles.masthead}>
-        <span className={styles.brand}>p.a.i.d.</span>
-        <span className={styles.mastLabel}>The money &amp; math workshop</span>
-        <span className={styles.edition}>Grade 11</span>
-      </header>
-      {props.libraryNavigation && (
-        <nav className={styles.lessonDestination} aria-label="Leave the lesson">
-          <span>
-            Lesson Back revisits an idea. Leave here to return to your
-            activities.
+      <LessonMasthead>
+        <header className={styles.masthead}>
+          <span className={styles.brand}>p.a.i.d.</span>
+          <span className={styles.mastLabel}>
+            The money &amp; math workshop
           </span>
+          <span className={styles.edition}>Grade 11</span>
+        </header>
+      </LessonMasthead>
+      {props.libraryNavigation && (
+        <LessonExit
+          className={styles.lessonDestination}
+          hint="Lesson Back revisits an idea. Leave here to return to your activities."
+        >
           <button
             type="button"
             disabled={
@@ -97,7 +101,7 @@ export function PrepareWorkRecord(props: C03PreparePresentation) {
               ? "Leave lesson for Overtime Pay"
               : "Leave lesson for Learning Library"}
           </button>
-        </nav>
+        </LessonExit>
       )}
       <div className={styles.sheet}>
         {entry && !observing ? (

@@ -10,6 +10,7 @@ import { TransferDiagram } from "./TransferDiagram";
 import { useWorkRecordMotion } from "./use-commission-motion";
 import base from "./commission.module.css";
 import t from "./transfer.module.css";
+import { LessonExit, LessonMasthead } from "../../navigation/public";
 
 /** Real Session-owned Actor; confirmed current work and delivered teaching precede Finish. */
 export function TransferExperience(props: C06PreparePresentation) {
@@ -64,21 +65,25 @@ export function TransferExperience(props: C06PreparePresentation) {
       aria-labelledby={id}
       data-c06-track="C06-A04"
     >
-      <header className={base.masthead}>
-        <span className={base.brand}>p.a.i.d.</span>
-        <span className={base.mastLabel}>The money &amp; math workshop</span>
-        <span className={base.edition}>Grade 11</span>
-      </header>
+      <LessonMasthead>
+        <header className={base.masthead}>
+          <span className={base.brand}>p.a.i.d.</span>
+          <span className={base.mastLabel}>The money &amp; math workshop</span>
+          <span className={base.edition}>Grade 11</span>
+        </header>
+      </LessonMasthead>
       {props.libraryNavigation && (
-        <nav className={base.lessonDestination} aria-label="Leave the lesson">
-          <span>Check and Transfer · Commission</span>
+        <LessonExit
+          className={base.lessonDestination}
+          hint="Check and Transfer · Commission"
+        >
           <button
             disabled={props.blocked || !props.libraryNavigation.available}
             onClick={props.libraryNavigation.onReturn}
           >
             Return to Learning Library
           </button>
-        </nav>
+        </LessonExit>
       )}
       <div className={`${base.sheet} ${t.sheet}`}>
         <h2

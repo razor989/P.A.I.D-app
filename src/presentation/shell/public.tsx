@@ -67,5 +67,9 @@ export type ShellProps = Readonly<{
     canAbandon: boolean;
     onReturn: () => void;
     onAbandon: () => void;
+    /** Read-only names for the decision: the live unfinished activity held by
+     * the Session and the activity the learner just selected. */
+    unfinishedActivityId?: ActivityId | null | undefined;
+    selectedActivityId?: ActivityId | null | undefined;
   }> | null;
 }>;

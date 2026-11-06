@@ -10,6 +10,7 @@ import "../c04-reference/atmosphere.css";
 import "../c04-reference/refinement.css";
 import "../c04-reference/instructional-enhancement.css";
 import styles from "./apply.module.css";
+import { LessonMasthead } from "../../navigation/public";
 
 export function ApplyExperience(props: C04Presentation) {
   const { frame, blocked, onIntent, onPresented } = props;
@@ -53,11 +54,13 @@ export function ApplyExperience(props: C04Presentation) {
       aria-label={complete ? "Apply recap" : undefined}
       aria-labelledby={complete ? undefined : title}
     >
-      <header className="masthead">
-        <span className="brand">p.a.i.d.</span>
-        <span className="mast-label">The money &amp; math workshop</span>
-        <span className="edition">Grade 11</span>
-      </header>
+      <LessonMasthead>
+        <header className="masthead">
+          <span className="brand">p.a.i.d.</span>
+          <span className="mast-label">The money &amp; math workshop</span>
+          <span className="edition">Grade 11</span>
+        </header>
+      </LessonMasthead>
       <div className="reference-main" ref={surface}>
         {entry ? (
           <div className="entry">

@@ -9,6 +9,7 @@ import { ExploreGlyph } from "./ExploreGlyph";
 import { useWorkRecordMotion } from "./use-work-record-motion";
 import base from "./work-record.module.css";
 import styles from "./transfer.module.css";
+import { LessonExit, LessonMasthead } from "../../navigation/public";
 
 export function TransferWorkRecord(props: C03PreparePresentation) {
   const { projection, blocked, onFeedbackPresented } = props;
@@ -68,21 +69,25 @@ export function TransferWorkRecord(props: C03PreparePresentation) {
       data-c03-track="C03-A04"
       aria-labelledby={id}
     >
-      <header className={base.masthead}>
-        <span className={base.brand}>p.a.i.d.</span>
-        <span className={base.mastLabel}>The money &amp; math workshop</span>
-        <span className={base.edition}>Grade 11</span>
-      </header>
+      <LessonMasthead>
+        <header className={base.masthead}>
+          <span className={base.brand}>p.a.i.d.</span>
+          <span className={base.mastLabel}>The money &amp; math workshop</span>
+          <span className={base.edition}>Grade 11</span>
+        </header>
+      </LessonMasthead>
       {props.libraryNavigation && (
-        <nav className={base.lessonDestination} aria-label="Leave the lesson">
-          <span>Check and Transfer · Overtime pay</span>
+        <LessonExit
+          className={base.lessonDestination}
+          hint="Check and Transfer · Overtime pay"
+        >
           <button
             disabled={blocked || !props.libraryNavigation.available}
             onClick={props.libraryNavigation.onReturn}
           >
             Return to Learning Library
           </button>
-        </nav>
+        </LessonExit>
       )}
       <div className={`${base.sheet} ${styles.sheet}`}>
         <div

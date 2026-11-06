@@ -10,6 +10,7 @@ import {
   projectPrepareStory,
 } from "./prepare-v3-story";
 import styles from "./prepare-v3.module.css";
+import { LessonMasthead } from "../../navigation/public";
 
 export function PrepareV3Experience(props: C04Presentation) {
   if (props.prepareContractId === "C04-A01-interpretation-v1")
@@ -136,17 +137,19 @@ function PrepareWorkshop(props: C04Presentation) {
         }
       }}
     >
-      <header className={styles.masthead}>
-        <span className={styles.brand}>
-          P.A.I.D<span>.</span>
-        </span>
-        <span className={styles.mastLabel}>
-          THE CHANGE WORKSHOP
-          <br />
-          PERCENTAGE CHANGE
-        </span>
-        <span className={styles.edition}>01 / Prepare</span>
-      </header>
+      <LessonMasthead>
+        <header className={styles.masthead}>
+          <span className={styles.brand}>
+            P.A.I.D<span>.</span>
+          </span>
+          <span className={styles.mastLabel}>
+            THE CHANGE WORKSHOP
+            <br />
+            PERCENTAGE CHANGE
+          </span>
+          <span className={styles.edition}>01 / Prepare</span>
+        </header>
+      </LessonMasthead>
       <div className={styles.sheet}>
         {landing ? (
           <div className={styles.landing}>

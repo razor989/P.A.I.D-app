@@ -8,6 +8,7 @@ import { ExploreRecap } from "./ExploreRecap";
 import { exploreChapters } from "./explore-story";
 import styles from "./commission.module.css";
 import e from "./explore.module.css";
+import { LessonMasthead } from "../../navigation/public";
 
 export function ExploreExperience(props: C06PreparePresentation) {
   const { onPresented } = props;
@@ -63,11 +64,15 @@ export function ExploreExperience(props: C06PreparePresentation) {
       aria-labelledby={title}
       data-c06-track="C06-A02"
     >
-      <header className={styles.masthead}>
-        <span className={styles.brand}>p.a.i.d.</span>
-        <span className={styles.mastLabel}>The money &amp; math workshop</span>
-        <span className={styles.edition}>Grade 11</span>
-      </header>
+      <LessonMasthead>
+        <header className={styles.masthead}>
+          <span className={styles.brand}>p.a.i.d.</span>
+          <span className={styles.mastLabel}>
+            The money &amp; math workshop
+          </span>
+          <span className={styles.edition}>Grade 11</span>
+        </header>
+      </LessonMasthead>
       <div className={styles.sheet}>
         <h2 className={e.srOnly} ref={heading} tabIndex={-1} id={title}>
           {entry

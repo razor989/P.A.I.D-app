@@ -1,0 +1,463 @@
+/* Floating lesson navigation: a detached wordmark, an outlined capsule with a
+   nested active pill, and a raised action with a solid offset shadow. On
+   upward scroll every part gathers into one compact island. Only transform,
+   opacity and visibility are transitioned. */
+
+.dock {
+  --ink: #203c33;
+  --paper: #fdfaf3;
+  --nav-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  position: fixed;
+  z-index: calc(var(--layer-overlay) - 1);
+  inset-block-start: max(0.75rem, env(safe-area-inset-top));
+  inset-inline: max(1rem, env(safe-area-inset-left))
+    max(1rem, env(safe-area-inset-right));
+  max-inline-size: 84rem;
+  margin-inline: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-areas: "brand capsule raised";
+  align-items: center;
+  column-gap: 1rem;
+  row-gap: 0.5rem;
+  pointer-events: none;
+}
+
+.dock > * {
+  pointer-events: auto;
+}
+
+/* Room a lesson leaves where its masthead used to be. */
+.spacer {
+  block-size: calc(
+    var(--lesson-nav-space, 5.5rem) + env(safe-area-inset-top, 0px)
+  );
+}
+
+/* ─── Independent wordmark ─── */
+
+.brand {
+  grid-area: brand;
+  justify-self: start;
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0.4rem 0.95rem 0.45rem 0.2rem;
+  border-radius: 999px;
+  transition:
+    background-color 240ms ease,
+    box-shadow 240ms ease,
+    padding 240ms ease;
+}
+
+.dock[data-scrolled] .brand {
+  padding-inline-start: 0.95rem;
+  background: rgb(253 250 243 / 0.94);
+  box-shadow: 0 6px 22px -14px rgb(32 60 51 / 0.5);
+  backdrop-filter: blur(10px);
+}
+
+.wordmark {
+  position: relative;
+  justify-self: start;
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 700;
+  font-size: 1.75rem;
+  line-height: 1;
+  letter-spacing: -0.045em;
+  color: var(--ink);
+}
+
+.wordmark::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 0.08em;
+  inset-inline-end: -0.4em;
+  inline-size: 0.26em;
+  block-size: 0.26em;
+  border-radius: 50%;
+  background: #d8ac4d;
+  box-shadow: 0.19em -0.11em 0 -0.06em #879d65;
+}
+
+.edition {
+  font-family: var(--font-heading);
+  font-size: 0.62rem;
+  font-weight: var(--font-weight-heading);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+/* ─── Outlined capsule ─── */
+
+.capsule {
+  grid-area: capsule;
+  justify-self: center;
+  padding: 5px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: rgb(253 250 243 / 0.95);
+  box-shadow: 0 14px 34px -22px rgb(32 60 51 / 0.55);
+  backdrop-filter: blur(12px) saturate(1.15);
+}
+
+.items {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dock .item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-block-size: 46px;
+  min-inline-size: 46px;
+  padding: 0 1.15rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.dock .item:hover:not(:disabled) {
+  background: rgb(32 60 51 / 0.08);
+}
+
+.dock .item:disabled {
+  color: var(--color-disabled-text);
+  background: transparent;
+  cursor: default;
+}
+
+.glyph {
+  inline-size: 0.9rem;
+  block-size: 0.9rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.current {
+  display: flex;
+}
+
+/* The nested active pill: filled, outlined, with a white marker and bold
+   title, so the current lesson reads without relying on colour. */
+.active {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-block-size: 46px;
+  padding: 0 1.15rem 0 0.75rem;
+  border: 1.5px solid var(--world-deep);
+  border-radius: 999px;
+  background: var(--world);
+  color: #fff;
+  box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.14);
+}
+
+.marker {
+  flex: none;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 0.28);
+}
+
+.number {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.label {
+  display: grid;
+  line-height: 1.12;
+}
+
+.kicker {
+  font-family: var(--font-heading);
+  font-size: 0.6rem;
+  font-weight: var(--font-weight-heading);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.86;
+  white-space: nowrap;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: var(--font-weight-strong);
+  white-space: nowrap;
+}
+
+/* ─── Detached raised action ─── */
+
+.raised {
+  grid-area: raised;
+  justify-self: end;
+  display: flex;
+}
+
+.raised:empty {
+  display: none;
+}
+
+.dock .raised > button {
+  min-block-size: 50px;
+  min-inline-size: 46px;
+  padding: 0 1.45rem;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-size: 0.92rem;
+  font-weight: var(--font-weight-heading);
+  line-height: 1.15;
+  text-align: center;
+  text-wrap: balance;
+  box-shadow: 4px 5px 0 var(--ink);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.dock .raised > button:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 6px 0 var(--ink);
+}
+
+.dock .raised > button:active:not(:disabled) {
+  transform: translate(3px, 4px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+.dock .raised > button:disabled {
+  color: var(--color-disabled-text);
+  background: var(--paper);
+  box-shadow: 2px 2px 0 rgb(32 60 51 / 0.35);
+  border-color: rgb(32 60 51 / 0.4);
+  cursor: default;
+}
+
+.dock :is(.item, .raised > button, .island):focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+/* ─── Compact island ─── */
+
+.island {
+  grid-area: raised;
+  justify-self: end;
+  align-self: start;
+  display: grid;
+  place-items: center;
+  inline-size: 56px;
+  block-size: 56px;
+  padding: 0;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--world-soft) 70%, var(--paper));
+  box-shadow: 3px 4px 0 var(--ink);
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.4);
+  transition:
+    transform 300ms var(--nav-ease),
+    opacity 160ms ease,
+    box-shadow 120ms ease,
+    visibility 0s linear 300ms;
+}
+
+.island svg {
+  inline-size: 38px;
+  block-size: 38px;
+}
+
+.island circle {
+  mix-blend-mode: multiply;
+}
+
+.dock[data-mode="compact"] .island {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    transform 340ms var(--nav-ease) 90ms,
+    opacity 200ms ease 90ms,
+    box-shadow 120ms ease,
+    visibility 0s;
+}
+
+.dock[data-mode="compact"] .island:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 5px 0 var(--ink);
+}
+
+.dock[data-mode="compact"] .island:active {
+  transform: translate(2px, 3px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+
+/* Idle: softened, never invisible; the hit area and silhouette remain. */
+.dock[data-mode="compact"][data-idle] .island {
+  opacity: 0.55;
+  transition:
+    opacity 700ms ease,
+    visibility 0s;
+}
+
+/* Every expanded part gathers into the island and re-emerges from it. */
+.dock [data-part] {
+  transform-origin: center;
+  transition:
+    transform 340ms var(--nav-ease),
+    opacity 220ms ease 40ms,
+    visibility 0s;
+}
+
+.dock[data-mode="compact"] [data-part] {
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(var(--gather-x, 0), var(--gather-y, 0)) scale(0.16);
+  transition:
+    transform 300ms var(--nav-ease),
+    opacity 160ms ease,
+    visibility 0s linear 300ms;
+}
+
+/* ─── Medium widths and short landscape: same row, tighter type ─── */
+
+@media (max-width: 64rem), (max-height: 30rem) {
+  .dock {
+    column-gap: 0.6rem;
+  }
+  .edition {
+    display: none;
+  }
+  .wordmark {
+    font-size: 1.45rem;
+  }
+  .dock .item {
+    min-block-size: 44px;
+    padding-inline: 0.85rem;
+    font-size: 0.88rem;
+  }
+  .active {
+    min-block-size: 44px;
+    padding-inline: 0.6rem 0.9rem;
+  }
+  .title {
+    font-size: 0.88rem;
+  }
+  .dock .raised > button {
+    min-block-size: 46px;
+    padding-inline: 1.05rem;
+    font-size: 0.84rem;
+  }
+}
+
+@media (max-height: 30rem) {
+  .dock {
+    inset-block-start: max(0.5rem, env(safe-area-inset-top));
+  }
+}
+
+/* ─── Narrow portrait: wordmark and action above, capsule below ─── */
+
+@media (max-width: 45rem) {
+  .dock {
+    inset-inline: max(0.75rem, env(safe-area-inset-left))
+      max(0.75rem, env(safe-area-inset-right));
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "brand raised"
+      "capsule capsule";
+  }
+  .wordmark {
+    font-size: 1.3rem;
+  }
+  .brand {
+    padding-inline-end: 0.75rem;
+  }
+  .capsule {
+    justify-self: stretch;
+  }
+  .items {
+    justify-content: space-between;
+  }
+  .current {
+    flex: 1;
+    min-inline-size: 0;
+    justify-content: flex-end;
+  }
+  .active {
+    min-inline-size: 0;
+  }
+  .label {
+    min-inline-size: 0;
+  }
+  .kicker,
+  .title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .dock .raised > button {
+    min-block-size: 44px;
+    padding-inline: 0.85rem;
+    font-size: 0.8rem;
+    box-shadow: 3px 4px 0 var(--ink);
+  }
+  .island {
+    inline-size: 52px;
+    block-size: 52px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand,
+  .island,
+  .dock [data-part],
+  .dock[data-mode="compact"] .island,
+  .dock[data-mode="compact"] [data-part],
+  .dock[data-mode="compact"][data-idle] .island,
+  .dock .raised > button,
+  .dock .item {
+    transition: none;
+  }
+  .dock[data-mode="compact"] [data-part] {
+    transform: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .capsule,
+  .island,
+  .dock .raised > button {
+    border-color: CanvasText;
+  }
+  .active {
+    border: 2px solid Highlight;
+  }
+}

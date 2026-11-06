@@ -8,6 +8,7 @@ import { ApplySynthesis } from "./ApplySynthesis";
 import { ApplyRecap } from "./ApplyRecap";
 import styles from "./commission.module.css";
 import a from "./apply.module.css";
+import { LessonMasthead } from "../../navigation/public";
 
 /** Production Actor owns responses, feedback, completion and recoverable work. */
 export function ApplyExperience(props: C06PreparePresentation) {
@@ -51,10 +52,12 @@ export function ApplyExperience(props: C06PreparePresentation) {
       aria-labelledby={title}
       data-c06-track="C06-A03"
     >
-      <header className={styles.masthead}>
-        <span className={styles.brand}>p.a.i.d.</span>
-        <span>Commission workshop · Apply</span>
-      </header>
+      <LessonMasthead>
+        <header className={styles.masthead}>
+          <span className={styles.brand}>p.a.i.d.</span>
+          <span>Commission workshop · Apply</span>
+        </header>
+      </LessonMasthead>
       <div className={`${styles.sheet} ${a.sheet}`}>
         {entry ? (
           <section className={a.opening}>
