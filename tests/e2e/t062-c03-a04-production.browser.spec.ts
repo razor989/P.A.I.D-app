@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { openGalleryActivity } from "../helpers/activity-gallery";
 
 test.use({ channel: "chrome", launchOptions: { args: ["--disable-gpu"] } });
 for (const width of [1440, 320]) {
@@ -62,9 +63,7 @@ for (const width of [1440, 320]) {
     await page
       .getByRole("button", { name: "Overtime Pay", exact: true })
       .click();
-    await page
-      .getByRole("button", { name: "Check and Transfer", exact: true })
-      .click();
+    await openGalleryActivity(page, "Check and Transfer");
     await expect(
       page.getByRole("heading", { name: /A different day/ }),
     ).toBeVisible();

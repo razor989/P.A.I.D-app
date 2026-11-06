@@ -61,8 +61,32 @@ const stepByFamily: Readonly<Record<string, ActivityStep>> = {
   "Check and Transfer": "transfer",
 };
 
-/** C04 activity-specific copy, written from the implemented activities. */
-const c04Activities: Partial<Readonly<Record<ActivityId, ActivityStory>>> = {
+/** Activity-specific copy, written from the implemented activities. */
+const activityStories: Partial<Readonly<Record<ActivityId, ActivityStory>>> = {
+  "C03-A01": {
+    step: "prepare",
+    kicker: "Get ready",
+    description:
+      "Nico’s eight-hour workday is over, but his work isn’t. Look at his work record and share how you imagine the extra hours might be paid, before any rules appear.",
+  },
+  "C03-A02": {
+    step: "explore",
+    kicker: "Investigate",
+    description:
+      "The same extra hours at the same rate can be paid differently. Compare an ordinary day with a rest day and see why the kind of day comes before the calculation.",
+  },
+  "C03-A03": {
+    step: "apply",
+    kicker: "Put it to work",
+    description:
+      "Use James’s monthly work record to calculate his overtime pay, then explain what your result means.",
+  },
+  "C03-A04": {
+    step: "transfer",
+    kicker: "Check and carry over",
+    description:
+      "Take your reasoning to Mara’s overtime on a regular holiday, then bring the overtime-pay ideas together.",
+  },
   "C04-A01": {
     step: "prepare",
     kicker: "Get ready",
@@ -87,11 +111,35 @@ const c04Activities: Partial<Readonly<Record<ActivityId, ActivityStory>>> = {
     description:
       "Take the idea somewhere new: a shop price, a smaller bill, and a start from zero. Check what still holds when the situation changes.",
   },
+  "C06-A01": {
+    step: "prepare",
+    kicker: "Get ready",
+    description:
+      "Same sales, different pay agreements. Compare what each agreement promises and share your first thinking about each pay structure.",
+  },
+  "C06-A02": {
+    step: "explore",
+    kicker: "Investigate",
+    description:
+      "Keep one agreement and change the sales. Follow what happens to commission and total pay, and explain what caused the difference.",
+  },
+  "C06-A03": {
+    step: "apply",
+    kicker: "Put it to work",
+    description:
+      "A property sale closes. Choose the pay structure, calculate the straight commission, and explain what it means.",
+  },
+  "C06-A04": {
+    step: "transfer",
+    kicker: "Check and carry over",
+    description:
+      "Bring your reasoning to Lina’s June pay record. Decide which amount does each job, and check how the relationship still holds.",
+  },
 };
 
 export function activityStory(id: ActivityId, family: string): ActivityStory {
   return (
-    c04Activities[id] ?? {
+    activityStories[id] ?? {
       step: stepByFamily[family] ?? "prepare",
       kicker: family,
       description: "Open this activity to begin.",

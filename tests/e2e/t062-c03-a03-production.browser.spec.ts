@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import {
+  expectGalleryActivityOffered,
+  openGalleryActivity,
+} from "../helpers/activity-gallery";
 
 test.use({ channel: "chrome", launchOptions: { args: ["--disable-gpu"] } });
 
@@ -18,10 +22,8 @@ for (const width of [1440, 320]) {
     await page
       .getByRole("button", { name: "Overtime Pay", exact: true })
       .click();
-    await expect(
-      page.getByRole("button", { name: "Check and Transfer", exact: true }),
-    ).toBeEnabled();
-    await page.getByRole("button", { name: "Apply", exact: true }).click();
+    await expectGalleryActivityOffered(page, "Check and Transfer");
+    await openGalleryActivity(page, "Apply");
     await expect(
       page.getByRole("heading", { name: /Extra hours\.\s*Your calculation\./ }),
     ).toBeVisible();
@@ -220,9 +222,7 @@ for (const width of [1440, 320]) {
     await page
       .getByRole("button", { name: "Return to Overtime Pay", exact: true })
       .click();
-    await expect(
-      page.getByRole("button", { name: "Check and Transfer", exact: true }),
-    ).toBeEnabled();
+    await expectGalleryActivityOffered(page, "Check and Transfer");
     await page
       .getByRole("button", { name: "Review completed activity", exact: true })
       .click();

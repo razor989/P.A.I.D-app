@@ -1,22 +1,29 @@
 import { useId } from "react";
-import type { ReactNode } from "react";
+import type { CompetencyId } from "@/core/public";
 import type { ActivityStep } from "../content";
+import type { Cover, CoverSet } from "./cover";
+import { c03Covers } from "./C03Covers";
+import { c06Covers } from "./C06Covers";
 
-/** Original "book cover" artwork for the four activity steps. Decorative:
- * the gallery caption and panel carry the accessible meaning. */
+/** Original "book cover" artwork for the four activity steps of each offered
+ * competency. Decorative: the gallery caption and panel carry the accessible
+ * meaning. */
 export function ActivityCoverArt({
+  competency,
   step,
   number,
   title,
   className,
 }: Readonly<{
+  competency?: CompetencyId | undefined;
   step: ActivityStep;
   number: string;
   title: string;
   className?: string | undefined;
 }>) {
   const g = useId();
-  const palette = covers[step];
+  const set = (competency && coverSets[competency]) || coverSets.C04;
+  const palette = set.covers[step];
   const lines = splitTitle(title);
   return (
     <svg
@@ -80,7 +87,7 @@ export function ActivityCoverArt({
         letterSpacing="2.5"
         opacity="0.8"
       >
-        P.A.I.D. · PERCENTAGE CHANGE
+        {`P.A.I.D. · ${set.footer}`}
       </text>
       <rect width="16" height="400" fill={`url(#${g}-spine)`} />
     </svg>
@@ -93,14 +100,7 @@ function splitTitle(title: string) {
   return [title];
 }
 
-type Cover = Readonly<{
-  top: string;
-  bottom: string;
-  ink: string;
-  art: ReactNode;
-}>;
-
-const covers: Readonly<Record<ActivityStep, Cover>> = {
+const c04Covers: Readonly<Record<ActivityStep, Cover>> = {
   /* Readiness: a sun rising over a ruled starting page, with the dashed
      starting line every later comparison returns to. */
   prepare: {
@@ -428,4 +428,12 @@ const covers: Readonly<Record<ActivityStep, Cover>> = {
       </>
     ),
   },
+};
+
+const coverSets: Partial<Readonly<Record<CompetencyId, CoverSet>>> & {
+  C04: CoverSet;
+} = {
+  C03: { footer: "OVERTIME PAY", covers: c03Covers },
+  C04: { footer: "PERCENTAGE CHANGE", covers: c04Covers },
+  C06: { footer: "COMMISSION", covers: c06Covers },
 };

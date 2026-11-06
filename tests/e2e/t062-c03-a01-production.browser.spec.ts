@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import {
+  expectGalleryActivityOffered,
+  openGalleryActivity,
+} from "../helpers/activity-gallery";
 test.use({ channel: "chrome", launchOptions: { args: ["--disable-gpu"] } });
 
 for (const reducedMotion of ["no-preference", "reduce"] as const) {
@@ -18,16 +22,10 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await page
       .getByRole("button", { name: "Overtime Pay", exact: true })
       .click();
-    await expect(
-      page.getByRole("button", { name: "Explore and Learn", exact: true }),
-    ).toBeEnabled();
-    await expect(
-      page.getByRole("button", { name: "Apply", exact: true }),
-    ).toBeEnabled();
-    await expect(
-      page.getByRole("button", { name: "Check and Transfer", exact: true }),
-    ).toBeEnabled();
-    await page.getByRole("button", { name: "Prepare", exact: true }).click();
+    await expectGalleryActivityOffered(page, "Explore and Learn");
+    await expectGalleryActivityOffered(page, "Apply");
+    await expectGalleryActivityOffered(page, "Check and Transfer");
+    await openGalleryActivity(page, "Prepare");
     await expect(page.getByLabel("Preview boundary")).toHaveCount(0);
     await page.getByRole("button", { name: /Start with Nico/ }).click();
     await page.getByRole("button", { name: /Share my first thinking/ }).click();

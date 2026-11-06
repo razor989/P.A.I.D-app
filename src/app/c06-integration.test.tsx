@@ -14,6 +14,27 @@ import { SessionProvider } from "./session-provider";
 import { createWebTestStore } from "./web-test-store";
 import { selectSession } from "@/session/app-machine/public";
 
+// Activity gallery: covers (radios) choose what is shown; the panel action
+// opens it through the Session. A cover is "offered" when it is not marked
+// unavailable, which is what the former activity buttons' enabled state meant.
+const activityCover = (label: string) =>
+  screen.getByRole("radio", { name: label });
+function openActivity(label: string) {
+  fireEvent.click(activityCover(label));
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: new RegExp(`^(Start|Resume) ${label}( again)?$`),
+    }),
+  );
+}
+function expectOffered(label: string, offered = true) {
+  const cover = activityCover(label);
+  if (offered) {
+    expect(cover).toBeEnabled();
+    expect(cover).not.toHaveAccessibleDescription(/not available/);
+  } else expect(cover).toHaveAccessibleDescription(/not available/);
+}
+
 const roots: ReturnType<typeof createApplicationRoot>[] = [];
 // jsdom does not implement native modal dialog methods. Browser checks exercise
 // the real focus trap and Escape behavior; this shim exposes its open state only.
@@ -45,10 +66,8 @@ async function mount(store = createWebTestStore()) {
 }
 function enter() {
   fireEvent.click(screen.getByRole("button", { name: "Commission" }));
-  expect(
-    screen.getByRole("button", { name: "Explore and Learn" }),
-  ).toBeEnabled();
-  fireEvent.click(screen.getByRole("button", { name: "Prepare" }));
+  expectOffered("Explore and Learn");
+  openActivity("Prepare");
   fireEvent.click(screen.getByRole("button", { name: /Meet the workers/ }));
   fireEvent.click(
     screen.getByRole("button", { name: /Share my first thinking/ }),
@@ -143,11 +162,9 @@ it("restores unfinished A01 through production startup without a second local Ac
 
 function enterExplore() {
   fireEvent.click(screen.getByRole("button", { name: "Commission" }));
-  expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
-  expect(
-    screen.getByRole("button", { name: "Check and Transfer" }),
-  ).toBeEnabled();
-  fireEvent.click(screen.getByRole("button", { name: "Explore and Learn" }));
+  expectOffered("Apply");
+  expectOffered("Check and Transfer");
+  openActivity("Explore and Learn");
   fireEvent.click(
     screen.getByRole("button", { name: "Investigate the two situations →" }),
   );
@@ -275,10 +292,8 @@ it("runs all six A02 teaching states, real selection, reconsideration, revision 
 
 function enterApply() {
   fireEvent.click(screen.getByRole("button", { name: "Commission" }));
-  expect(
-    screen.getByRole("button", { name: "Check and Transfer" }),
-  ).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+  expectOffered("Check and Transfer", false);
+  openActivity("Apply");
   fireEvent.click(
     screen.getByRole("button", { name: "Work out the agent’s commission →" }),
   );
@@ -389,14 +404,12 @@ it("runs A03 through production checks, contextual correction, Help, and durable
   fireEvent.click(
     screen.getByRole("button", { name: "Back to Commission activities" }),
   );
-  expect(
-    screen.getByRole("button", { name: "Check and Transfer" }),
-  ).toBeDisabled();
+  expectOffered("Check and Transfer", false);
 }, 20000);
 
 function enterTransfer() {
   fireEvent.click(screen.getByRole("button", { name: "Commission" }));
-  fireEvent.click(screen.getByRole("button", { name: "Check and Transfer" }));
+  openActivity("Check and Transfer");
   fireEvent.click(
     screen.getByRole("button", { name: "Read Lina’s June record →" }),
   );

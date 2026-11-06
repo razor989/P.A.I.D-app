@@ -23,6 +23,27 @@ import {
   serializeRecoveryCheckpointV3,
 } from "@/recovery/checkpoint/public";
 
+// Activity gallery: covers (radios) choose what is shown; the panel action
+// opens it through the Session. A cover is "offered" when it is not marked
+// unavailable, which is what the former activity buttons' enabled state meant.
+const activityCover = (label: string) =>
+  screen.getByRole("radio", { name: label });
+function openActivity(label: string) {
+  fireEvent.click(activityCover(label));
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: new RegExp(`^(Start|Resume) ${label}( again)?$`),
+    }),
+  );
+}
+function expectOffered(label: string, offered = true) {
+  const cover = activityCover(label);
+  if (offered) {
+    expect(cover).toBeEnabled();
+    expect(cover).not.toHaveAccessibleDescription(/not available/);
+  } else expect(cover).toHaveAccessibleDescription(/not available/);
+}
+
 const roots: ReturnType<typeof createApplicationRoot>[] = [];
 afterEach(() => {
   cleanup();
@@ -46,7 +67,7 @@ async function mount(store = createWebTestStore()) {
 }
 function enter() {
   fireEvent.click(screen.getByRole("button", { name: "Overtime Pay" }));
-  fireEvent.click(screen.getByRole("button", { name: "Prepare" }));
+  openActivity("Prepare");
   fireEvent.click(screen.getByRole("button", { name: /Start with Nico/ }));
   fireEvent.click(
     screen.getByRole("button", { name: /Share my first thinking/ }),
@@ -120,9 +141,7 @@ it("uses the Session actor, persists V3 and returns to the overview after Prepar
     kind: "competency",
     competencyId: "C03",
   });
-  expect(
-    screen.getByRole("button", { name: "Explore and Learn" }),
-  ).toBeEnabled();
+  expectOffered("Explore and Learn");
   fireEvent.click(
     screen.getByRole("button", { name: /Review completed activity/ }),
   );
@@ -171,7 +190,7 @@ it("retains C03 work across navigation and uses the existing cross-activity aban
   );
   fireEvent.click(screen.getByRole("button", { name: "Back" }));
   expect(selectSession(root.session).currentActivity).toBe(actor);
-  fireEvent.click(screen.getByRole("button", { name: "Prepare" }));
+  openActivity("Prepare");
   expect(
     screen.getByRole("radio", {
       name: "I'm not sure yet; I would like to find out.",
@@ -268,7 +287,7 @@ it("rejects a C03 checkpoint with mismatched model identity without deleting it 
 it("runs A02 in production with authentic inspection, V3 recovery and delivered comparison feedback", async () => {
   const first = await mount();
   fireEvent.click(screen.getByRole("button", { name: "Overtime Pay" }));
-  fireEvent.click(screen.getByRole("button", { name: "Explore and Learn" }));
+  openActivity("Explore and Learn");
   fireEvent.click(
     screen.getByRole("button", { name: "Start the investigation →" }),
   );
@@ -371,7 +390,7 @@ it("runs A02 in production with authentic inspection, V3 recovery and delivered 
   fireEvent.click(
     screen.getByRole("button", { name: "Return to Overtime Pay" }),
   );
-  expect(screen.getByRole("button", { name: "Apply" })).toBeEnabled();
+  expectOffered("Apply");
   fireEvent.click(
     screen.getByRole("button", { name: "Review completed activity" }),
   );

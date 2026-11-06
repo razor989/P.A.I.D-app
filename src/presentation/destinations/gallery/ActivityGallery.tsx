@@ -273,6 +273,7 @@ export function ActivityGallery({
             >
               <span className={styles.coverFrame}>
                 <ActivityCoverArt
+                  competency={competency.id}
                   step={s.step}
                   number={number(i)}
                   title={a.label}

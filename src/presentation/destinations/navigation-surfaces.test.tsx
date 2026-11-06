@@ -13,8 +13,14 @@ import { LearningLibrary } from "./LearningLibrary";
 import { ActivityGallery } from "./gallery/ActivityGallery";
 import { initialFeatured } from "./gallery/featured";
 import { SLIDE_INTERVAL_MS } from "./library/useSlideshow";
+import { activityStory } from "./content";
+import { DestinationView } from "../shell/DestinationView";
 import type { ActivityId } from "@/core/public";
-import type { CompetencySummary, LearnerContinuation } from "../shell/public";
+import type {
+  CompetencySummary,
+  LearnerContinuation,
+  ShellProps,
+} from "../shell/public";
 
 afterEach(() => {
   cleanup();
@@ -474,5 +480,143 @@ describe("C04 activity gallery", () => {
       expect((control as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Start Prepare" }));
     expect(onSelect).not.toHaveBeenCalled();
+  });
+});
+
+describe("C03 and C06 activity galleries", () => {
+  const c03 = library[1]!;
+  const c06 = library[3]!;
+  const fallback = activityStory("C01-A01", "Prepare");
+
+  it("gives every C03 and C06 activity its own step and description", () => {
+    for (const competency of [c03, c06])
+      competency.activities.forEach((a, i) => {
+        const story = activityStory(a.id, a.label);
+        expect(story.description).not.toBe(fallback.description);
+        expect(story.step).toBe(
+          (["prepare", "explore", "apply", "transfer"] as const)[i],
+        );
+      });
+  });
+
+  it.each([
+    [
+      c03,
+      "Competency 03",
+      [
+        ["Prepare", /Nico’s eight-hour workday/],
+        ["Explore and Learn", /ordinary day with a rest day/],
+        ["Apply", /James’s monthly work record/],
+        ["Check and Transfer", /Mara’s overtime on a regular holiday/],
+      ],
+    ],
+    [
+      c06,
+      "Competency 06",
+      [
+        ["Prepare", /Same sales, different pay agreements/],
+        ["Explore and Learn", /Keep one agreement and change the sales/],
+        ["Apply", /A property sale closes/],
+        ["Check and Transfer", /Lina’s June pay record/],
+      ],
+    ],
+  ] as const)(
+    "%#: presents four covers with activity copy and opens through the Session callback",
+    async (competency, kicker, copy) => {
+      const onSelect = vi.fn();
+      const user = userEvent.setup();
+      const { container } = render(
+        <ActivityGallery
+          competency={competency}
+          continuation={none}
+          blocked={false}
+          onSelect={onSelect}
+        />,
+      );
+      expect(screen.getByText(new RegExp(kicker))).toBeDefined();
+      expect(screen.getAllByRole("radio")).toHaveLength(4);
+      expect(container.querySelectorAll("svg text").length).toBeGreaterThan(0);
+      expect(container.textContent).not.toMatch(/PERCENTAGE CHANGE/);
+      for (const [label, phrase] of copy) {
+        await user.click(screen.getByRole("radio", { name: label }));
+        const panel = screen.getByRole("group", { name: label });
+        expect(within(panel).getByText(phrase)).toBeDefined();
+      }
+      expect(onSelect).not.toHaveBeenCalled();
+      await user.click(
+        screen.getByRole("button", { name: "Start Check and Transfer" }),
+      );
+      expect(onSelect).toHaveBeenCalledExactlyOnceWith(`${competency.id}-A04`);
+    },
+  );
+
+  it("features only this competency's Session-backed progress", () => {
+    const view = render(
+      <ActivityGallery
+        competency={c03}
+        continuation={{
+          resume: null,
+          upNext: { competencyId: "C03", activityId: "C03-A03" },
+          completedThisSession: ["C03-A01", "C03-A02"],
+        }}
+        blocked={false}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("radio", { name: "Apply" }).getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(screen.getByText("Suggested next")).toBeDefined();
+    view.unmount();
+    render(
+      <ActivityGallery
+        competency={c06}
+        continuation={{
+          resume: { competencyId: "C04", activityId: "C04-A03" },
+          upNext: null,
+          completedThisSession: [],
+        }}
+        blocked={false}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(
+      screen
+        .getByRole("radio", { name: "Prepare" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    expect(screen.queryByText(/In progress/)).toBeNull();
+    expect(screen.queryByText(/still in progress/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Start Prepare" })).toBeDefined();
+  });
+
+  it("routes the three offered competencies to the gallery and others to the overview", () => {
+    const shell = (competencyId: ShellProps["competencies"][number]["id"]) =>
+      ({
+        destination: { kind: "competency", competencyId },
+        competencies: library,
+        continuation: none,
+        blocked: false,
+        notice: null,
+        canBack: true,
+        canReturn: false,
+        onBack: vi.fn(),
+        onReturn: vi.fn(),
+        onCompetency: vi.fn(),
+        onActivity: vi.fn(),
+        switchChoice: null,
+      }) satisfies ShellProps;
+    for (const id of ["C03", "C04", "C06"] as const) {
+      const view = render(<DestinationView {...shell(id)} />);
+      expect(
+        screen.getByRole("radiogroup", { name: "Choose an activity" }),
+      ).toBeDefined();
+      view.unmount();
+    }
+    render(<DestinationView {...shell("C01")} />);
+    expect(screen.queryByRole("radiogroup")).toBeNull();
+    expect(
+      screen.getByRole("heading", { name: "Learning activities" }),
+    ).toBeDefined();
   });
 });
