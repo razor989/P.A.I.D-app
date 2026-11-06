@@ -10,6 +10,8 @@ export type { C04Presentation } from "../models/c04-anchored-change-track/public
 export type C04RoutePresentation = C04Presentation;
 
 export { AppShell } from "./AppShell";
+/** Decorative startup ident and its display-only readiness signal. */
+export { StartupIdent, signalStartupSurface } from "../transitions/public";
 export type ActivitySummary = Readonly<{
   id: ActivityId;
   label: string;

@@ -35,6 +35,8 @@ export function CompetencyCollection({
             <li
               key={c.id}
               className={styles.card}
+              data-motion-origin
+              data-competency={c.id}
               data-theme={story?.theme ?? "sage"}
             >
               <div className={styles.cardArt}>

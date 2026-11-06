@@ -268,6 +268,7 @@ export function ActivityGallery({
               disabled={blocked}
               className={styles.cover}
               data-step={s.step}
+              data-cover={a.id}
               onClick={() => select(i, false)}
               onKeyDown={(event) => onKey(event, i)}
             >

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { AccessibilityCoordinator } from "@/presentation/accessibility/public";
+import { TransitionStage } from "@/presentation/transitions/public";
 import type { ShellProps } from "./public";
 import { DestinationView } from "./DestinationView";
 import { galleryCompetencies } from "./galleryCompetencies";
@@ -7,6 +8,7 @@ import styles from "./shell.module.css";
 
 export function AppShell(props: ShellProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
   const wasCompletedReview = useRef(false);
   const destinationIdentity = JSON.stringify([
     props.destination.kind,
@@ -109,79 +111,86 @@ export function AppShell(props: ShellProps) {
     root.scrollTop = 0;
   }, [destinationIdentity, layout]);
   return (
-    <div
-      className={styles.shell}
-      data-reference-activity={referenceActivity || undefined}
-      data-destination={layout}
+    <TransitionStage
+      destination={props.destination}
+      competencies={props.competencies}
+      shell={shellRef}
     >
-      <a
-        className={styles.skip}
-        href="#paid-main"
-        onClick={() => document.getElementById("paid-main")?.focus()}
+      <div
+        ref={shellRef}
+        className={styles.shell}
+        data-reference-activity={referenceActivity || undefined}
+        data-destination={layout}
       >
-        Skip to main content
-      </a>
-      <header className={styles.header}>
-        <p className={styles.brand}>P.A.I.D.</p>
-        <nav aria-label="Application navigation">
-          {props.destination.kind !== "library" && (
-            <>
+        <a
+          className={styles.skip}
+          href="#paid-main"
+          onClick={() => document.getElementById("paid-main")?.focus()}
+        >
+          Skip to main content
+        </a>
+        <header className={styles.header}>
+          <p className={styles.brand}>P.A.I.D.</p>
+          <nav aria-label="Application navigation">
+            {props.destination.kind !== "library" && (
+              <>
+                <button
+                  type="button"
+                  disabled={!props.canBack}
+                  onClick={props.onBack}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  disabled={!props.canReturn}
+                  onClick={props.onReturn}
+                >
+                  Learning Library
+                </button>
+              </>
+            )}
+          </nav>
+        </header>
+        <main id="paid-main" tabIndex={-1} className={styles.main}>
+          <h1 ref={headingRef} tabIndex={-1}>
+            {heading}
+          </h1>
+          {props.notice && <p role="status">{props.notice}</p>}
+          {props.switchChoice && (
+            <section aria-labelledby="switch-heading">
+              <h2 id="switch-heading">Unfinished activity</h2>
+              <p>
+                Choose whether to return to your unfinished activity or abandon
+                it before opening the selected activity.
+              </p>
               <button
                 type="button"
-                disabled={!props.canBack}
-                onClick={props.onBack}
+                disabled={!props.switchChoice.canReturn}
+                onClick={props.switchChoice.onReturn}
               >
-                Back
+                Return to unfinished activity
               </button>
               <button
                 type="button"
-                disabled={!props.canReturn}
-                onClick={props.onReturn}
+                disabled={!props.switchChoice.canAbandon}
+                onClick={props.switchChoice.onAbandon}
               >
-                Learning Library
+                Abandon and open selected activity
               </button>
-            </>
+            </section>
           )}
-        </nav>
-      </header>
-      <main id="paid-main" tabIndex={-1} className={styles.main}>
-        <h1 ref={headingRef} tabIndex={-1}>
-          {heading}
-        </h1>
-        {props.notice && <p role="status">{props.notice}</p>}
-        {props.switchChoice && (
-          <section aria-labelledby="switch-heading">
-            <h2 id="switch-heading">Unfinished activity</h2>
-            <p>
-              Choose whether to return to your unfinished activity or abandon it
-              before opening the selected activity.
-            </p>
-            <button
-              type="button"
-              disabled={!props.switchChoice.canReturn}
-              onClick={props.switchChoice.onReturn}
-            >
-              Return to unfinished activity
-            </button>
-            <button
-              type="button"
-              disabled={!props.switchChoice.canAbandon}
-              onClick={props.switchChoice.onAbandon}
-            >
-              Abandon and open selected activity
-            </button>
-          </section>
-        )}
-        <DestinationView {...props} />
-      </main>
-      <AccessibilityCoordinator
-        event={{
-          kind: "destination",
-          identity: destinationIdentity,
-          target: headingRef,
-        }}
-        blocked={props.blocked}
-      />
-    </div>
+          <DestinationView {...props} />
+        </main>
+        <AccessibilityCoordinator
+          event={{
+            kind: "destination",
+            identity: destinationIdentity,
+            target: headingRef,
+          }}
+          blocked={props.blocked}
+        />
+      </div>
+    </TransitionStage>
   );
 }

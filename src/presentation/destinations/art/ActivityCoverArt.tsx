@@ -14,12 +14,15 @@ export function ActivityCoverArt({
   number,
   title,
   className,
+  fit = "slice",
 }: Readonly<{
   competency?: CompetencyId | undefined;
   step: ActivityStep;
   number: string;
   title: string;
   className?: string | undefined;
+  /** "meet" shows the whole cover (transition chapter sheets). */
+  fit?: "slice" | "meet" | undefined;
 }>) {
   const g = useId();
   const set = (competency && coverSets[competency]) || coverSets.C04;
@@ -31,7 +34,7 @@ export function ActivityCoverArt({
       viewBox="0 0 300 400"
       aria-hidden="true"
       focusable="false"
-      preserveAspectRatio="xMidYMid slice"
+      preserveAspectRatio={`xMidYMid ${fit}`}
     >
       <defs>
         <linearGradient id={`${g}-bg`} x1="0" y1="0" x2="0.3" y2="1">
@@ -429,6 +432,18 @@ const c04Covers: Readonly<Record<ActivityStep, Cover>> = {
     ),
   },
 };
+
+/** The cover gradient and ink for one activity step (transition colours). */
+export function coverPalette(
+  competency: CompetencyId | null | undefined,
+  step: ActivityStep,
+): Readonly<{ top: string; bottom: string; ink: string }> {
+  const { top, bottom, ink } = (
+    (competency && coverSets[competency]) ||
+    coverSets.C04
+  ).covers[step];
+  return { top, bottom, ink };
+}
 
 const coverSets: Partial<Readonly<Record<CompetencyId, CoverSet>>> & {
   C04: CoverSet;

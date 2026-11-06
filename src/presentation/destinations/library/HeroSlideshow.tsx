@@ -94,6 +94,7 @@ export function HeroSlideshow({
             aria-roledescription="slide"
             aria-labelledby={`${base}-tab-${i}`}
             hidden={i !== show.index}
+            data-motion-origin
             data-theme={story.theme}
           >
             <div className={styles.slideCopy}>

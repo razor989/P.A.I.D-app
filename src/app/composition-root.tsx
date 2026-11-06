@@ -46,7 +46,11 @@ import {
 } from "@/recovery/checkpoint/public";
 import { SessionProvider, useSessionSnapshot } from "./session-provider";
 import { StartupRecoveryGateway } from "./startup-recovery-gateway";
-import { AppShell } from "@/presentation/shell/public";
+import {
+  AppShell,
+  StartupIdent,
+  signalStartupSurface,
+} from "@/presentation/shell/public";
 import type {
   C04Presentation,
   C03PreparePresentation,
@@ -265,6 +269,12 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
     snapshot.status === "active" && view.startup === "clear-pending",
     snapshot.context.startupTransaction,
   );
+  // Display signal only: the startup ident may reveal once the authorised
+  // startup surface (destination or recovery choice) is on screen.
+  const startupSurface = settled || view.startup !== "pending";
+  useEffect(() => {
+    if (startupSurface) signalStartupSurface();
+  }, [startupSurface]);
   const technicalPending =
     view.lifecyclePhase !== "failed" &&
     (view.technical === "idle" || view.technical === "loading") &&
@@ -1084,14 +1094,19 @@ export function CompositionRoot() {
     }
     return () => current.stop();
   }, []);
-  return root ? (
-    <SessionProvider session={root.session}>
-      <StartupShell root={root} />
-    </SessionProvider>
-  ) : (
-    <main>
-      <h1>P.A.I.D.</h1>
-      <p role="status">Starting application.</p>
-    </main>
+  return (
+    <>
+      {root ? (
+        <SessionProvider session={root.session}>
+          <StartupShell root={root} />
+        </SessionProvider>
+      ) : (
+        <main>
+          <h1>P.A.I.D.</h1>
+          <p role="status">Starting application.</p>
+        </main>
+      )}
+      <StartupIdent />
+    </>
   );
 }

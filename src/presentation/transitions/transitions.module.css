@@ -1,0 +1,309 @@
+/* Navigation transition layers. Every element here is decorative, aria-hidden
+   and inert, and exists only for the length of one run. Motion itself is
+   driven from script (Web Animations) and only ever touches transform,
+   opacity and clip-path. */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  overflow: hidden;
+  contain: strict;
+  isolation: isolate;
+  forced-color-adjust: none;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.still {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--color-canvas);
+}
+
+/* ─── Accordion ─── */
+
+.fold {
+  position: absolute;
+  inset: 0;
+  perspective: 1600px;
+}
+
+.panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: hidden;
+  backface-visibility: hidden;
+  will-change: transform;
+}
+
+.sheet {
+  position: absolute;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 78% 30%,
+      var(--world-wash) 0 18%,
+      transparent 46%
+    ),
+    var(--world-soft);
+  color: var(--world-wash);
+}
+
+.sheetBand {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 48%;
+  background: var(--world);
+  clip-path: polygon(0 0, 100% 0, 80% 100%, 0 100%);
+}
+
+.sheetBand::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -62deg,
+    transparent 0 22px,
+    rgb(255 255 255 / 0.06) 22px 24px
+  );
+}
+
+.sheetArt {
+  position: absolute;
+  right: 5%;
+  top: 50%;
+  width: min(78vh, 46vw);
+  height: min(78vh, 46vw);
+  transform: translateY(-50%);
+}
+
+.sheetType {
+  position: absolute;
+  left: clamp(1.25rem, 6vw, 6rem);
+  bottom: clamp(1.5rem, 11vh, 7rem);
+  display: grid;
+  gap: 0.5rem;
+  max-width: 40%;
+}
+
+.sheetKicker {
+  font-family: var(--font-heading);
+  font-weight: var(--font-weight-heading);
+  font-size: clamp(0.7rem, 1.1vw, 0.9rem);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.sheetNumber {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(6rem, 21vw, 17rem);
+  line-height: 0.82;
+  letter-spacing: -0.04em;
+}
+
+.sheetHeadline {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.25rem, 3vw, 2.5rem);
+  line-height: 1.1;
+  max-width: 16ch;
+}
+
+.shade {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(to right, var(--world-deep), transparent 80%);
+  pointer-events: none;
+}
+
+.panel[data-face="1"] .shade {
+  background: linear-gradient(to left, var(--world-deep), transparent 80%);
+}
+
+.fold[data-axis="y"] .shade {
+  background: linear-gradient(to bottom, var(--world-deep), transparent 80%);
+}
+
+.fold[data-axis="y"] .panel[data-face="1"] .shade {
+  background: linear-gradient(to top, var(--world-deep), transparent 80%);
+}
+
+/* Portrait: the band becomes a masthead, the art sits beneath it. */
+.fold[data-axis="y"] .sheetBand {
+  inset: 0 0 auto 0;
+  width: auto;
+  height: 54%;
+  clip-path: polygon(0 0, 100% 0, 100% 82%, 0 100%);
+}
+
+.fold[data-axis="y"] .sheetArt {
+  top: auto;
+  right: 50%;
+  bottom: 4%;
+  width: min(46vh, 84vw);
+  height: min(46vh, 84vw);
+  transform: translateX(50%);
+}
+
+.fold[data-axis="y"] .sheetType {
+  top: clamp(1.5rem, 9vh, 5rem);
+  bottom: auto;
+  max-width: 82%;
+}
+
+.fold[data-axis="y"] .sheetNumber {
+  font-size: clamp(5rem, 34vw, 11rem);
+}
+
+/* ─── Chapter ─── */
+
+.wrap {
+  position: absolute;
+  inset: 0;
+}
+
+.half {
+  position: absolute;
+  inset: 0;
+  will-change: transform;
+}
+
+.grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  mix-blend-mode: multiply;
+  background-image: radial-gradient(rgb(0 0 0 / 0.35) 0.8px, transparent 1px);
+  background-size: 7px 7px;
+}
+
+.cover {
+  position: absolute;
+  transform-origin: 0 0;
+  overflow: hidden;
+  border-radius: 6px;
+  box-shadow:
+    0 2px 0 rgb(0 0 0 / 0.08),
+    0 34px 70px -28px rgb(0 0 0 / 0.45);
+  will-change: transform;
+}
+
+.cover > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.perf {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.stub {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 16px;
+  background-image: radial-gradient(
+    circle at 50% 50%,
+    currentColor 0 2px,
+    transparent 2.4px
+  );
+  background-size: 16px 18px;
+  box-shadow: inset -1px 0 0 rgb(0 0 0 / 0.18);
+  opacity: 0.92;
+}
+
+/* ─── Startup: Color Registration ─── */
+
+.ident {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483001;
+  display: grid;
+  place-items: center;
+  isolation: isolate;
+  overflow: hidden;
+  forced-color-adjust: none;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.identHalf {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50.5%;
+  background: var(--color-canvas);
+}
+
+.identHalf[data-half="top"] {
+  top: 0;
+  box-shadow: 0 1px 0 rgb(38 49 40 / 0.08);
+}
+
+.identHalf[data-half="bottom"] {
+  bottom: 0;
+}
+
+.identMark,
+.marks {
+  grid-area: 1 / 1;
+  position: relative;
+}
+
+.identMark {
+  width: min(80vw, 560px);
+  aspect-ratio: 600 / 260;
+}
+
+.plate {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  mix-blend-mode: multiply;
+}
+
+.marks {
+  width: min(92vw, 680px);
+  aspect-ratio: 600 / 330;
+  pointer-events: none;
+}
+
+.markSvg {
+  position: absolute;
+  width: clamp(20px, 4vw, 30px);
+  height: clamp(20px, 4vw, 30px);
+}
+
+.markSvg[data-corner="tl"] {
+  top: 0;
+  left: 0;
+}
+.markSvg[data-corner="tr"] {
+  top: 0;
+  right: 0;
+}
+.markSvg[data-corner="bl"] {
+  bottom: 0;
+  left: 0;
+}
+.markSvg[data-corner="br"] {
+  bottom: 0;
+  right: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Reduced motion only ever uses the still's brief fade. */
+  .fold,
+  .wrap,
+  .ident {
+    display: none;
+  }
+}

@@ -55,6 +55,7 @@ export function ContinueLearning({
     <section
       className={styles.continue}
       aria-labelledby="continue-heading"
+      data-motion-origin
       data-theme={theme}
       data-state={resume ? "resume" : upNext ? "next" : "start"}
     >
