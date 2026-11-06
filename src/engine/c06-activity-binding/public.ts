@@ -170,7 +170,7 @@ function contract(id: Id) {
 }
 const explanation = Object.freeze({
   "EXP-01":
-    "This arrangement contains both Commission and a Base Salary. The Base Salary is fixed at ₱15,000.00. The Commission Rate is fixed at 3%. The Sales Input will change between two approved states so we can observe what that change causes.",
+    "This arrangement contains both Commission and a Base Salary. The Base Salary is fixed at ₱15,000.00. The Commission Rate is fixed at 3%. The Sales Input will change between two situations so we can observe what that change causes.",
   "EXP-02":
     "Commission is determined from the active Sales Input and the fixed Commission Rate. The Base Salary does not enter this multiplication.",
   "EXP-03":
@@ -180,7 +180,7 @@ const explanation = Object.freeze({
   "EXP-05":
     "Changed: Sales, Commission and Total Compensation. Stayed fixed: Arrangement, Rate and Base Salary.",
   "EXP-06":
-    "The Commission Machine has two stages in this Base-Plus arrangement. First, Sales and Rate determine Commission. Only after Commission is established does the Total-Compensation stage combine Commission with the fixed Base Salary. The Sales amount is the basis for the Commission calculation. The machine is not removing Commission money from Sales or reducing the Sales amount.",
+    "The Commission Machine has two stages in this Base-Plus arrangement. First, Sales and Rate determine Commission. Only after Commission is found does the Total-Compensation stage combine Commission with the fixed Base Salary. The Sales amount is the basis for the Commission calculation. The machine is not removing Commission money from Sales or reducing the Sales amount.",
 });
 function definition(id: Id): ActivityDefinition {
   const teaching = id === "C06-A01" || id === "C06-A04";
@@ -417,8 +417,8 @@ export function projectC06ActivityFrame(actor: ActivityActor) {
                   id: `${prefix}common-ownership-explanation`,
                   text:
                     id === "C06-A01"
-                      ? "Worker A: Straight Commission. Commission ₱4,000. Base Salary Not Applicable. Machine Ends at Commission. Worker B: Base-Plus-Commission. Commission ₱4,000. Base Salary ₱10,000. Total Compensation ₱14,000."
-                      : "C06 Commission ₱3,600 is exported read-only to C01. C06 Total Compensation ₱18,600 stays a C06 result. The C01 allowance ₱800 remains outside C06.",
+                      ? "Worker A: straight commission; the agreement ends at commission. Worker B: a ₱10,000 base salary plus commission. Commission and total pay are still to be worked out."
+                      : "Lina’s commission, ₱3,600, carries forward unchanged. Her total compensation, ₱18,600, stays with this activity.",
                 },
                 phases: [c.position],
                 timing: "CURRENT_FEEDBACK" as const,

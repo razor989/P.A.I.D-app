@@ -134,9 +134,8 @@ export function TransferCompletion(props: C06PreparePresentation) {
               </p>
             </div>
             <p>
-              These are the established results. Compare them with your response
-              above. The sales amount is not another payment, and the separate
-              communication allowance is not part of this total.
+              These are the worked results. Compare them with your response
+              above. The sales amount is not another payment to Lina.
             </p>
           </section>
           <button

@@ -89,13 +89,13 @@ export function ExploreInspection({
     ],
     condition: [
       "Which kind of day?",
-      "The calendar decides which approved overtime multiplier applies. Change the day and follow its effect on the pay.",
+      "The calendar decides which overtime multiplier applies. Change the day and follow its effect on the pay.",
     ],
     multiplier: [
       "Pay for one extra hour",
       math
         ? `For ${math.condition}, multiply the regular hourly rate by ${math.multiplier.magnitude.toString()}. The extra width represents pay, not extra time.`
-        : "Identify the kind of day first. Its approved multiplier tells us how overtime pay relates to the regular hourly rate.",
+        : "Identify the kind of day first. Its multiplier tells us how overtime pay relates to the regular hourly rate.",
     ],
     pay: [
       "Compare overtime pay",

@@ -19,7 +19,7 @@ const scenes = [
     title: "The hours alone cannot tell the whole story.",
     question: "What must we know before choosing the rule?",
     reading:
-      "An ordinary day, a rest day and a regular holiday are not interchangeable conditions. Mara’s record establishes a regular holiday. That condition links her calculation to its approved multiplier.",
+      "An ordinary day, a rest day and a regular holiday are not interchangeable conditions. Mara’s record shows a regular holiday. That condition links her calculation to its approved multiplier.",
     closing: "Let the condition choose the rule.",
   },
   {
@@ -35,7 +35,7 @@ const scenes = [
     title: "Extra hours tell part of the story.",
     question: "The condition gives the calculation its meaning.",
     reading:
-      "When you meet an overtime figure, look beyond the total. Ask which condition applies, which rate is established, how many extra hours are included—and what the amount actually represents.",
+      "When you meet an overtime figure, look beyond the total. Ask which condition applies, which hourly rate is given, how many extra hours are included—and what the amount actually represents.",
     closing:
       "Read carefully. Connect the evidence. Make the amount mean something.",
   },
@@ -127,7 +127,7 @@ export function TransferFinale({
                 : scene === 1
                   ? "The regular-holiday condition connects to its multiplier."
                   : scene === 2
-                    ? "Mara’s established rate, regular-holiday multiplier and three overtime hours connect to overtime pay."
+                    ? "Mara’s hourly rate, regular-holiday multiplier and three overtime hours connect to overtime pay."
                     : "Read the day, connect its rule, calculate the extra hours, and interpret overtime pay."
             }
           >
@@ -227,7 +227,7 @@ export function TransferFinale({
                     fill="#71531d"
                     fontSize="16"
                   >
-                    Established by the record
+                    Given in the record
                   </text>
                 </g>
                 <path
@@ -383,7 +383,7 @@ export function TransferFinale({
           ) : scene === 1 ? (
             <>
               <span>
-                <strong>Regular holiday</strong>The established condition
+                <strong>Regular holiday</strong>The condition in the record
               </span>
               <span>
                 <strong>
@@ -400,7 +400,7 @@ export function TransferFinale({
                 <strong>
                   {pesos(projection.workEvidence.rate.magnitude.toString())}
                 </strong>
-                Established hourly rate
+                Regular hourly rate
               </span>
               <span>
                 <strong>× {math?.multiplier.magnitude.toString()} × 3</strong>

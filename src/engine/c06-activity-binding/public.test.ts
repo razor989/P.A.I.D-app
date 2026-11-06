@@ -375,11 +375,11 @@ describe("C06 canonical composition and Actor delivery", () => {
         .join(" ");
       expect(teachingText).toContain(
         id === "C06-A01"
-          ? "Machine Ends at Commission"
-          : "exported read-only to C01",
+          ? "the agreement ends at commission"
+          : "carries forward unchanged",
       );
       if (id === "C06-A04")
-        expect(teachingText).toContain("₱800 remains outside C06");
+        expect(teachingText).not.toMatch(/₱800|allowance|\bC0\d\b/);
       expect(
         p.frame.contentReferences.some((r) =>
           r.id.endsWith("accessibility-summary"),

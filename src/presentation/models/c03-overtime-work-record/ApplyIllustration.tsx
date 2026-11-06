@@ -13,7 +13,7 @@ export function ApplyIllustration({
       <svg
         viewBox="0 0 500 390"
         role="img"
-        aria-label="James’s monthly overtime: established hourly rate, ordinary working days, and ten extra hours to calculate."
+        aria-label="James’s monthly overtime: hourly rate, ordinary working days, and ten extra hours to calculate."
       >
         <circle cx="250" cy="172" r="145" fill="#d8e2c8" />
         <path d="M24 350h452" stroke="#a4b38b" />

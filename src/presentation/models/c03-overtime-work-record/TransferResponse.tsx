@@ -128,7 +128,7 @@ export function TransferResponse({
             [
               "Use the condition stated in Mara’s record. You do not need to work out a holiday from a date.",
               "Connect your chosen condition to its approved multiplier. Use the relationship reference if you need it—this is not a memory test.",
-              "The hourly rate is already established. Apply the day’s multiplier, then account for all three overtime hours.",
+              "The hourly rate is already given. Apply the day’s multiplier, then account for all three overtime hours.",
             ][step]
           }
         </p>

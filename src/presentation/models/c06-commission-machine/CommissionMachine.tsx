@@ -26,9 +26,13 @@ function Connector({ operation }: { operation: "×" | "→" | "+" | "=" }) {
 export function CommissionMachine({
   model,
   worker,
+  open = false,
 }: {
   model: C06CommissionProjection["model"];
   worker: string;
+  /** Prepare: show each agreement’s structure and given facts, leaving
+   * commission and total pay as questions for Explore and Learn. */
+  open?: boolean;
 }) {
   const id = useId();
   const surface = useRef<HTMLElement>(null);
@@ -39,11 +43,13 @@ export function CommissionMachine({
   );
   const basePlus = model.arrangement === "BASE_PLUS_COMMISSION";
   const result = (value: typeof model.commission) =>
-    value?.resolution.kind === "KNOWN"
-      ? displayQuantity(value.resolution.value)
-      : value
-        ? "Information needed"
-        : "Not revealed yet";
+    open && value
+      ? "Still to find out"
+      : value?.resolution.kind === "KNOWN"
+        ? displayQuantity(value.resolution.value)
+        : value
+          ? "Information needed"
+          : "Not revealed yet";
   return (
     <CommissionInspection
       facts={[

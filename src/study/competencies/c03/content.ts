@@ -1,14 +1,17 @@
-/** Literal FINAL-CONTENT-COPY-SPECIFICATION.md §§11.0, 11.3.
+/** Based on FINAL-CONTENT-COPY-SPECIFICATION.md §§11.0, 11.3.
  * GLO IDs are canonical; c03/Sxx/role keys are task-local lookups, NOT source IDs.
  * Feedback and completion roles do not authorize premature answer exposure.
+ * Learner-copy revision (owner-authorized, 2026-11-06): internal codes and
+ * specification wording were rewritten for learners. Values, rules, keys and
+ * evaluation are unchanged; the specification document needs the same edits.
  */
 export const c03Copy = Object.freeze({
   "GLO-08-C03":
     "Use the overtime condition to identify the applicable multiplier and determine overtime pay.",
   "GLO-09-C03":
-    "Keep the regular hourly rate, overtime hours, condition, and multiplier distinct. The overtime condition determines which approved multiplier applies.",
+    "Keep the regular hourly rate, overtime hours, condition, and multiplier distinct. The overtime condition determines which multiplier applies.",
   "c03/S01/scenario":
-    "Nico is a covered private-sector employee with an established regular hourly rate of ₱100.00 per hour. On an ordinary working day, he finishes his regular eight hours of work and then works 2 additional hours.",
+    "Nico is a covered private-sector employee with a regular hourly rate of ₱100.00 per hour. On an ordinary working day, he finishes his regular eight hours of work and then works 2 additional hours.",
   "c03/S01/task":
     "Choose the idea closest to your thinking. It's fine to be unsure. You do not need to calculate.",
   "c03/S01/relationship-help":
@@ -23,7 +26,7 @@ export const c03Copy = Object.freeze({
   "c03/S01/accessibility-summary":
     "Nico earns ₱100.00 per hour and works eight regular hours, then two additional hours on an ordinary working day. Your recorded ideas are a starting point, not a marked answer.",
   "c03/S02/scenario":
-    "Two approved work situations use the same regular hourly rate of ₱100.00 per hour and the same 2 overtime hours. Situation A occurs on an ordinary working day. Situation B occurs on the employee's rest day.",
+    "Two work situations use the same regular hourly rate of ₱100.00 per hour and the same 2 overtime hours. Situation A occurs on an ordinary working day. Situation B occurs on the employee's rest day.",
   "c03/S02/task":
     "Compare how the overtime condition changes the multiplier and the resulting overtime pay.",
   "c03/S02/relationship-help":
@@ -41,11 +44,11 @@ export const c03Copy = Object.freeze({
   "c03/S02/reconsider-changes":
     "Watch the day marker change. Its multiplier and overtime pay change with it; the ₱100 hourly rate and two extra hours do not.",
   "c03/S02/completion":
-    "Activity complete. With the same hourly rate and overtime hours, a different approved overtime condition can produce a different multiplier and overtime-pay result.",
+    "Activity complete. With the same hourly rate and overtime hours, a different overtime condition can produce a different multiplier and overtime-pay result.",
   "c03/S02/accessibility-summary":
     "Situation A: ordinary working day, rate ₱100.00 per hour, 2 overtime hours, multiplier 1.25, overtime pay ₱250.00. Situation B: rest day, same rate and hours, multiplier 1.69, overtime pay ₱338.00. Difference ₱88.00.",
   "c03/S03/scenario":
-    "James has an established regular hourly rate of ₱75.00 per hour. During the month, he works 10 overtime hours after his regular hours on ordinary working days.",
+    "James has a regular hourly rate of ₱75.00 per hour. During the month, he works 10 overtime hours after his regular hours on ordinary working days.",
   "c03/S03/task":
     "Identify the applicable overtime multiplier and determine James's overtime pay.",
   "c03/S03/relationship-help":
@@ -57,32 +60,32 @@ export const c03Copy = Object.freeze({
   "c03/S03/reconsider-boundary":
     "Stop at overtime pay. Do not add regular pay or continue into gross income in this activity.",
   "c03/S03/reconsider-arithmetic":
-    "Revisit the calculation: established hourly rate × applicable multiplier × all 10 overtime hours. Check each factor, then multiply again. Your target is overtime pay only.",
+    "Revisit the calculation: regular hourly rate × applicable multiplier × all 10 overtime hours. Check each factor, then multiply again. Your target is overtime pay only.",
   "c03/S03/reconsider-units":
-    "Express the multiplier as a dimensionless number and the overtime pay as a peso amount, not an hourly rate or a duration.",
+    "Write the multiplier as a plain number with no unit, and the overtime pay as a peso amount, not an hourly rate or a duration.",
   "c03/S03/completion": "Activity complete. James's overtime pay is ₱937.50.",
   "c03/S03/accessibility-summary":
     "Regular hourly rate ₱75.00 per hour. Ordinary working-day overtime. Multiplier 1.25. Overtime hours 10. Overtime pay ₱937.50.",
   "c03/S04/scenario":
-    "Mara is a covered private-sector employee. Her regular hourly rate has already been established as ₱120.00 per hour. On a day established by the scenario as a regular holiday, she works 3 hours beyond the first eight hours.",
+    "Mara is a covered private-sector employee. Her regular hourly rate is ₱120.00 per hour. On a regular holiday, she works 3 hours beyond the first eight hours.",
   "c03/S04/task":
     "Identify the overtime condition, identify the multiplier that follows from that condition, and calculate Mara's overtime pay for the 3 overtime hours.",
   "c03/S04/relationship-help":
-    "The regular-holiday condition determines the approved 2.60 overtime multiplier. The hourly rate is already established and is not converted in this activity.",
+    "The regular-holiday condition sets the 2.60 overtime multiplier. The hourly rate is already given, so there is nothing to convert.",
   "c03/S04/confirmation":
     "Confirmed. The condition is regular-holiday overtime, so the multiplier is 2.60. ₱120.00 × 2.60 × 3 = ₱936.00 overtime pay.",
   "c03/S04/reconsider-condition":
-    "The scenario establishes a regular holiday. Use the overtime multiplier for that condition.",
+    "Mara works on a regular holiday. Use the overtime multiplier for that condition.",
   "c03/S04/reconsider-arithmetic":
-    "Revisit the calculation: established hourly rate × the multiplier for the regular holiday × 3 overtime hours. Check each factor, then multiply again. Stop at overtime pay.",
+    "Revisit the calculation: regular hourly rate × the multiplier for the regular holiday × 3 overtime hours. Check each factor, then multiply again. Stop at overtime pay.",
   "c03/S04/reconsider-units":
-    "Express the multiplier as a dimensionless decimal and overtime pay as a peso amount, not an hourly rate or a duration.",
+    "Write the multiplier as a decimal with no unit, and overtime pay as a peso amount, not an hourly rate or a duration.",
   "c03/S04/reconsider-scope":
     "The ₱936.00 result is overtime pay for the three overtime hours, not total holiday earnings, gross income, or net pay.",
   "c03/S04/completion":
     "Activity complete. Mara's overtime pay for the 3 regular-holiday overtime hours is ₱936.00.",
   "c03/S04/accessibility-summary":
-    "Established regular hourly rate ₱120.00 per hour. Condition: regular-holiday overtime. Multiplier 2.60. Overtime hours 3. Overtime pay ₱936.00.",
+    "Regular hourly rate ₱120.00 per hour. Condition: regular-holiday overtime. Multiplier 2.60. Overtime hours 3. Overtime pay ₱936.00.",
 } as const);
 
 export type C03CopyKey = keyof typeof c03Copy;

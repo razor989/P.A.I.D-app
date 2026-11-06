@@ -24,7 +24,7 @@ it("keeps technical status distinct and calls only explicit authorized actions",
     "Synthetic storage unavailable",
   );
   expect(screen.queryByText("Information Needed")).toBeNull();
-  expect(screen.queryByText("Reconsideration")).toBeNull();
+  expect(screen.queryByText("Look again")).toBeNull();
   expect(retry).not.toHaveBeenCalled();
   expect(destructive).not.toHaveBeenCalled();
   await userEvent.setup().click(screen.getByRole("button", { name: "Reset" }));

@@ -38,7 +38,7 @@ export function TransferReference({
         >
           <div>
             <ExploreGlyph name="day" />
-            <span>Established condition</span>
+            <span>Condition in the record</span>
             <strong>Regular holiday</strong>
           </div>
           <ExploreGlyph name="next" />
@@ -54,7 +54,7 @@ export function TransferReference({
             </p>
           ))}
           <p>
-            Use the rule with Mara’s established hourly rate and her three extra
+            Use the rule with Mara’s regular hourly rate and her three extra
             hours. Your entries have not been changed or checked.
           </p>
         </div>

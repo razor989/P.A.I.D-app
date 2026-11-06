@@ -345,7 +345,7 @@ for (const wrong of [false, true])
     });
     await expect(record).toContainText(wrong ? "₱0" : "₱1500");
     await expect(record).toContainText(
-      wrong ? "Reconsideration" : "Confirmation",
+      wrong ? "Look again" : "Your answer holds",
     );
     await expect(record).not.toContainText("unavailable");
     await expect(record).toContainText("Your explanation");
@@ -460,7 +460,7 @@ test("an incorrect numerical percentage remains the submitted percentage in the 
     name: "Your recorded response",
   });
   await expect(record).toContainText("100%");
-  await expect(record).toContainText("Reconsideration");
+  await expect(record).toContainText("Look again");
   await expect(
     page.getByRole("region", { name: "What the relationship showed" }),
   ).toContainText("Undefined");

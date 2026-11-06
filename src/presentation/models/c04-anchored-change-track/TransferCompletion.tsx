@@ -180,8 +180,8 @@ export function TransferCompletion(
                 >
                   <h3>
                     {record.outcome === "CONFIRMED"
-                      ? "Confirmation"
-                      : "Reconsideration"}
+                      ? "Your answer holds"
+                      : "Look again"}
                   </h3>
                   <p>{record.feedback.text}</p>
                 </div>

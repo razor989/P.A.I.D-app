@@ -36,7 +36,7 @@ async function choosePrepare(page: Page, alternative = false) {
       "Thanks for sharing your idea.",
     );
     await expect(page.locator(".feedback")).not.toContainText(
-      /Confirmed|Reconsideration/,
+      /Confirmed|Reconsideration|Your answer holds|Look again/,
     );
     if (q === 3) break;
     await page

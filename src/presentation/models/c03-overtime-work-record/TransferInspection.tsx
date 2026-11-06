@@ -84,7 +84,7 @@ export function TransferInspection({
   const facts: Record<TransferPart, [string, string]> = {
     rate: [
       "Already an hourly rate",
-      `${rate} is Mara’s regular pay for one hour. The rate has already been established. No daily or monthly wage conversion belongs in this task.`,
+      `${rate} is Mara’s regular pay for one hour. The rate is already given. No daily or monthly wage conversion belongs in this task.`,
     ],
     hours: [
       "Only the three extra hours",
@@ -102,7 +102,7 @@ export function TransferInspection({
     ],
     pay: [
       "Overtime pay—not all holiday earnings",
-      "Multiply the established hourly rate by the applicable multiplier and by three overtime hours. The result covers only those extra hours. The first eight hours, gross income and net pay are outside this calculation.",
+      "Multiply the regular hourly rate by the applicable multiplier and by three overtime hours. The result covers only those extra hours. The first eight hours, gross income and net pay are outside this calculation.",
     ],
   };
   function close(restore = false) {

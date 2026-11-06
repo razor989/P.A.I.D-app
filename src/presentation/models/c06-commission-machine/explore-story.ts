@@ -30,7 +30,7 @@ export const exploreChapters = [
       ],
       [
         "Name the operation",
-        "Commission = sales × 0.03. Salary is not included in that multiplication. We will use the salary only after commission has been established.",
+        "Commission = sales × 0.03. Salary is not included in that multiplication. We will use the salary only after commission has been found.",
       ],
     ],
   },
@@ -73,7 +73,7 @@ export const exploreChapters = [
     moments: [
       [
         "Hold the agreement still",
-        "Both situations use the same base-plus-commission agreement: ₱15,000 monthly salary and 3% commission. These are the controls in our comparison.",
+        "Both situations use the same base-plus-commission agreement: ₱15,000 monthly salary and 3% commission. These stay the same in both situations.",
       ],
       [
         "Compare the changing part",
@@ -94,7 +94,7 @@ export const exploreChapters = [
       ],
       [
         "Then: combine the pay",
-        "Addition answers a different question: how much pay is there altogether? Join the established commission to the fixed salary—not to sales.",
+        "Addition answers a different question: how much pay is there altogether? Join the commission you found to the fixed salary—not to sales.",
       ],
       [
         "Carry the explanation",

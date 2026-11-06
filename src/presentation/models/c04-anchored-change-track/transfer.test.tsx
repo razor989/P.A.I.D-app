@@ -115,7 +115,7 @@ it.each(["CONFIRMED", "RECONSIDERATION"] as const)(
     );
     expect(record).toHaveTextContent("Authentic delivered feedback.");
     expect(record).toHaveTextContent(
-      outcome === "CONFIRMED" ? "Confirmation" : "Reconsideration",
+      outcome === "CONFIRMED" ? "Your answer holds" : "Look again",
     );
     expect(
       screen.getByRole("region", { name: "What the relationship showed" }),

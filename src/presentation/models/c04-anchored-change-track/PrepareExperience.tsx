@@ -625,9 +625,7 @@ function PrepareWorkshop(props: C04Presentation) {
           </div>
         )}
       </div>
-      <footer className="site-footer">
-        Explore &amp; learn · Percentage change
-      </footer>
+      <footer className="site-footer">Prepare · Percentage change</footer>
       <div
         className="sr-only"
         role="status"

@@ -58,7 +58,7 @@ test("explicit v3 retains aggregate grading and its original optional post-Check
     .getByRole("button", { name: "Check my reasoning", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Confirmation", exact: true }),
+    page.getByRole("heading", { name: "Your answer holds", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Finish activity", exact: true }),

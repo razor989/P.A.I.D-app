@@ -59,7 +59,7 @@ export function ExploreGuidance({
                 {part === "sales"
                   ? "Sales measures goods sold. It supplies the reference for 3%; it is not another payment to add to salary."
                   : part === "base"
-                    ? "Salary is the agreement’s separate monthly promise. It remains ₱15,000 in both situations and is added after commission is established."
+                    ? "Salary is the agreement’s separate monthly promise. It remains ₱15,000 in both situations and is added after commission is found."
                     : "Commission is pay linked to sales at the agreed rate. It can change even though the salary and rate stay fixed."}
               </p>
             </div>

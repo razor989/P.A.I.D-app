@@ -141,9 +141,9 @@ export const c06Copy = Object.freeze({
   "c06/S01/reconsider-not-applicable":
     "Not being sure gives us a question to investigate. Start with what matches—the sales and the commission rate—then look for a promise that appears in only one agreement. We’ll follow the two pay stories together; you don’t have to change your answer to continue.",
   "c06/S01/completion":
-    "Matching sales are only part of the story. The pay agreement tells us what a worker receives for those sales, and whether a fixed salary belongs alongside commission.",
+    "Matching sales are only part of the story. What does each agreement promise for those sales—and does a fixed salary belong alongside commission? Carry those questions into Explore and Learn.",
   "c06/S01/accessibility-summary":
-    "Here’s where the two stories separate. Each worker earns ₱4,000 commission from ₱80,000 in sales at 5%. Worker A’s agreement ends there: there’s no fixed salary to add, rather than a salary of zero. Worker B has another promise to follow—the ₱10,000 monthly salary. Add it to the ₱4,000 commission and Worker B receives ₱14,000 in total compensation. The 5% applies to sales, not to that fixed salary. And the sales record still shows ₱80,000; calculating commission hasn’t reduced what was sold.",
+    "Here’s where the two stories separate. Both workers start from ₱80,000 in sales and the same 5% commission rate. Worker A’s agreement ends at commission: there’s no fixed salary to add, rather than a salary of zero. Worker B has another promise to follow—a ₱10,000 monthly salary. How much commission does each worker earn? What does Worker B’s salary add, and does the 5% apply to it? Keep those questions in view as you explore how commission is worked out.",
   "c06/S02/task":
     "Keep one agreement in view while changing only sales. Follow the commission, compare the two pay pictures, then explain what caused the difference.",
   "c06/S02/confirmation":

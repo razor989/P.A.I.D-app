@@ -29,7 +29,7 @@ export function TransferGuidance(
             [
               "Start with commission as a payment earned from sales, not the sales proceeds themselves.",
               "Trace the separate salary branch. It joins commission once to make total compensation.",
-              "Recalculate only those two components. The separate allowance does not belong in this record.",
+              "Recalculate only those two components. Nothing else belongs in this total.",
             ],
           ] as const)
         : diagnostic === "UNITS"

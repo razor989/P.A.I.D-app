@@ -234,8 +234,8 @@ export function ApplyWorkRecord(props: C03PreparePresentation) {
               <span>Overtime hours</span>
             </div>
             <p>
-              James’s hourly rate is already established. The 10 hours are a
-              monthly total, not a single shift. Stop at overtime pay.
+              James’s hourly rate is already given. The 10 hours are a monthly
+              total, not a single shift. Stop at overtime pay.
             </p>
             <button
               className={base.primary}

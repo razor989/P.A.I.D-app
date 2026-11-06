@@ -137,8 +137,8 @@ export function ApplyExperience(props: C04Presentation) {
               >
                 <h3>
                   {frame.feedbackState.outcome === "CONFIRMED"
-                    ? "Confirmation"
-                    : "Reconsideration"}
+                    ? "Your answer holds"
+                    : "Look again"}
                 </h3>
                 <p>{frame.feedbackState.content.text}</p>
               </div>

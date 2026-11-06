@@ -21,7 +21,7 @@ export function FeedbackSurface({ feedback }: FeedbackSurfaceProps) {
       aria-labelledby={titleId}
       role="status"
     >
-      <h2 id={titleId}>{confirmed ? "Confirmation" : "Reconsideration"}</h2>
+      <h2 id={titleId}>{confirmed ? "Your answer holds" : "Look again"}</h2>
       <p>{feedback.content}</p>
     </section>
   );

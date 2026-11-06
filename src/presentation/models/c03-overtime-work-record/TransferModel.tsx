@@ -44,7 +44,7 @@ export function TransferModel({
           <ExploreGlyph name="day" />
         </header>
         <TransferInspectable part="condition" className={styles.day}>
-          <span>Scenario evidence</span>
+          <span>From Mara’s record</span>
           <strong>Regular holiday</strong>
           <small>
             Your identification: {value("condition") ?? "Not yet recorded"}
@@ -94,7 +94,7 @@ export function TransferModel({
         </TransferInspectable>
         <div className={styles.factors}>
           <TransferInspectable part="rate">
-            <span>Established hourly rate</span>
+            <span>Regular hourly rate</span>
             <strong>
               {pesos(projection.workEvidence.rate.magnitude.toString())}
             </strong>

@@ -7,7 +7,7 @@ export const moments = [
     captions: [
       "Meet Nico, a covered private-sector employee. On this ordinary working day, he has finished eight regular hours of work.",
       "Those hours are already part of his day. The green tiles gather them into one record: eight hours of regular work completed.",
-      "For a regular hour, Nico’s established pay is ₱100.00. That gives us a familiar starting point—but his workday does not end with those eight hours.",
+      "For a regular hour, Nico’s pay is ₱100.00. That gives us a familiar starting point—but his workday does not end with those eight hours.",
     ],
   },
   {

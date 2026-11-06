@@ -305,7 +305,7 @@ export function PayPicture({
           <i className={e.salaryKey} />
           Fixed salary
           <strong>
-            {model.baseSalary ? known(model.baseSalary) : "Not established"}
+            {model.baseSalary ? known(model.baseSalary) : "Not yet shown"}
           </strong>
         </p>
         {revealed > 0 && (

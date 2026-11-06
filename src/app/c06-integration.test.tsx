@@ -114,10 +114,18 @@ it.each([false, true])(
         actor.getSnapshot().context.responseRevision,
       ),
     );
+    // Prepare ends with open questions: the pay is not worked out here.
+    const worked = /4,000|14,000|4000|14000/;
+    expect(document.body.textContent).not.toMatch(worked);
+    expect(screen.getAllByText("Still to find out").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Finish Prepare" }));
     await waitFor(() =>
       expect(selectSession(root.session).lifecyclePhase).toBe("finalized"),
     );
+    expect(document.body.textContent).not.toMatch(worked);
+    expect(
+      screen.getByText(/Carry those questions into Explore and Learn/),
+    ).toBeVisible();
     expect(await store.load()).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: /Back to Commission activities/ }),
@@ -497,7 +505,7 @@ it.each([false, true])(
       ),
     );
     expect(
-      screen.getByText(/C06 Commission ₱3,600 is exported read-only/),
+      screen.getByText(/Lina’s commission, ₱3,600, carries forward unchanged/),
     ).toBeVisible();
     fireEvent.click(
       screen.getByRole("button", { name: "See my June recap →" }),
@@ -513,7 +521,7 @@ it.each([false, true])(
       screen.getByRole("button", { name: "Commission: Ideas Together →" }),
     );
     fireEvent.click(
-      screen.getByRole("radio", { name: "A03 · A property sale" }),
+      screen.getByRole("radio", { name: "Apply · A property sale" }),
     );
     fireEvent.click(
       screen.getByRole("button", { name: "Reveal the connection" }),

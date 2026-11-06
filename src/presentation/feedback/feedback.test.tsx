@@ -15,7 +15,7 @@ it("distinguishes caller-owned outcomes without invalid-input semantics and remo
       }}
     />,
   );
-  expect(screen.getByRole("heading").textContent).toBe("Confirmation");
+  expect(screen.getByRole("heading").textContent).toBe("Your answer holds");
   expect(screen.getByRole("status").textContent).toContain(
     "Synthetic current confirmation",
   );
@@ -27,7 +27,7 @@ it("distinguishes caller-owned outcomes without invalid-input semantics and remo
       }}
     />,
   );
-  expect(screen.getByRole("heading").textContent).toBe("Reconsideration");
+  expect(screen.getByRole("heading").textContent).toBe("Look again");
   expect(view.container.innerHTML).not.toContain("aria-invalid");
   expect(view.container.innerHTML).not.toContain(
     "Synthetic current confirmation",

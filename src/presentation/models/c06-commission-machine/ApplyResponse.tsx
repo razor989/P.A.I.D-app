@@ -193,7 +193,7 @@ export function ApplyResponse(props: C06PreparePresentation) {
             <>
               <p>
                 Build your own claim from the record. The spaces below are your
-                inputs and result—not a solved machine.
+                inputs and result—nothing is filled in for you.
               </p>
               <div className={a.equation}>
                 {field("sales")}

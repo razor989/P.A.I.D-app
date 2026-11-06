@@ -25,7 +25,7 @@ it("presents current feedback without inventing Finish eligibility", () => {
     />,
   );
   expect(
-    screen.getByRole("status", { name: "Confirmation" }).textContent,
+    screen.getByRole("status", { name: "Your answer holds" }).textContent,
   ).toContain("Current approved feedback");
   expect(screen.queryByRole("button", { name: "Finish activity" })).toBeNull();
 });

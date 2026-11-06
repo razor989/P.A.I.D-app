@@ -80,7 +80,7 @@ test("unmarked legacy A01 resumes numeric evidence unchanged, finishes and conti
   await page.getByRole("radio").first().check();
   await page.getByRole("button", { name: "Check", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "Confirmation", exact: true }),
+    page.getByRole("heading", { name: "Your answer holds", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Finish activity", exact: true }),

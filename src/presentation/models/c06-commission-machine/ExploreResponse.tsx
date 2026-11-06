@@ -78,9 +78,7 @@ export function ExploreResponse(props: C06PreparePresentation) {
   if (!editable) return <ExploreRecord projection={projection} />;
   return (
     <section className={e.questionSurface} aria-label="Your guided comparison">
-      <p className={styles.eyebrow}>
-        Question {step + 1} of 9
-      </p>
+      <p className={styles.eyebrow}>Question {step + 1} of 9</p>
       <h3 ref={heading} tabIndex={-1}>
         {bank?.prompt ?? title}
       </h3>
@@ -203,7 +201,7 @@ export function ExploreResponse(props: C06PreparePresentation) {
                 </h4>
                 <p>
                   {confirmed
-                    ? "Your answer is checked. Carry this relationship into the next question."
+                    ? "Your answer is checked. Carry this relationship forward."
                     : "Keep your answer in view. Follow the evidence, then revise this question and check again."}
                 </p>
                 {reconsider && (

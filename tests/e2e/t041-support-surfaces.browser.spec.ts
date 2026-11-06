@@ -18,13 +18,13 @@ test("current feedback removal, separate Information Needed and withheld DOM", a
     .getByRole("button", { name: "Supply Confirmation", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Confirmation", exact: true }),
+    page.getByRole("heading", { name: "Your answer holds", exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Supply Reconsideration", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Reconsideration", exact: true }),
+    page.getByRole("heading", { name: "Look again", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("textbox")).not.toHaveAttribute(
     "aria-invalid",

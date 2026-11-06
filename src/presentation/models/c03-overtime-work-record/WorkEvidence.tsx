@@ -49,7 +49,7 @@ export function WorkEvidence({
     {
       id: "rate",
       title: "His usual hourly pay",
-      copy: `${pesos(rate.magnitude.toString())} per hour is Nico’s established regular rate. What would you want to know about pay for the extra work?`,
+      copy: `${pesos(rate.magnitude.toString())} per hour is Nico’s regular rate. What would you want to know about pay for the extra work?`,
     },
     {
       id: "context",

@@ -1,4 +1,8 @@
-/* Verbatim UTF-8 final-copy specification §§11.6 and 11.0; scenario keys are local lookups. */
+/* UTF-8 final-copy specification §§11.6 and 11.0; scenario keys are local lookups.
+ * Learner-copy revision (owner-authorized, 2026-11-06): internal codes and
+ * specification wording were rewritten for learners. Values, rules, keys and
+ * evaluation are unchanged; the specification document needs the same edits.
+ */
 export const c06Copy = Object.freeze({
   "c06/S01/scenario":
     "Two sales workers have different compensation arrangements. Worker A earns 5% commission on ₱80,000.00 in sales and receives no base salary as part of the arrangement. Worker B receives a ₱10,000.00 monthly base salary plus 5% commission on ₱80,000.00 in sales.",
@@ -37,11 +41,11 @@ export const c06Copy = Object.freeze({
   "c06/S03/task":
     "Identify the sales base and commission rate, then determine the agent's commission.",
   "c06/S03/relationship-help":
-    "For straight commission, commission = sales × rate. No base salary is part of this approved arrangement.",
+    "For straight commission, commission = sales × rate. No base salary is part of this arrangement.",
   "c06/S03/confirmation":
     "Confirmed. ₱2,000,000.00 × 5% = ₱100,000.00 commission. Base salary is not applicable.",
   "c06/S03/reconsider-arrangement":
-    "This is a straight-commission arrangement. Do not add a base-salary branch.",
+    "This is a straight-commission arrangement. Do not add a base salary.",
   "c06/S03/reconsider-meaning":
     "Commission is the agent’s payment for making the sale. The property’s price is the sales base, not another payment to add to commission.",
   "c06/S03/reconsider-rate":
@@ -61,19 +65,19 @@ export const c06Copy = Object.freeze({
   "c06/S04/task":
     "Identify the compensation arrangement, determine Lina's June commission, and then determine the base-plus-commission total compensation.",
   "c06/S04/relationship-help":
-    "Calculate commission from sales × rate, then add the established base salary for the C06 total. C06 stops at the base-plus-commission total and does not add C01-only earnings.",
+    "Calculate commission from sales × rate, then add the base salary for the total. The total is base salary plus commission; nothing else is added.",
   "c06/S04/confirmation":
     "Confirmed. ₱120,000.00 × 3% = ₱3,600.00 commission. ₱15,000.00 base salary + ₱3,600.00 commission = ₱18,600.00 base-plus-commission total compensation.",
   "c06/S04/provider-note":
-    "Established output for downstream Gross Income: commission, ₱3,600.00. Gross Income may use this value without recalculating the commission relationship.",
+    "Carry forward: Lina’s June commission is ₱3,600.00. When you later work out gross income, you can use this value without recalculating the commission.",
   "c06/S04/reconsider-scope":
-    "Do not add the ₱800.00 communication allowance from the separate C01 scenario here. C06's approved total is ₱18,600.00, and its downstream output is the ₱3,600.00 commission.",
+    "Add only Lina’s base salary and her commission. Her total compensation is ₱18,600.00, and the commission it includes is ₱3,600.00.",
   "c06/S04/completion":
     "Activity complete. Lina's June commission is ₱3,600.00 and her base-plus-commission total compensation is ₱18,600.00.",
   "c06/S04/accessibility-summary":
-    "Base-plus-commission arrangement. Sales ₱120,000.00. Rate 3%. Commission ₱3,600.00. Base salary ₱15,000.00. C06 total compensation ₱18,600.00. Commission ₱3,600.00 is the established downstream output for Gross Income.",
+    "Base-plus-commission arrangement. Sales ₱120,000.00. Rate 3%. Commission ₱3,600.00. Base salary ₱15,000.00. Total compensation ₱18,600.00. The ₱3,600.00 commission carries forward to gross income.",
   "GLO-08-C06":
     "Determine commission from sales and an applicable rate, and distinguish straight commission from base-plus-commission.",
   "GLO-09-C06":
-    "Identify the compensation arrangement, sales base, and commission rate first. Include a base salary only when the established arrangement provides one.",
+    "Identify the compensation arrangement, sales base, and commission rate first. Include a base salary only when the arrangement provides one.",
 } as const);

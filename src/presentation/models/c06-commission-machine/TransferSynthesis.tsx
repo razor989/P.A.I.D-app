@@ -5,27 +5,27 @@ import { TransferDiagram } from "./TransferDiagram";
 
 const connections = [
   [
-    "A01 · Two agreements",
+    "Prepare · Two agreements",
     "The agreement decides what belongs.",
     "The workers shared the same sales and rate, but not the same salary promise. Straight commission ends at commission; base-plus-commission includes a separate salary branch.",
     "Read the promise before building the total.",
   ],
   [
-    "A02 · Changing sales",
+    "Explore · Changing sales",
     "A fixed rate does not mean fixed commission.",
     "When sales changed, the agreed rate and base salary stayed fixed. Commission changed with sales; total compensation changed because it included that commission.",
     "Separate what changes from what stays fixed.",
   ],
   [
-    "A03 · A property sale",
+    "Apply · A property sale",
     "The sale is not the agent’s payment.",
     "The agent’s straight-commission agreement ended at commission. The property price supplied the sales base, not an extra amount to add to the agent’s pay.",
     "Keep the reference and the result distinct.",
   ],
   [
-    "A04 · Lina’s June",
+    "Transfer · Lina’s June",
     "One result can become another calculation’s input.",
-    "Lina’s commission joins her base salary for the C06 total. Only the commission is the established downstream output; carrying the whole total forward could count the salary again.",
+    "Lina’s commission joins her base salary for her total. Only the commission carries forward; carrying the whole total forward could count the salary again.",
     "Name the amount before using it somewhere else.",
   ],
 ] as const;

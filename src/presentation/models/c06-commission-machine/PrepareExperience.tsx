@@ -247,8 +247,8 @@ export function PrepareExperience(props: C06PreparePresentation) {
               data-presentation="teaching"
             >
               <p className={styles.lead}>
-                The sales and the rate match, so the commission matches too. Now
-                follow what each agreement promises after that.
+                The sales match, and so do the rates. Does that mean the pay
+                matches? Follow what each agreement promises.
               </p>
               <div className={styles.comparison}>
                 {projection.comparison?.map((model, index) => (
@@ -256,6 +256,7 @@ export function PrepareExperience(props: C06PreparePresentation) {
                     key={index}
                     model={model}
                     worker={index === 0 ? "Worker A" : "Worker B"}
+                    open
                   />
                 ))}
               </div>

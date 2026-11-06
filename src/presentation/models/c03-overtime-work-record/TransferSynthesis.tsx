@@ -53,16 +53,16 @@ export function TransferSynthesis({
         aria-labelledby={`${id}-heading`}
       >
         <header className={styles.labHeading}>
-          <p className={base.eyebrow}>Start with the controlled comparison</p>
+          <p className={base.eyebrow}>Start with the fair comparison</p>
           <h3 id={`${id}-heading`}>
             Same hours. Same rate.
             <br />
             <em>What does the day change?</em>
           </h3>
           <p>
-            In A02, we held ₱100 per hour and two extra hours steady. Only the
-            condition—and the rule linked to it—changed. Follow either record
-            through the same relationship.
+            In Explore and Learn, we held ₱100 per hour and two extra hours
+            steady. Only the condition—and the rule linked to it—changed. Follow
+            either record through the same relationship.
           </p>
         </header>
         <fieldset disabled={blocked} className={styles.labChoices}>
@@ -112,7 +112,7 @@ export function TransferSynthesis({
           </div>
           <div className={styles.factorRail}>
             <div>
-              <span>Established hourly rate</span>
+              <span>Regular hourly rate</span>
               <strong>{pesos(record.rate.magnitude.toString())}</strong>
               <small>per hour</small>
             </div>
@@ -122,7 +122,7 @@ export function TransferSynthesis({
               <strong>
                 {revealed ? record.multiplier.magnitude.toString() : "?"}
               </strong>
-              <small>dimensionless multiplier</small>
+              <small>multiplier, no unit</small>
             </div>
             <b aria-hidden="true">×</b>
             <div>
@@ -164,7 +164,7 @@ export function TransferSynthesis({
               {selected < 2
                 ? "The hourly rate and two hours stayed the same. The condition and its multiplier explain the difference."
                 : selected === 2
-                  ? "James’s ten hours are the monthly overtime total—not a single-day shift. His hourly rate is already established."
+                  ? "James’s ten hours are the monthly overtime total—not a single-day shift. His hourly rate is already given."
                   : "Mara’s three extra hours are separate from the first eight. The result does not include first-eight-hours earnings."}
             </p>
           ) : (
@@ -173,7 +173,7 @@ export function TransferSynthesis({
                 ? "Keep the rate and hours in place. Predict which part of the calculation will change when you switch the day."
                 : selected === 2
                   ? "A monthly total, but the same relationship. Which factors come from James’s work record?"
-                  : "A different day, rate and overtime duration. Trace each factor from Mara’s established record."}
+                  : "A different day, rate and overtime duration. Trace each factor from Mara’s record."}
             </p>
           )}
         </div>

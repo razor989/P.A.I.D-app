@@ -93,7 +93,9 @@ for (const width of [1440, 320]) {
       "reference-transition",
     );
     await expect(
-      page.getByText(/The regular-holiday condition determines/),
+      page.getByText(
+        /The regular-holiday condition sets the 2.60 overtime multiplier/,
+      ),
     ).toBeVisible();
     await noAnswer();
     await page

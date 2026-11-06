@@ -27,7 +27,7 @@ export function TransferTeaching({
     [
       "Carry forward",
       "Pass on the commission—not the whole total.",
-      "Gross Income can use the established commission without recalculating it. The base-plus total stays here, so another activity does not accidentally count the salary twice.",
+      "When you later work out gross income, you can use this commission without recalculating it. The base-plus total stays here, so the salary is never counted twice.",
     ],
   ];
   return (
@@ -75,7 +75,7 @@ export function TransferTeaching({
             <div>
               <span>COMMISSION · CARRY FORWARD</span>
               <strong>₱3,600</strong>
-              <p>The commission value available to Gross Income.</p>
+              <p>The commission you can carry forward to gross income.</p>
             </div>
             <div>
               <span>BASE-PLUS TOTAL · STAYS HERE</span>

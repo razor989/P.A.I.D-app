@@ -171,7 +171,7 @@ export function ExploreModel({
                 <svg
                   viewBox="0 0 380 73"
                   role="img"
-                  aria-label={`${item.condition}: ${value ? pesos(value) : "pay not established"}`}
+                  aria-label={`${item.condition}: ${value ? pesos(value) : "pay not yet worked out"}`}
                 >
                   <path d="M4 55h365" stroke="#b7c3a5" />
                   <rect

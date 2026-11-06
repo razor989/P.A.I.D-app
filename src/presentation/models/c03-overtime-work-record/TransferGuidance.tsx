@@ -26,14 +26,14 @@ export function TransferGuidance({
         ? ([
             "multiplier",
             "Reconnect the day and its multiplier.",
-            "Your proposed multiplier does not match the established condition. Follow the day’s rule in the relationship reference.",
+            "Your proposed multiplier does not match the day in the record. Follow the day’s rule in the relationship reference.",
             1,
           ] as const)
         : projection.diagnostic === "UNITS"
           ? ([
               "units",
               "Keep the answers in their own units.",
-              "A multiplier is a dimensionless decimal. Overtime pay is an amount in pesos—not pesos per hour. Review both entries; this diagnostic does not identify a single field.",
+              "A multiplier is a decimal with no unit. Overtime pay is an amount in pesos—not pesos per hour. Review both entries; this diagnostic does not identify a single field.",
               1,
             ] as const)
           : ([
@@ -98,12 +98,12 @@ export function TransferGuidance({
               <div>
                 <h4>
                   {kind === "condition"
-                    ? "Read the established day."
+                    ? "Read the day in the record."
                     : kind === "multiplier"
                       ? "Start from the condition."
                       : kind === "units"
                         ? "Separate the two quantities."
-                        : "Start with the established rate."}
+                        : "Start with the hourly rate."}
                 </h4>
                 <p>
                   {kind === "condition"
@@ -126,7 +126,7 @@ export function TransferGuidance({
                 </h4>
                 <p>
                   {kind === "condition" || kind === "multiplier"
-                    ? "Inspect the condition and multiplier parts of the model. Open the relationship reference to check the approved rule, then return to your own entries."
+                    ? "Inspect the condition and multiplier parts of the model. Open the relationship reference to check the rule, then return to your own entries."
                     : "The eight pale marks are completed first-eight hours, outside this calculation. The three gold marks are the overtime hours. This boundary is a check—not a claim about how you obtained your answer."}
                 </p>
               </div>
@@ -142,7 +142,7 @@ export function TransferGuidance({
                 <p>
                   {kind === "condition" || kind === "multiplier"
                     ? "Revise the indicated response, then revisit the payment if that change affects your calculation. The three answers will be checked together again."
-                    : "Established hourly rate × applicable multiplier × 3 overtime hours. Recalculate the product and enter overtime pay only. Do not add first-eight-hours earnings."}
+                    : "Regular hourly rate × applicable multiplier × 3 overtime hours. Recalculate the product and enter overtime pay only. Do not add first-eight-hours earnings."}
                 </p>
               </div>
             </li>

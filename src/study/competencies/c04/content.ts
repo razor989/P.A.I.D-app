@@ -1,6 +1,9 @@
-/** Literal FINAL-CONTENT-COPY-SPECIFICATION.md §§11.0, 11.4.
+/** Based on FINAL-CONTENT-COPY-SPECIFICATION.md §§11.0, 11.4.
  * GLO IDs are source identities; c04/Sxx/role strings are local lookup keys.
  * Answer-bearing roles remain role-scoped; this module does not reveal them.
+ * Learner-copy revision (owner-authorized, 2026-11-06): internal codes and
+ * specification wording were rewritten for learners. Values, rules, keys and
+ * evaluation are unchanged; the specification document needs the same edits.
  */
 /** V4 diagnostic invitations are separate from preserved v3 teaching prompts. */
 export const c04PrepareDiagnosticPrompts = Object.freeze([
@@ -118,7 +121,7 @@ export const c04Copy = Object.freeze({
   "c04/S03/reconsider-reference":
     "Use the original offer, ₱30,000.00, as the reference denominator.",
   "c04/S03/reconsider-direction":
-    "The new offer is lower than the original, so the signed change is negative and the learner-facing interpretation is a decrease.",
+    "The new offer is lower than the original, so the signed change is negative: the salary decreased.",
   "c04/S03/completion":
     "Activity complete. The offered monthly salary decreased by 10% from ₱30,000.00 to ₱27,000.00.",
   "c04/S03/accessibility-summary":
@@ -126,13 +129,13 @@ export const c04Copy = Object.freeze({
   "c04/S04/scenario":
     "A job previously offered no monthly communication allowance, so the original allowance amount was ₱0.00. The employer later introduces a ₱1,500.00 monthly communication allowance.",
   "c04/S04/task":
-    "Determine the absolute change. Then determine whether percentage change can be calculated using the approved original-value formula.",
+    "Determine the absolute change. Then determine whether percentage change can be calculated by dividing the change by the original value.",
   "c04/S04/relationship-help":
     "The absolute change can be calculated, but percentage change would require division by the original value. Here, the original value is zero.",
   "c04/S04/confirmation":
     "Confirmed. The absolute increase is ₱1,500.00. Percentage change relative to an original value of ₱0.00 is undefined, so no percentage result is reported.",
   "c04/S04/undefined-result":
-    "Percentage change undefined. The original value is zero, so the approved percentage-change formula would require division by zero. The absolute increase is still ₱1,500.00.",
+    "Percentage change undefined. The original value is zero, so the percentage-change formula would require dividing by zero. The absolute increase is still ₱1,500.00.",
   "c04/S04/reconsider-prohibited-substitutions":
     "Do not report 0%, 100%, or infinity, and do not replace the original value with the new value as the denominator.",
   "c04/S04/completion":

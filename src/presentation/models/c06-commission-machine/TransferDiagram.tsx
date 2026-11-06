@@ -21,7 +21,7 @@ const readings = {
   ],
   total: [
     "Two pay components, one total",
-    "Base salary plus commission determines this compensation total. Sales proceeds and the separate allowance are not additional components here.",
+    "Base salary plus commission determines this compensation total. Sales proceeds are not an additional component.",
   ],
 } as const;
 type Part = keyof typeof readings;
