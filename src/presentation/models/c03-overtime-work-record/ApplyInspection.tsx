@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useId,
   useRef,
   useState,
@@ -12,6 +13,7 @@ import { ExploreGlyph, ExploreHourMark } from "./ExploreGlyph";
 import type { C03WorkRecordProjection } from "./public";
 import { pesos } from "./WorkEvidence";
 import explore from "./explore.module.css";
+import { anchorInspection } from "./anchor-inspection";
 
 export type ApplyPart = "rate" | "hours" | "condition" | "multiplier" | "pay";
 const Inspection = createContext<{
@@ -133,13 +135,11 @@ export function ApplyInspection({
     clearTimeout(timer.current);
     const show = () => {
       const box = target.getBoundingClientRect();
-      const width = Math.min(360, innerWidth - 24);
       setActive((current) => ({
         part,
         target,
         pinned: pin || (current?.target === target && current.pinned),
-        left: Math.max(12, Math.min(innerWidth - width - 12, box.left)),
-        top: Math.max(12, Math.min(innerHeight - 370, box.bottom + 12)),
+        ...anchorInspection(box, panel.current?.offsetHeight),
       }));
       onInspect?.();
     };
@@ -176,11 +176,9 @@ export function ApplyInspection({
       setActive((current) => {
         if (!current) return null;
         const box = current.target.getBoundingClientRect();
-        const width = Math.min(360, innerWidth - 24);
         return {
           ...current,
-          left: Math.max(12, Math.min(innerWidth - width - 12, box.left)),
-          top: Math.max(12, Math.min(innerHeight - 370, box.bottom + 12)),
+          ...anchorInspection(box, panel.current?.offsetHeight),
         };
       });
     document.addEventListener("keydown", dismiss);
@@ -195,6 +193,22 @@ export function ApplyInspection({
       window.removeEventListener("scroll", reposition, true);
     };
   }, [id]);
+  // Once the panel has rendered, place it by its real height so it sits
+  // beside its trigger rather than over it.
+  useLayoutEffect(() => {
+    if (!active || !panel.current) return;
+    const placed = anchorInspection(
+      active.target.getBoundingClientRect(),
+      panel.current.offsetHeight,
+    );
+    if (
+      Math.abs(placed.top - active.top) > 0.5 ||
+      Math.abs(placed.left - active.left) > 0.5
+    )
+      setActive((current) =>
+        current?.target === active.target ? { ...current, ...placed } : current,
+      );
+  }, [active]);
   return (
     <Inspection.Provider
       value={{
