@@ -32,6 +32,7 @@ export function Inspectable({
   className?: string | undefined;
 }) {
   const context = useContext(Inspection);
+  const hovered = useRef(false);
   return (
     <button
       type="button"
@@ -39,11 +40,22 @@ export function Inspectable({
       className={className ?? explore.proseTrigger}
       aria-expanded={context?.active === part}
       aria-controls={context?.id}
-      onPointerEnter={(event) => {
-        if (event.pointerType !== "touch")
-          context?.open(part, event.currentTarget);
+      // Hover intent needs a real movement over the fact. A new screen that
+      // lands under a resting pointer (after a click) must not open a panel.
+      onPointerMove={(event) => {
+        if (
+          event.pointerType === "touch" ||
+          hovered.current ||
+          (event.movementX === 0 && event.movementY === 0)
+        )
+          return;
+        hovered.current = true;
+        context?.open(part, event.currentTarget);
       }}
-      onPointerLeave={() => context?.leave()}
+      onPointerLeave={() => {
+        hovered.current = false;
+        context?.leave();
+      }}
       onFocus={(event) => context?.open(part, event.currentTarget)}
       onBlur={() => context?.leave()}
       onClick={(event) => context?.open(part, event.currentTarget, true)}

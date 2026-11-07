@@ -1452,3 +1452,402 @@
     padding: 24px 18px;
   }
 }
+
+/* ── Explore stage: timesheet, caption track, model dock, moment motion ──
+   Presentation only. Motion decorates a state already shown; reduced motion
+   shows the same end state at once. */
+.story {
+  container: explore-stage / inline-size;
+}
+
+/* The timesheet ledger */
+.ledgerHead text {
+  font:
+    700 10.5px Arial,
+    sans-serif;
+  letter-spacing: 1.2px;
+  fill: #52645a;
+}
+.ledgerRule {
+  fill: none;
+  stroke: #c9d2b9;
+}
+.hourTile rect {
+  fill: #fff2dc;
+  stroke: #b28248;
+}
+.hourTile circle,
+.hourTile path {
+  fill: none;
+  stroke: #8b672c;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.hourTile text {
+  font:
+    700 14px Georgia,
+    serif;
+  fill: #493a22;
+}
+.regularBar {
+  fill: #879d65;
+}
+.premiumBar {
+  stroke: #b28248;
+}
+.barLabel {
+  font:
+    700 13px Arial,
+    sans-serif;
+  fill: #fffdf7;
+}
+.workshop .modelAnnotations .multiplierTag {
+  min-height: 32px;
+  padding: 3px 10px;
+  border: 3px double #a5733a;
+  border-radius: 6px;
+  background: #fbf3e4;
+  color: #6c4a17;
+  font:
+    700 16px/1.2 Georgia,
+    serif;
+  letter-spacing: 0.5px;
+  transform: rotate(-4deg);
+}
+.story .restartText {
+  font-size: inherit;
+  vertical-align: baseline;
+}
+.dayStamp rect {
+  fill: #e5ead7;
+  stroke: #a4b38b;
+}
+.dayStamp text {
+  font:
+    700 10.5px Arial,
+    sans-serif;
+  letter-spacing: 1px;
+  fill: #35482c;
+}
+.dayNote {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid #deceb0;
+  border-radius: 8px;
+  background: #faf3e6;
+  color: #5c4318;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.workshop .dayNote button {
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #21583f;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+/* The caption track: numbered moments, the current one set apart, the
+   moments still to come listed faintly so the column reads as a sequence. */
+.narrator {
+  counter-reset: moment;
+}
+.workshop .narrator .caption {
+  position: relative;
+  margin-top: 10px;
+  padding: 8px 12px 8px 46px;
+  border-left: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #5f6f65;
+}
+.narrator .caption::before {
+  counter-increment: moment;
+  content: counter(moment, decimal-leading-zero) / "";
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  font:
+    700 12px/1 Arial,
+    sans-serif;
+  letter-spacing: 1px;
+  color: #8a977f;
+}
+.workshop .narrator .caption[data-current="true"] {
+  padding-block: 12px;
+  border-radius: 0 8px 8px 0;
+  background: #fffdf7;
+  box-shadow: inset 3px 0 #718951;
+  font-size: 17px;
+  line-height: 1.75;
+  color: #203c33;
+}
+.narrator .caption[data-current="true"]::before {
+  top: 16px;
+  color: #21583f;
+}
+.narrator .caption[data-other-day="true"] {
+  opacity: 0.55;
+}
+.upcoming {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.upcoming li {
+  display: flex;
+  gap: 18px;
+  padding: 9px 12px;
+  border-top: 1px dashed #d5dcc9;
+  color: #8a977f;
+  font-size: 14px;
+}
+.upcoming span {
+  font:
+    700 12px/1.6 Arial,
+    sans-serif;
+  letter-spacing: 1px;
+}
+
+/* Moment motion: changes ease in when stepping; playback drives them
+   frame by frame, so no transition runs while playing. */
+@media (prefers-reduced-motion: no-preference) {
+  .story[data-playing="false"] .regularBar,
+  .story[data-playing="false"] .premiumBar {
+    transition: width 320ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .narrator .caption[data-current="true"] {
+    animation: caption-rise 280ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .workshop .modelAnnotations .multiplierTag {
+    animation: stamp-land 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .payRow foreignObject > div {
+    animation: caption-rise 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+}
+@keyframes caption-rise {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes stamp-land {
+  from {
+    opacity: 0;
+    transform: rotate(-4deg) scale(1.4);
+  }
+  65% {
+    opacity: 1;
+    transform: rotate(-4deg) scale(0.95);
+  }
+  to {
+    transform: rotate(-4deg) scale(1);
+  }
+}
+
+/* Narrow stages: the model dock. The part that changes stays pinned under
+   the floating lesson nav; the explanation scrolls beneath it and the
+   playback bar stays at the foot of the screen. One tree, CSS reflow only. */
+@container explore-stage (max-width: 45rem) {
+  .storyLayout {
+    display: block;
+  }
+  .storyLayout > .unifiedRecord {
+    display: contents;
+  }
+  .storyLayout > .unifiedRecord > .recordIdentity {
+    margin: 0;
+    padding: 16px 16px 12px;
+  }
+  .storyLayout > .unifiedRecord > .recordFacts {
+    gap: 10px;
+    padding: 6px 16px;
+  }
+  .storyLayout .factLink {
+    min-height: 44px;
+  }
+  .storyLayout .factLink strong {
+    font-size: 20px;
+  }
+  .stageDock {
+    position: sticky;
+    top: calc(var(--lesson-nav-scroll, 5.5rem) + env(safe-area-inset-top, 0px));
+    z-index: 2;
+    padding: 8px 10px 6px;
+    background: #fffdf7;
+    border-bottom: 1px solid #c1cbb1;
+    box-shadow: 0 12px 14px -14px #29332680;
+  }
+  .stageDock .dayDock {
+    margin-bottom: 6px;
+    padding: 5px;
+    gap: 5px;
+  }
+  .stageDock .dayDock button {
+    min-height: 44px;
+    padding: 4px 10px;
+  }
+  .stageDock .dayDock p {
+    margin: 0;
+    font-size: 12px;
+  }
+  .stageDock .hourlyScene {
+    margin: 0;
+    padding: 4px 2px 0;
+  }
+  .stageDock .hourlyScene > svg {
+    max-height: calc(38svh - 3.5rem);
+  }
+  .stageDock .pairedPay {
+    margin-top: 0;
+    display: grid;
+    gap: 6px;
+  }
+  .stageDock .pairedPay figure {
+    margin: 0;
+    padding: 6px 10px;
+  }
+  .stageDock .pairedPay figcaption {
+    padding-bottom: 4px;
+    font-size: 14px;
+  }
+  .stageDock .pairedPay svg {
+    max-height: 3.4rem;
+  }
+  .narrator {
+    padding: 16px 14px 20px;
+  }
+  .narrator h3 {
+    margin: 4px 0 10px;
+    font-size: 26px;
+  }
+  .narrator .caption {
+    scroll-margin-top: calc(var(--dock-h, 0px) + 12px);
+    scroll-margin-bottom: calc(var(--playback-h, 0px) + 12px);
+  }
+  .playbackBar {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+  .playbackBar label {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .story .playbackBar .playControl {
+    width: 48px;
+    height: 48px;
+  }
+  .playbackBar > span:last-child {
+    font-size: 11px;
+  }
+  .restartText,
+  .positionLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+/* Phone-width stages scale the timesheet down; its print scales up to stay
+   readable (≈10–12px on screen at 360px). The position slider keeps room. */
+@container explore-stage (max-width: 26rem) {
+  .ledgerHead text {
+    font-size: 12px;
+    letter-spacing: 0.4px;
+  }
+  .barLabel {
+    font-size: 15px;
+  }
+  .workshop .modelAnnotations button {
+    font-size: 13px;
+  }
+  .playbackBar > span:last-child {
+    display: none;
+  }
+}
+
+/* Short landscape phones: model and explanation side by side, the model
+   pinned, the playback bar at the foot of the explanation. */
+@media (orientation: landscape) and (max-height: 30rem) {
+  .story {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .storyLayout {
+    display: contents;
+  }
+  .storyLayout > .unifiedRecord {
+    display: block;
+    grid-row: 1 / span 2;
+    align-self: start;
+    position: sticky;
+    top: calc(var(--lesson-nav-scroll, 5.5rem) + 4px);
+    padding: 8px 10px;
+    border: 0;
+  }
+  .storyLayout > .unifiedRecord > .recordIdentity,
+  .storyLayout > .unifiedRecord > .recordFacts {
+    display: none;
+  }
+  .stageDock {
+    position: static;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+  .stageDock .hourlyScene > svg {
+    max-height: calc(100svh - var(--lesson-nav-scroll, 5.5rem) - 7rem);
+  }
+  .narrator {
+    grid-column: 2;
+    padding: 12px 14px;
+  }
+  .narrator h3 {
+    font-size: 22px;
+  }
+  .workshop .narrator .caption,
+  .workshop .narrator .caption[data-current="true"] {
+    font-size: 15px;
+    line-height: 1.6;
+    scroll-margin-top: 8px;
+  }
+  .playbackBar label {
+    flex: 1 1 3.5rem;
+    min-width: 3.5rem;
+  }
+  .story .playbackBar {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+  .playbackBar > span:last-child {
+    display: none;
+  }
+  .story .playbackBar .playControl {
+    width: 44px;
+    height: 44px;
+  }
+  .playbackBar {
+    grid-column: 2;
+    position: sticky;
+    bottom: 0;
+    flex-wrap: nowrap;
+    padding: 6px 10px;
+  }
+  .momentNav {
+    grid-column: 1 / -1;
+  }
+}

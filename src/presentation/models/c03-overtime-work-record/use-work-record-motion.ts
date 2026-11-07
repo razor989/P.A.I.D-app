@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { RefObject } from "react";
+import { usePrefersReducedMotion } from "../../accessibility/public";
 
 /** Local choreography only. Never creates Actor evidence or gates an action. */
 export function useWorkRecordMotion(
@@ -7,18 +8,7 @@ export function useWorkRecordMotion(
   identity: string,
   blocked: boolean,
 ) {
-  const [reduced, setReduced] = useState(
-    () =>
-      typeof matchMedia === "function" &&
-      matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
-  useEffect(() => {
-    if (typeof matchMedia !== "function") return;
-    const media = matchMedia("(prefers-reduced-motion: reduce)");
-    const change = () => setReduced(media.matches);
-    media.addEventListener("change", change);
-    return () => media.removeEventListener("change", change);
-  }, []);
+  const reduced = usePrefersReducedMotion();
   useEffect(() => {
     if (reduced || blocked) return;
     const animations: Animation[] = [];

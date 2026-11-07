@@ -5,6 +5,8 @@ import type { C03PreparePresentation } from "./public";
 import { ExploreModel } from "./ExploreModel";
 import styles from "./work-record.module.css";
 import explore from "./explore.module.css";
+import { revealFeedback, revealHeading } from "./reveal";
+import { usePrefersReducedMotion } from "../../accessibility/public";
 
 const fields = [
   "invariants",
@@ -53,6 +55,8 @@ export function ExploreResponse({
   >({});
   const [help, setHelp] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
+  const partFeedback = useRef<HTMLDivElement>(null);
+  const reduced = usePrefersReducedMotion();
   const field = fields[index]!;
   const editable =
     projection.frame.allowedLearnerIntents.includes("RESPONSE_CHANGED");
@@ -78,9 +82,7 @@ export function ExploreResponse({
   function move(next: number) {
     setIndex(next);
     setHelp(false);
-    requestAnimationFrame(() =>
-      heading.current?.focus({ preventScroll: true }),
-    );
+    requestAnimationFrame(() => revealHeading(heading.current, reduced));
   }
   function publish(text: string) {
     let response:
@@ -296,6 +298,7 @@ export function ExploreResponse({
           )}
           {current && (
             <div
+              ref={partFeedback}
               className={explore.partFeedback}
               role="status"
               data-correct={confirmed}
@@ -334,6 +337,9 @@ export function ExploreResponse({
                         [field]: { result, fingerprint: fingerprint(field) },
                       });
                       setHelp(result.outcome !== "CONFIRMED");
+                      requestAnimationFrame(() =>
+                        revealFeedback(partFeedback.current, reduced),
+                      );
                     }
                   }}
                 >

@@ -1,6 +1,7 @@
 import type { RefObject } from "react";
 
 export { AccessibilityCoordinator } from "./AccessibilityCoordinator";
+export { usePrefersReducedMotion } from "./use-prefers-reduced-motion";
 export type FocusEvent = Readonly<
   { identity: string; target: RefObject<HTMLElement | null> } & (
     | { kind: "destination" | "major-step" | "recovered-activity" }

@@ -8,14 +8,14 @@ export const c03Explanation = Object.freeze({
   ]),
   "EXP-02": Object.freeze([
     "Open the ordinary-day record. The kind of day tells us which overtime multiplier to use.",
-    "For this ordinary working day, the approved multiplier is 1.25.",
+    "For this ordinary working day, the overtime multiplier is 1.25.",
     "Follow one extra hour: ₱100 × 1.25 gives ₱125. The extension shows the amount above the regular hourly rate.",
     "There are two extra hours, each paid at that overtime rate.",
     "Together they earn ₱250 in overtime pay: ₱100 × 1.25 × 2. Regular pay is not included here.",
   ]),
   "EXP-03": Object.freeze([
     "Now switch the day marker to rest day. Leave the hourly rate and the two hours where they are.",
-    "The approved rest-day overtime multiplier is 1.69. It belongs to this condition, not to a change in hours.",
+    "The rest-day overtime multiplier is 1.69. It belongs to this condition, not to a change in hours.",
     "At ₱100 an hour, that multiplier gives ₱169 for each overtime hour.",
     "Two hours now earn ₱338 in overtime pay. Watch the pay extend while the hour marks stay put.",
     "Switch between the days. Only the condition, its multiplier and the overtime pay change together.",

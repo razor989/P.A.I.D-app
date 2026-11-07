@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { C03WorkRecordProjection } from "./public";
 import { ExploreModel } from "./ExploreModel";
 import { ExploreInspection, Inspectable } from "./ExploreInspection";
@@ -8,6 +8,13 @@ import { exploreBeatDuration, projectExploreStory } from "./explore-story";
 import styles from "./work-record.module.css";
 import explore from "./explore.module.css";
 
+const momentTitles = [
+  "Start",
+  "The day",
+  "Each hour",
+  "The pay",
+  "Put it together",
+];
 const terms: [RegExp, ExplorePart][] = [
   [/regular hourly rate|hourly rate|₱100 an hour|₱100/g, "rate"],
   [/two extra hours|two hours|overtime hours/gi, "hours"],
@@ -66,6 +73,21 @@ export function ExploreStory({
     starts,
     end: total,
   } = projectExploreStory(time, durations);
+  // Stage 3 narrates the rest day (moments 2–4) but invites switching days.
+  // If the learner shows the other day, say so rather than let a caption
+  // describe pay the model is not showing (§K3).
+  const control = projection.frame.modelSelectionControl;
+  const restDay = control?.options.find((option) => /rest/i.test(option.text));
+  const shownDay = control?.options
+    .find((option) => option.id === control.selectedId)
+    ?.text.toLowerCase();
+  const offDay =
+    stage === 2 &&
+    index >= 1 &&
+    index <= 3 &&
+    Boolean(onSelectCondition) &&
+    restDay !== undefined &&
+    control?.selectedId !== restDay.id;
   useEffect(() => {
     if (!playing || blocked) return;
     let request = 0,
@@ -95,6 +117,57 @@ export function ExploreStory({
       setTime(Math.max(0, Math.min(total, value)));
     }
   }
+  // Stepping lands on a moment’s finished state, so the change it describes
+  // is visible at once (CSS eases it in). Only scrubbing shows in-betweens.
+  const settle = (i: number) =>
+    seek((starts[i] ?? 0) + (durations[i] ?? 0) - 1);
+  const story = useRef<HTMLElement>(null);
+  // Narrow stages dock the model under the lesson nav. Publish the dock and
+  // playback heights so the current caption can be kept clear of both.
+  useEffect(() => {
+    const element = story.current;
+    const dock = element?.querySelector<HTMLElement>("[data-cue]");
+    const bar = element?.querySelector<HTMLElement>("[data-playback]");
+    if (!element || !dock || !bar || typeof ResizeObserver !== "function")
+      return;
+    const observer = new ResizeObserver(() => {
+      element.style.setProperty("--dock-h", `${dock.offsetHeight}px`);
+      element.style.setProperty("--playback-h", `${bar.offsetHeight}px`);
+    });
+    observer.observe(dock);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
+  const shownMoment = useRef(index);
+  useEffect(() => {
+    if (shownMoment.current === index) return;
+    shownMoment.current = index;
+    const element = story.current;
+    const dock = element?.querySelector<HTMLElement>("[data-cue]");
+    const bar = element?.querySelector<HTMLElement>("[data-playback]");
+    const caption = element?.querySelector<HTMLElement>(
+      '[data-current="true"]',
+    );
+    // Only a pinned model (phone dock, or the landscape column) needs this.
+    const pinned = [dock, dock?.parentElement].some(
+      (item) => item && getComputedStyle(item).position === "sticky",
+    );
+    if (!dock || !caption || !pinned) return;
+    const box = caption.getBoundingClientRect();
+    const model = dock.getBoundingClientRect();
+    const stacked = model.left < box.right && box.left < model.right;
+    const top = stacked
+      ? model.bottom
+      : parseFloat(
+          getComputedStyle(document.documentElement).scrollPaddingBlockStart,
+        ) || 0;
+    const bottom = bar?.getBoundingClientRect().top ?? window.innerHeight;
+    if (box.top < top || box.bottom > bottom)
+      caption.scrollIntoView?.({
+        block: "nearest",
+        behavior: reduced ? "auto" : "smooth",
+      });
+  }, [index, reduced]);
   return (
     <ExploreInspection
       projection={projection}
@@ -102,6 +175,7 @@ export function ExploreStory({
       onInspect={() => setPlaying(false)}
     >
       <section
+        ref={story}
         className={explore.story}
         aria-label="Overtime explanation"
         data-playing={playing}
@@ -135,11 +209,35 @@ export function ExploreStory({
                 key={passage.id}
                 hidden={i > index}
                 data-current={i === index}
+                data-other-day={offDay && i >= 1 && i <= 3}
                 className={explore.caption}
               >
                 {narrative(passage.text)}
               </p>
             ))}
+            {index < passages.length - 1 && (
+              <ol className={explore.upcoming} aria-hidden="true">
+                {passages.slice(index + 1).map((passage, j) => (
+                  <li key={passage.id}>
+                    <span>0{index + j + 2}</span>
+                    {momentTitles[index + j + 1]}
+                  </li>
+                ))}
+              </ol>
+            )}
+            {offDay && (
+              <p className={explore.dayNote}>
+                These lines follow the rest day. The record now shows the{" "}
+                {shownDay}.{" "}
+                <button
+                  type="button"
+                  disabled={blocked}
+                  onClick={() => restDay && onSelectCondition?.(restDay.id)}
+                >
+                  Show the rest day
+                </button>
+              </p>
+            )}
             {stage === 4 && (
               <div className={explore.formula}>
                 <span>Overtime pay</span>
@@ -161,7 +259,8 @@ export function ExploreStory({
           </div>
         </div>
         <div
-          className={styles.playback}
+          className={[styles.playback, explore.playbackBar].join(" ")}
+          data-playback
           role="group"
           aria-label="Overtime explanation playback"
         >
@@ -169,7 +268,7 @@ export function ExploreStory({
             className={styles.skipControl}
             disabled={blocked || index === 0}
             aria-label="Previous moment"
-            onClick={() => seek(starts[index - 1] ?? 0)}
+            onClick={() => settle(index - 1)}
           >
             <ExploreGlyph name="previous" />
           </button>
@@ -178,7 +277,8 @@ export function ExploreStory({
             disabled={blocked}
             aria-label={playing ? "Pause playback" : "Play explanation"}
             onClick={() => {
-              if (time === total) setTime(0);
+              // At (or settled on) the end, Play starts the stage again.
+              if (time >= total - 1) setTime(0);
               setPlaying(!playing);
             }}
           >
@@ -188,7 +288,7 @@ export function ExploreStory({
             className={styles.skipControl}
             disabled={blocked || index === passages.length - 1}
             aria-label="Next moment"
-            onClick={() => seek(starts[index + 1] ?? total)}
+            onClick={() => settle(index + 1)}
           >
             <ExploreGlyph name="next" />
           </button>
@@ -197,10 +297,11 @@ export function ExploreStory({
             disabled={blocked}
             onClick={() => seek(0)}
           >
-            <ExploreGlyph name="replay" /> Restart
+            <ExploreGlyph name="replay" />{" "}
+            <span className={explore.restartText}>Restart</span>
           </button>
           <label>
-            Explanation position
+            <span className={explore.positionLabel}>Explanation position</span>
             <input
               type="range"
               min="0"
@@ -226,7 +327,7 @@ export function ExploreStory({
               key={passage.id}
               aria-current={i === index ? "step" : undefined}
               disabled={blocked}
-              onClick={() => seek(starts[i]!)}
+              onClick={() => settle(i)}
             >
               <span className={explore.chapterNumber}>0{i + 1}</span>
               <svg viewBox="0 0 80 40" aria-hidden="true">
@@ -278,17 +379,7 @@ export function ExploreStory({
                   </>
                 )}
               </svg>
-              <span className={explore.chapterTitle}>
-                {
-                  [
-                    "Start",
-                    "The day",
-                    "Each hour",
-                    "The pay",
-                    "Put it together",
-                  ][i]
-                }
-              </span>
+              <span className={explore.chapterTitle}>{momentTitles[i]}</span>
             </button>
           ))}
         </nav>

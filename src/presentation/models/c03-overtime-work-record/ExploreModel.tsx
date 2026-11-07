@@ -1,7 +1,7 @@
 import type { C03WorkRecordProjection } from "./public";
 import { pesos } from "./WorkEvidence";
 import { ExploreInspection, Inspectable } from "./ExploreInspection";
-import { ExploreGlyph, ExploreHourMark } from "./ExploreGlyph";
+import { ExploreGlyph } from "./ExploreGlyph";
 import explore from "./explore.module.css";
 
 /** One work record. Widths project exposed quantities; no pay is evaluated here. */
@@ -87,27 +87,6 @@ export function ExploreModel({
           />
         </svg>
       </header>
-      {control && onSelectCondition && (
-        <div
-          className={explore.dayDock}
-          role="group"
-          aria-label="Choose the work condition"
-        >
-          {control.options.map((option) => (
-            <button
-              key={option.id}
-              aria-pressed={control.selectedId === option.id}
-              disabled={blocked}
-              onClick={() => onSelectCondition(option.id)}
-            >
-              {stage === 1
-                ? `${inspected ? "✓ " : ""}Inspect ordinary working day`
-                : option.text}
-            </button>
-          ))}
-          {stage === 1 && !inspected && <p>Open this record to continue ↓</p>}
-        </div>
-      )}
       <div className={explore.recordFacts}>
         <Inspectable part="rate" className={explore.factLink}>
           <svg viewBox="0 0 40 40" aria-hidden="true">
@@ -146,153 +125,194 @@ export function ExploreModel({
           </span>
         </Inspectable>
       </div>
-      {paired ? (
-        <div className={explore.pairedPay}>
-          {comparison!.map((item, index) => {
-            const value =
-              item.overtimePay.resolution.kind === "KNOWN"
-                ? item.overtimePay.resolution.value.magnitude.toString()
-                : null;
-            const visibility = compact ? 1 : reveal(index + 1, 1);
-            return (
-              <figure
-                key={item.condition}
-                style={{ opacity: visibility ? 1 : 0.25 }}
-              >
-                <figcaption>
-                  <Inspectable part="condition">
-                    <ExploreGlyph name={index ? "rest" : "day"} />
-                    {index ? "Rest day" : "Ordinary day"}
-                  </Inspectable>
-                  <Inspectable part="multiplier">
-                    × {item.multiplier.magnitude.toString()}
-                  </Inspectable>
-                </figcaption>
-                <svg
-                  viewBox="0 0 380 73"
-                  role="img"
-                  aria-label={`${item.condition}: ${value ? pesos(value) : "pay not yet worked out"}`}
-                >
-                  <path d="M4 55h365" stroke="#b7c3a5" />
-                  <rect
-                    x="4"
-                    y="12"
-                    width={value ? Number(value) * visibility : 0}
-                    className={compact ? explore.recapPayBar : undefined}
-                    height="32"
-                    rx="3"
-                    fill={index ? "#b28248" : "#718951"}
-                  />
-                  {!compact && cue >= 3 && index === 1 && (
-                    <path
-                      d="M254 5v49M254 62v6h88v-6"
-                      stroke="#71531d"
-                      strokeWidth="2"
-                      fill="none"
-                    />
-                  )}
-                </svg>
-                <div className={explore.recordResult}>
-                  <span>
-                    {pesos(workEvidence.rate.magnitude.toString())} ×{" "}
-                    {item.multiplier.magnitude.toString()} ×{" "}
-                    {workEvidence.hours.magnitude.toString()}
-                  </span>
-                  <Inspectable part="pay">
-                    {value ? pesos(value) : "—"}
-                  </Inspectable>
-                </div>
-              </figure>
-            );
-          })}
-        </div>
-      ) : (
-        <div className={explore.hourlyScene}>
-          <svg
-            viewBox="0 -46 390 300"
+      {/* The part that changes with each moment. On narrow stages it docks
+          under the lesson nav while the explanation scrolls beneath it. */}
+      <div className={explore.stageDock} data-cue={cue}>
+        {control && onSelectCondition && (
+          <div
+            className={explore.dayDock}
             role="group"
-            aria-label="Two overtime hours on one work record; the pay for each hour develops with the explanation"
+            aria-label="Choose the work condition"
           >
-            <defs>
-              <pattern
-                id={`premium-${stage}`}
-                width="7"
-                height="7"
-                patternUnits="userSpaceOnUse"
+            {control.options.map((option) => (
+              <button
+                key={option.id}
+                aria-pressed={control.selectedId === option.id}
+                disabled={blocked}
+                onClick={() => onSelectCondition(option.id)}
               >
-                <path d="M0 7 7 0" stroke="#b28248" strokeWidth="2" />
-              </pattern>
-            </defs>
-            <foreignObject x="95" y="-44" width="280" height="56">
-              <div className={explore.modelAnnotations}>
-                <Inspectable part="rate" className={explore.rateTag}>
-                  Regular-rate reference
-                </Inspectable>
-                {showMath && (
-                  <Inspectable
-                    part="multiplier"
-                    className={explore.multiplierTag}
-                  >
-                    × {math.multiplier.magnitude.toString()}
-                  </Inspectable>
-                )}
-              </div>
-            </foreignObject>
-            <path d="M95 19v-24h135v24" fill="none" stroke="#879d65" />
-            <path d="M55 25v155" stroke="#b7c3a5" strokeWidth="2" />
-            {[0, 1].map((hour) => (
-              <g key={hour} transform={`translate(0 ${30 + hour * 85})`}>
-                <path d="M80 20h15" stroke="#b7c3a5" />
-                <g transform="translate(55 20)">
-                  <ExploreHourMark />
-                </g>
-                <rect
-                  x="95"
-                  y="0"
-                  width={135 * (stage === 0 ? reveal(0.5, 1) : 1)}
-                  height="40"
-                  rx="4"
-                  fill="#879d65"
-                />
-                {showMath && (
-                  <g>
-                    <rect
-                      x="230"
-                      y="0"
-                      width={extension}
-                      height="40"
-                      fill={`url(#premium-${stage})`}
-                      stroke="#b28248"
-                    />
-                    <path
-                      d={`M95 47v6h${135 + extension}v-6`}
-                      fill="none"
-                      stroke="#718951"
-                    />
-                    <text x="95" y="72" fontSize="14" fill="#52645a">
-                      {cue >= 1
-                        ? `${pesos(workEvidence.rate.magnitude.toString())} × ${math.multiplier.magnitude.toString()}`
-                        : ""}
-                    </text>
-                  </g>
-                )}
-              </g>
+                {stage === 1
+                  ? `${inspected ? "✓ " : ""}Inspect ordinary working day`
+                  : option.text}
+              </button>
             ))}
-            {showMath && cue >= 3 && (
-              <g opacity={reveal(3)}>
-                <path d="M95 207h230" stroke="#b7c3a5" />
-                <foreignObject x="95" y="213" width="280" height="40">
-                  <div className={explore.modelPayResult}>
-                    <Inspectable part="pay" className={explore.payTag}>
-                      {amount} <span>overtime pay</span>
+            {stage === 1 && !inspected && <p>Open this record to continue ↓</p>}
+          </div>
+        )}
+        {paired ? (
+          <div className={explore.pairedPay}>
+            {comparison!.map((item, index) => {
+              const value =
+                item.overtimePay.resolution.kind === "KNOWN"
+                  ? item.overtimePay.resolution.value.magnitude.toString()
+                  : null;
+              const visibility = compact ? 1 : reveal(index + 1, 1);
+              return (
+                <figure
+                  key={item.condition}
+                  style={{ opacity: visibility ? 1 : 0.25 }}
+                >
+                  <figcaption>
+                    <Inspectable part="condition">
+                      <ExploreGlyph name={index ? "rest" : "day"} />
+                      {index ? "Rest day" : "Ordinary day"}
+                    </Inspectable>
+                    <Inspectable part="multiplier">
+                      × {item.multiplier.magnitude.toString()}
+                    </Inspectable>
+                  </figcaption>
+                  <svg
+                    viewBox="0 0 380 73"
+                    role="img"
+                    aria-label={`${item.condition}: ${value ? pesos(value) : "pay not yet worked out"}`}
+                  >
+                    <path d="M4 55h365" stroke="#b7c3a5" />
+                    <rect
+                      x="4"
+                      y="12"
+                      width={value ? Number(value) * visibility : 0}
+                      className={compact ? explore.recapPayBar : undefined}
+                      height="32"
+                      rx="3"
+                      fill={index ? "#b28248" : "#718951"}
+                    />
+                    {!compact && cue >= 3 && index === 1 && (
+                      <path
+                        d="M254 5v49M254 62v6h88v-6"
+                        stroke="#71531d"
+                        strokeWidth="2"
+                        fill="none"
+                      />
+                    )}
+                  </svg>
+                  <div className={explore.recordResult}>
+                    <span>
+                      {pesos(workEvidence.rate.magnitude.toString())} ×{" "}
+                      {item.multiplier.magnitude.toString()} ×{" "}
+                      {workEvidence.hours.magnitude.toString()}
+                    </span>
+                    <Inspectable part="pay">
+                      {value ? pesos(value) : "—"}
                     </Inspectable>
                   </div>
-                </foreignObject>
+                </figure>
+              );
+            })}
+          </div>
+        ) : (
+          <div className={explore.hourlyScene}>
+            {/* A printed timesheet: one ruled row per extra hour, each with the
+              pay for that hour measured from the regular-rate reference. */}
+            <svg
+              viewBox="0 0 390 214"
+              role="group"
+              aria-label="Two overtime hours on one work record; the pay for each hour develops with the explanation"
+            >
+              <defs>
+                <pattern
+                  id={`premium-${stage}`}
+                  width="7"
+                  height="7"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <path d="M0 7 7 0" stroke="#b28248" strokeWidth="2" />
+                </pattern>
+              </defs>
+              <g className={explore.ledgerHead} aria-hidden="true">
+                <text x="8" y="13">
+                  EXTRA HOUR
+                </text>
+                <text x="98" y="13">
+                  PAY FOR THAT HOUR
+                </text>
               </g>
-            )}
-          </svg>
-        </div>
-      )}
+              {math && (
+                <g className={explore.dayStamp} aria-hidden="true">
+                  <rect x="282" y="0" width="106" height="19" rx="4" />
+                  <text x="335" y="14" textAnchor="middle">
+                    {math.condition.replace("working ", "").toUpperCase()}
+                  </text>
+                </g>
+              )}
+              <path d="M0 21h390" className={explore.ledgerRule} />
+              <path d="M90 21v143" className={explore.ledgerRule} />
+              <foreignObject x="92" y="25" width="296" height="38">
+                <div className={explore.modelAnnotations}>
+                  <Inspectable part="rate" className={explore.rateTag}>
+                    Regular-rate reference
+                  </Inspectable>
+                  {showMath && (
+                    <Inspectable
+                      part="multiplier"
+                      className={explore.multiplierTag}
+                    >
+                      × {math.multiplier.magnitude.toString()}
+                    </Inspectable>
+                  )}
+                </div>
+              </foreignObject>
+              {[0, 1].map((hour) => (
+                <g key={hour} transform={`translate(0 ${66 + hour * 50})`}>
+                  <g className={explore.hourTile} aria-hidden="true">
+                    <rect x="4" y="2" width="80" height="38" rx="8" />
+                    <circle cx="19" cy="21" r="7" />
+                    <path d="M19 16v5l3 2" />
+                    <text x="31" y="26">
+                      Hour {hour + 1}
+                    </text>
+                  </g>
+                  <rect
+                    className={explore.regularBar}
+                    x="96"
+                    y="2"
+                    width={135 * (stage === 0 ? reveal(0.5, 1) : 1)}
+                    height="38"
+                    rx="4"
+                  />
+                  {showMath && (
+                    <rect
+                      className={explore.premiumBar}
+                      x="231"
+                      y="2"
+                      width={extension}
+                      height="38"
+                      fill={`url(#premium-${stage})`}
+                    />
+                  )}
+                  {showMath && cue >= 1 && (
+                    <text className={explore.barLabel} x="104" y="26">
+                      {pesos(workEvidence.rate.magnitude.toString())} ×{" "}
+                      {math.multiplier.magnitude.toString()}
+                    </text>
+                  )}
+                  <path d="M0 46h390" className={explore.ledgerRule} />
+                </g>
+              ))}
+              {showMath && cue >= 3 && (
+                <g opacity={reveal(3)} className={explore.payRow}>
+                  <foreignObject x="92" y="170" width="296" height="42">
+                    <div className={explore.modelPayResult}>
+                      <Inspectable part="pay" className={explore.payTag}>
+                        {amount} <span>overtime pay</span>
+                      </Inspectable>
+                    </div>
+                  </foreignObject>
+                </g>
+              )}
+            </svg>
+          </div>
+        )}
+      </div>
     </section>
   );
   return onInspect ? (

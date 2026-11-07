@@ -10,6 +10,7 @@ import { useWorkRecordMotion } from "./use-work-record-motion";
 import styles from "./work-record.module.css";
 import explore from "./explore.module.css";
 import { LessonMasthead } from "../../navigation/public";
+import { revealFeedback, revealHeading } from "./reveal";
 
 export function ExploreWorkRecord(props: C03PreparePresentation) {
   const { projection, blocked, onFeedbackPresented } = props;
@@ -47,10 +48,13 @@ export function ExploreWorkRecord(props: C03PreparePresentation) {
       return;
     }
     if (focused.current !== frame.stateId) {
+      // The first state keeps the shell’s own entry placement.
+      const first = focused.current === "";
       focused.current = frame.stateId;
-      heading.current?.focus({ preventScroll: true });
+      if (first) heading.current?.focus({ preventScroll: true });
+      else revealHeading(heading.current, reduced);
     }
-  }, [frame.stateId, blocked, supporting]);
+  }, [frame.stateId, blocked, supporting, reduced]);
   useEffect(() => {
     const element = feedback.current;
     if (
@@ -61,6 +65,16 @@ export function ExploreWorkRecord(props: C03PreparePresentation) {
     )
       onFeedbackPresented?.(element);
   }, [disabled, frame.feedbackState, onFeedbackPresented]);
+  const shownFeedback = frame.feedbackState
+    ? `${frame.feedbackState.outcome}/${frame.feedbackState.content.id}`
+    : "";
+  const revealedFeedback = useRef("");
+  useEffect(() => {
+    // Only a newly shown outcome moves the view; re-renders do not.
+    if (disabled || shownFeedback === revealedFeedback.current) return;
+    revealedFeedback.current = shownFeedback;
+    if (shownFeedback) revealFeedback(feedback.current, reduced);
+  }, [shownFeedback, disabled, reduced]);
   if (frame.activityId !== "C03-A02")
     throw new TypeError("Explore requires the canonical C03-A02 projection");
   const action = (intent: C03PrepareAction, label: string, primary = false) =>
