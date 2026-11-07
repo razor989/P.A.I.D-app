@@ -9,6 +9,11 @@ import { ApplyRecap } from "./ApplyRecap";
 import styles from "./commission.module.css";
 import a from "./apply.module.css";
 import { LessonMasthead } from "../../navigation/public";
+import { revealHeading } from "../../activity/public";
+
+const prefersReducedMotion = () =>
+  typeof matchMedia === "function" &&
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /** Production Actor owns responses, feedback, completion and recoverable work. */
 export function ApplyExperience(props: C06PreparePresentation) {
@@ -24,11 +29,18 @@ export function ApplyExperience(props: C06PreparePresentation) {
   const complete = frame.stateId === "COMPLETE";
   const confirmed = frame.feedbackState?.outcome === "CONFIRMED";
   const { onPresented } = props;
+  const revealed = useRef("");
   useEffect(() => {
     if (props.blocked) return;
-    heading.current?.focus({ preventScroll: true });
-    heading.current?.scrollIntoView?.({ block: "start" });
-  }, [frame.stateId, props.blocked]);
+    // A new step's heading lands below the lesson nav, and only scrolls when
+    // out of view: the intro keeps its masthead instead of opening part-way
+    // down. Unblocking the same step only restores focus.
+    if (revealed.current === frame.stateId)
+      heading.current?.focus({ preventScroll: true });
+    else if (!entry) revealHeading(heading.current, prefersReducedMotion());
+    else heading.current?.focus({ preventScroll: true });
+    revealed.current = frame.stateId;
+  }, [frame.stateId, props.blocked, entry]);
   useEffect(() => {
     if (support && dialog.current && !dialog.current.open)
       dialog.current.showModal();

@@ -11,6 +11,7 @@ import "../c04-reference/refinement.css";
 import "../c04-reference/instructional-enhancement.css";
 import styles from "./apply.module.css";
 import { LessonMasthead } from "../../navigation/public";
+import { revealHeading } from "../../activity/public";
 
 export function ApplyExperience(props: C04Presentation) {
   const { frame, blocked, onIntent, onPresented } = props;
@@ -29,8 +30,12 @@ export function ApplyExperience(props: C04Presentation) {
     !disabled && frame.allowedLearnerIntents.includes(intent);
   useEffect(() => {
     if (disabled) return;
-    heading.current?.focus({ preventScroll: true });
     const media = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    // A new step's heading lands below the lesson nav, not scrolled away.
+    // The intro opens at the top with its masthead (the shell resets scroll);
+    // the completion recap brings itself into view.
+    if (entry || complete) heading.current?.focus({ preventScroll: true });
+    else revealHeading(heading.current, Boolean(media?.matches));
     if (media?.matches) return;
     const animation = surface.current?.animate?.(
       [{ transform: "translateY(8px)" }, { transform: "none" }],
@@ -42,7 +47,7 @@ export function ApplyExperience(props: C04Presentation) {
       stop();
       media?.removeEventListener("change", stop);
     };
-  }, [frame.stateId, disabled]);
+  }, [frame.stateId, disabled, entry, complete]);
   useEffect(() => {
     if (!disabled && frame.feedbackState && feedback.current?.isConnected)
       onPresented?.("feedback", feedback.current);

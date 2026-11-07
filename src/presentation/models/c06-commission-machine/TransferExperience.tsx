@@ -11,6 +11,7 @@ import { useWorkRecordMotion } from "./use-commission-motion";
 import base from "./commission.module.css";
 import t from "./transfer.module.css";
 import { LessonMasthead } from "../../navigation/public";
+import { revealHeading } from "../../activity/public";
 
 /** Real Session-owned Actor; confirmed current work and delivered teaching precede Finish. */
 export function TransferExperience(props: C06PreparePresentation) {
@@ -27,9 +28,26 @@ export function TransferExperience(props: C06PreparePresentation) {
   const disabled = props.blocked || support;
   useWorkRecordMotion(surface, `${frame.stateId}/${panel}`, disabled);
   const { onPresented } = props;
+  const revealed = useRef("");
   useEffect(() => {
-    if (!props.blocked && !support)
+    if (props.blocked || support) return;
+    // A new step's heading lands below the lesson nav; returning from help
+    // only restores focus, without moving the page. The intro opens at the
+    // top with its masthead (the shell resets scroll); the completion recap
+    // brings itself into view.
+    if (
+      revealed.current === frame.stateId ||
+      frame.stateId === "ENTRY" ||
+      frame.stateId === "COMPLETE"
+    )
       heading.current?.focus({ preventScroll: true });
+    else
+      revealHeading(
+        heading.current,
+        typeof matchMedia === "function" &&
+          matchMedia("(prefers-reduced-motion: reduce)").matches,
+      );
+    revealed.current = frame.stateId;
   }, [frame.stateId, props.blocked, support]);
   useEffect(() => {
     if (support && dialog.current && !dialog.current.open)

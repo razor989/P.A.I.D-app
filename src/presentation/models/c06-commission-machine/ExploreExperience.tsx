@@ -9,6 +9,11 @@ import { exploreChapters } from "./explore-story";
 import styles from "./commission.module.css";
 import e from "./explore.module.css";
 import { LessonMasthead } from "../../navigation/public";
+import { revealHeading } from "../../activity/public";
+
+const prefersReducedMotion = () =>
+  typeof matchMedia === "function" &&
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function ExploreExperience(props: C06PreparePresentation) {
   const { onPresented } = props;
@@ -27,9 +32,11 @@ export function ExploreExperience(props: C06PreparePresentation) {
   const entry = state === "ENTRY";
   const checked = Boolean(frame.feedbackState);
   useEffect(() => {
-    heading.current?.focus({ preventScroll: true });
-    heading.current?.scrollIntoView?.({ block: "start" });
-  }, [state]);
+    // Below the lesson nav, and only scrolled when out of view: the intro
+    // keeps its masthead instead of opening part-way down.
+    if (entry) heading.current?.focus({ preventScroll: true });
+    else revealHeading(heading.current, prefersReducedMotion());
+  }, [state, entry]);
   useEffect(() => {
     if (support && help.current && !help.current.open) help.current.showModal();
     if (!support && help.current?.open) {

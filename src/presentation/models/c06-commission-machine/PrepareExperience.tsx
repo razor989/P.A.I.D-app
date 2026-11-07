@@ -11,6 +11,7 @@ import {
 import { useWorkRecordMotion } from "./use-commission-motion";
 import styles from "./commission.module.css";
 import { LessonMasthead } from "../../navigation/public";
+import { revealHeading } from "../../activity/public";
 
 /** A01: the Actor retains response, feedback, teaching and completion authority. */
 export function PrepareExperience(props: C06PreparePresentation) {
@@ -39,9 +40,18 @@ export function PrepareExperience(props: C06PreparePresentation) {
     !blocked &&
     !support &&
     frame.allowedLearnerIntents.some((item) => item === intent);
+  const revealed = useRef("");
   useEffect(() => {
-    if (!blocked && !support) heading.current?.focus({ preventScroll: true });
-  }, [frame.stateId, blocked, support, reading]);
+    if (blocked || support) return;
+    const step = `${frame.stateId}/${reading}`;
+    // A new step's heading lands below the lesson nav; returning from help
+    // only restores focus, without moving the page.
+    if (revealed.current === step)
+      heading.current?.focus({ preventScroll: true });
+    else if (!entry || reading) revealHeading(heading.current, reduced);
+    else heading.current?.focus({ preventScroll: true });
+    revealed.current = step;
+  }, [frame.stateId, blocked, support, reading, reduced, entry]);
   useEffect(() => {
     const dialog = help.current;
     if (!dialog) return;
