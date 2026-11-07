@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { C06CommissionProjection } from "./public";
 import { CommissionEvidence } from "./CommissionEvidence";
 import { MomentIllustration } from "./CommissionIllustrations";
+import { useStoryDock } from "../../activity/public";
 import styles from "./commission.module.css";
 
 const moments = [
@@ -94,6 +95,9 @@ export function CommissionObservation({
   useEffect(() => {
     if (time === end) setPlaying(false);
   }, [time]);
+  // Phones: the record stays pinned while the captions change beneath it.
+  const surface = useRef<HTMLDivElement>(null);
+  useStoryDock(surface, "[data-dock]", index * 3 + cue, reduced);
   function seek(value: number) {
     if (!blocked) {
       setPlaying(false);
@@ -102,7 +106,7 @@ export function CommissionObservation({
   }
   return (
     <>
-      <div className={styles.storySurface}>
+      <div ref={surface} className={styles.storySurface}>
         <div className={styles.observation}>
           <CommissionEvidence
             projection={projection}
@@ -129,6 +133,7 @@ export function CommissionObservation({
           role="group"
           aria-label="Sales story playback"
           data-playing={playing}
+          data-playback
         >
           <button
             className={styles.skipControl}
@@ -170,10 +175,11 @@ export function CommissionObservation({
             disabled={blocked}
             onClick={() => seek(0)}
           >
-            ↺ Restart
+            <span aria-hidden="true">↺</span>{" "}
+            <span className={styles.restartText}>Restart</span>
           </button>
           <label>
-            Story position
+            <span className={styles.positionLabel}>Story position</span>
             <input
               type="range"
               min="0"

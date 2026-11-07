@@ -263,63 +263,135 @@ export function ExploreRelationship({ kind }: { kind: string }) {
   );
 }
 
-export function PayPicture({
+/** The element each moment changes, by idea (stage) and moment (cue). It is
+ * ringed (and, with motion, eased in) so the learner sees what moved. */
+const changes: Partial<Record<number, readonly string[]>> = {
+  0: ["agreement", "salary", "rate"],
+  1: ["sales", "share", "relationship"],
+  2: ["sales", "commission", "total"],
+  3: ["sales", "commission", "total"],
+  4: ["agreement", "commission", "total"],
+  5: ["relationship", "total", "tally"],
+};
+
+/** The pay tally: one peso scale from ₱0 to ₱30,000, shared by every view so
+ * salary, commission and total keep the same lengths wherever they appear. */
+const scaleTop = 30000;
+const ticks = ["₱0", "₱10,000", "₱20,000", "₱30,000"];
+const amountOf = (value: Model["sales"] | undefined) =>
+  value?.kind === "KNOWN" ? Number(value.value.magnitude.toString()) : 0;
+const perMonth = (text: string) => text.replace(/ per month$/, "");
+const share = (value: number) =>
+  `${Math.max(0, Math.min(100, (value / scaleTop) * 100))}%`;
+
+export function PayTally({
   model,
   label,
-  revealed = 2,
+  salary = true,
+  commission = "shown",
+  total = true,
+  changed,
 }: {
   model: Model;
   label: string;
-  revealed?: number;
+  salary?: boolean;
+  commission?: "hidden" | "slot" | "shown";
+  total?: boolean;
+  changed?: string | undefined;
 }) {
-  const commission = model.commission?.resolution;
-  const magnitude =
-    commission?.kind === "KNOWN"
-      ? Number(commission.value.magnitude.toString())
-      : 0;
+  const salaryValue = amountOf(model.baseSalary ?? undefined);
+  const commissionValue = amountOf(model.commission?.resolution);
+  const parts = [
+    salary &&
+      `fixed salary ${model.baseSalary ? known(model.baseSalary) : "unknown"}`,
+    commission === "shown" && `commission ${output(model.commission)}`,
+    commission === "slot" && "commission still depends on sales",
+    total && `total ${output(model.totalCompensation)}`,
+  ].filter(Boolean);
   return (
-    <figure className={e.payPicture}>
+    <figure className={e.tally} data-changed={changed === "tally"}>
       <figcaption>
         {label}
-        <span>Monthly pay · one shared peso scale</span>
+        <span>Monthly pay · one peso scale</span>
       </figcaption>
       <div
-        className={e.payScale}
+        className={e.tallyTrack}
         role="img"
-        aria-label={`Fixed salary ${model.baseSalary ? known(model.baseSalary) : "unknown"}${revealed > 0 ? `; commission ${output(model.commission)}` : ""}`}
+        aria-label={
+          parts.length
+            ? `Monthly pay: ${parts.join("; ")}`
+            : "Monthly pay, not yet filled in"
+        }
       >
-        <div className={e.salaryPart} style={{ width: "50%" }}>
-          <span>Salary</span>
-        </div>
-        {revealed > 0 && (
-          <div
-            className={e.commissionPart}
-            style={{ width: `${(magnitude / 30000) * 100}%` }}
+        {salary && (
+          <span
+            className={e.salaryPart}
+            data-changed={changed === "salary"}
+            style={{ width: share(salaryValue) }}
           >
-            <span>Commission</span>
-          </div>
+            <b>Salary</b>
+          </span>
+        )}
+        {commission === "slot" && (
+          <span className={e.commissionSlot} data-changed={changed === "rate"}>
+            <b>Commission · depends on sales</b>
+          </span>
+        )}
+        {commission === "shown" && (
+          <span
+            className={e.commissionPart}
+            data-changed={changed === "commission"}
+            style={{ width: share(commissionValue) }}
+          >
+            <b>Commission</b>
+          </span>
+        )}
+        {!salary && commission === "hidden" && (
+          <span className={e.tallyEmpty}>Monthly pay</span>
         )}
       </div>
-      <div className={e.payLabels}>
-        <p>
-          <i className={e.salaryKey} />
-          Fixed salary
-          <strong>
-            {model.baseSalary ? known(model.baseSalary) : "Not yet shown"}
-          </strong>
-        </p>
-        {revealed > 0 && (
-          <p>
-            <i className={e.commissionKey} />
-            Commission<strong>{output(model.commission)}</strong>
-          </p>
-        )}
+      <div className={e.ruler} aria-hidden="true">
+        {ticks.map((tick, i) => (
+          <span key={tick} style={{ left: `${(i / 3) * 100}%` }}>
+            {tick}
+          </span>
+        ))}
       </div>
-      {revealed > 1 && (
-        <p className={e.totalLabel}>
-          Together <strong>{output(model.totalCompensation)}</strong> total
-          compensation
-        </p>
+      {(salary || commission !== "hidden") && (
+        <dl className={e.tallyValues}>
+          {salary && (
+            <div>
+              <dt>
+                <i className={e.salaryKey} />
+                Fixed salary
+              </dt>
+              <dd>
+                {model.baseSalary
+                  ? perMonth(known(model.baseSalary))
+                  : "Unknown"}
+              </dd>
+            </div>
+          )}
+          {commission !== "hidden" && (
+            <div>
+              <dt>
+                <i className={e.commissionKey} />
+                Commission
+              </dt>
+              <dd>
+                {commission === "shown"
+                  ? perMonth(output(model.commission))
+                  : "Depends on sales"}
+              </dd>
+            </div>
+          )}
+          {total && (
+            <div className={e.totalValue} data-changed={changed === "total"}>
+              <dt>Total pay</dt>
+              <dd>{perMonth(output(model.totalCompensation))}</dd>
+            </div>
+          )}
+        </dl>
       )}
     </figure>
   );
@@ -368,9 +440,10 @@ export function ExploreModel({
       copy: "Read the green salary and gold commission as two parts of compensation. Their combined length shows total pay on one peso scale. Do not add the sales record: it measures goods sold, not another payment to the representative.",
     },
   ];
-  const share = stage > 1 || (stage === 1 && cue > 0);
+  const shared = stage > 1 || (stage === 1 && cue > 0);
   const commission = stage > 3 || (stage >= 2 && cue > 0);
   const total = stage > 3 || (stage >= 2 && cue > 1);
+  const changed = changes[stage]?.[cue];
   return (
     <CommissionInspection
       facts={facts}
@@ -379,91 +452,114 @@ export function ExploreModel({
       diagram={(id) => <ExploreRelationship kind={id} />}
     >
       {(target) => (
-        <div className={e.model} data-stage={stage} data-cue={cue}>
-          <h3 className={e.srOnly}>Investigate the agreement and pay</h3>
-          <div className={e.agreement}>
-            <span className={styles.eyebrow}>One monthly agreement</span>
-            <strong>Salary + commission</strong>
-            <div>
-              {(stage > 0 || cue > 0) && (
-                <button {...target("base")} className={styles.factButton}>
-                  ₱15,000 salary · fixed
-                </button>
-              )}
-              {(stage > 0 || cue > 1) && (
-                <button {...target("rate")} className={styles.factButton}>
-                  3% of sales · fixed
-                </button>
-              )}
-            </div>
-          </div>
-          {stage >= 1 && (
-            <figure className={e.salesReference}>
-              <figcaption>
-                <button {...target("sales")} className={styles.factButton}>
-                  Sales reference
-                </button>
-                <strong>{known(m.sales)}</strong>
-              </figcaption>
-              <div
-                className={e.hundred}
-                role="img"
-                aria-label={
-                  share
-                    ? "Three highlighted shares of the intact 100-share sales reference"
-                    : "Intact sales reference divided into 100 equal shares"
-                }
-              >
-                {Array.from({ length: 100 }, (_, i) => (
-                  <span
-                    key={i}
-                    data-share={share && i < 3}
-                    style={{
-                      opacity:
-                        share && i < 3
-                          ? 0.35 + Math.min(1, progress * 2) * 0.65
-                          : 1,
-                    }}
-                  />
-                ))}
+        <>
+          <div className={e.model} data-stage={stage} data-cue={cue} data-dock>
+            <h3 className={e.srOnly}>Investigate the agreement and pay</h3>
+            <div className={e.agreement} data-changed={changed === "agreement"}>
+              <span className={styles.eyebrow}>One monthly agreement</span>
+              <strong>Salary + commission</strong>
+              <div>
+                {(stage > 0 || cue > 0) && (
+                  <button
+                    {...target("base")}
+                    className={styles.factButton}
+                    data-changed={changed === "salary"}
+                  >
+                    ₱15,000 salary · fixed
+                  </button>
+                )}
+                {(stage > 0 || cue > 1) && (
+                  <button
+                    {...target("rate")}
+                    className={styles.factButton}
+                    data-changed={changed === "rate"}
+                  >
+                    3% of sales · fixed
+                  </button>
+                )}
               </div>
-              <p>
-                {share
-                  ? "3 highlighted shares out of 100 · the sales record stays intact"
-                  : "The whole sales record—not salary—is our reference."}
+            </div>
+            {stage >= 1 && (
+              <figure
+                className={e.salesReference}
+                data-changed={changed === "sales"}
+              >
+                <figcaption>
+                  <button {...target("sales")} className={styles.factButton}>
+                    Sales reference
+                  </button>
+                  <strong>{known(m.sales)}</strong>
+                </figcaption>
+                <div
+                  className={e.hundred}
+                  data-changed={changed === "share"}
+                  role="img"
+                  aria-label={
+                    shared
+                      ? "Three highlighted shares of the intact 100-share sales reference"
+                      : "Intact sales reference divided into 100 equal shares"
+                  }
+                >
+                  {Array.from({ length: 100 }, (_, i) => (
+                    <span
+                      key={i}
+                      data-share={shared && i < 3}
+                      style={{
+                        opacity:
+                          shared && i < 3
+                            ? 0.35 + Math.min(1, progress * 2) * 0.65
+                            : 1,
+                        animationDelay: i < 3 ? `${i * 90}ms` : undefined,
+                      }}
+                    />
+                  ))}
+                </div>
+                <p>
+                  {shared
+                    ? "3 highlighted shares out of 100 · the sales record stays intact"
+                    : "The whole sales record—not salary—is our reference."}
+                </p>
+              </figure>
+            )}
+            {shared && (
+              <p
+                className={e.relationship}
+                data-changed={changed === "relationship"}
+              >
+                <button {...target("commission")} className={styles.factButton}>
+                  Commission
+                </button>{" "}
+                <span className={e.ruleText}>= sales × 0.03</span>
+                {commission && (
+                  <strong>
+                    {perMonth(known(m.sales))} × 0.03 ={" "}
+                    {perMonth(output(m.commission))}
+                  </strong>
+                )}
               </p>
-            </figure>
-          )}
-          {share && (
-            <p className={e.relationship}>
-              <button {...target("commission")} className={styles.factButton}>
-                Commission
-              </button>{" "}
-              = sales × 0.03
-              {commission && (
-                <strong>
-                  {known(m.sales)} × 0.03 = {output(m.commission)}
-                </strong>
-              )}
-            </p>
-          )}
-          {stage >= 2 && (
-            <PayPicture
-              key={known(m.sales)}
+            )}
+            <PayTally
               model={m}
               label="From the agreement to monthly pay"
-              revealed={total ? 2 : commission ? 1 : 0}
+              salary={stage > 0 || cue > 0}
+              commission={
+                commission ? "shown" : stage > 0 || cue > 1 ? "slot" : "hidden"
+              }
+              total={total}
+              changed={changed}
             />
-          )}
-          {total && (
-            <button {...target("total")} className={styles.factButton}>
-              Why add the salary afterward?
-            </button>
-          )}
-          <p className={e.inspectHint}>
-            Hover, focus or tap an underlined part to investigate.
-          </p>
-        </div>
+          </div>
+          <div className={e.modelFoot}>
+            {total && (
+              <button {...target("total")} className={styles.factButton}>
+                Why add the salary afterward?
+              </button>
+            )}
+            <p className={e.inspectHint}>
+              Hover, focus or tap an underlined part to investigate.
+            </p>
+          </div>
+        </>
       )}
     </CommissionInspection>
   );
@@ -472,13 +568,17 @@ export function ExploreModel({
 export function ExploreComparison({
   projection,
   cue = 2,
+  marked = false,
 }: {
   projection: C06CommissionProjection;
   cue?: number;
+  /** Ring what the current moment changed (the story only, not the recap). */
+  marked?: boolean;
 }) {
   if (!projection.comparison) return null;
   const [a, b] = projection.comparison;
   if (!a || !b) return null;
+  const changed = marked ? changes[4]?.[cue] : undefined;
   const rows = [
     ["Arrangement", "Fixed", "Base plus commission", "Base plus commission"],
     [
@@ -499,20 +599,22 @@ export function ExploreComparison({
   ];
   return (
     <section className={e.comparison} aria-label="Compare the two situations">
-      <p className={e.sharedAgreement}>
-        One representative · same agreement · ₱15,000 salary + 3% of sales
-      </p>
-      <div className={e.paired}>
-        <PayPicture
-          model={a}
-          label="Situation A"
-          revealed={cue === 0 ? 0 : 2}
-        />
-        <PayPicture
-          model={b}
-          label="Situation B"
-          revealed={cue === 0 ? 0 : 2}
-        />
+      <div className={e.comparisonDock} data-dock>
+        <p className={e.sharedAgreement} data-changed={changed === "agreement"}>
+          One representative · same agreement · ₱15,000 salary + 3% of sales
+        </p>
+        {[[a, "Situation A"] as const, [b, "Situation B"] as const].map(
+          ([model, label]) => (
+            <PayTally
+              key={label}
+              model={model}
+              label={label}
+              commission={cue === 0 ? "slot" : "shown"}
+              total={cue > 0}
+              changed={changed}
+            />
+          ),
+        )}
       </div>
       {cue > 0 && (
         <p className={e.causalNote}>

@@ -10,7 +10,7 @@ import { useWorkRecordMotion } from "./use-work-record-motion";
 import base from "./work-record.module.css";
 import styles from "./transfer.module.css";
 import { LessonMasthead } from "../../navigation/public";
-import { revealFeedback, revealHeading } from "./reveal";
+import { revealFeedback, revealHeading } from "../../activity/public";
 
 export function TransferWorkRecord(props: C03PreparePresentation) {
   const { projection, blocked, onFeedbackPresented } = props;

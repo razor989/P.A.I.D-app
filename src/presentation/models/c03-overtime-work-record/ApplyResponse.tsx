@@ -5,7 +5,7 @@ import base from "./work-record.module.css";
 import styles from "./apply.module.css";
 import { ExploreGlyph } from "./ExploreGlyph";
 import { pesos } from "./WorkEvidence";
-import { revealHeading } from "./reveal";
+import { revealHeading } from "../../activity/public";
 import { usePrefersReducedMotion } from "../../accessibility/public";
 
 const labels = {

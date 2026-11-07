@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { C06PreparePresentation } from "./public";
 import { ExploreComparison, ExploreModel } from "./ExploreModel";
 import { exploreChapters, exploreMoment } from "./explore-story";
 import { ExploreNarration } from "./ExploreNarration";
 import { MomentThumbnail } from "./MomentThumbnail";
+import { useStoryDock } from "../../activity/public";
 import styles from "./commission.module.css";
 import e from "./explore.module.css";
 
@@ -65,9 +66,18 @@ export function ExploreStory({
       setTime(value);
     }
   }
+  // Stepping lands on a moment’s finished state, so the change it describes
+  // is visible at once (CSS eases it in). Only scrubbing shows in-betweens.
+  const settle = (i: number) => {
+    setFull(false);
+    seek((starts[i + 1] ?? end) - 1);
+  };
+  const story = useRef<HTMLElement>(null);
+  useStoryDock(story, "[data-dock]", cue, reduced);
   const switcher = props.projection.frame.modelSelectionControl;
   return (
     <section
+      ref={story}
       className={e.story}
       aria-label="Commission explanation"
       data-playing={playing}
@@ -111,6 +121,7 @@ export function ExploreStory({
             <ExploreComparison
               projection={props.projection}
               cue={full || reduced ? 2 : cue}
+              marked
             />
           ) : (
             <ExploreModel
@@ -145,23 +156,33 @@ export function ExploreStory({
               Salary and rate are unchanged.
             </p>
           )}
+          {!full && !reduced && cue < 2 && (
+            <div className={e.upcoming}>
+              <p>Still to come</p>
+              <ol start={cue + 2}>
+                {chapter.moments.slice(cue + 1).map(([label]) => (
+                  <li key={label}>{label}</li>
+                ))}
+              </ol>
+            </div>
+          )}
         </div>
       </div>
       <div
         className={styles.playback}
         role="group"
         aria-label="Commission explanation playback"
+        data-playback
       >
         <button
           className={styles.skipControl}
           aria-label="Previous moment"
           disabled={disabled || cue === 0}
-          onClick={() => {
-            setFull(false);
-            seek(starts[cue - 1]!);
-          }}
+          onClick={() => settle(cue - 1)}
         >
-          ‹
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m14 6-6 6 6 6" />
+          </svg>
         </button>
         <button
           className={styles.playControl}
@@ -169,22 +190,27 @@ export function ExploreStory({
           disabled={disabled}
           onClick={() => {
             setFull(false);
-            if (time === end) setTime(0);
+            if (time >= end - 1) setTime(0);
             setPlaying(!playing);
           }}
         >
-          {playing ? "Ⅱ" : "▶"}
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            {playing ? (
+              <path d="M8 6h3v12H8zM15 6h3v12h-3z" />
+            ) : (
+              <path d="m9 5 11 7-11 7z" />
+            )}
+          </svg>
         </button>
         <button
           className={styles.skipControl}
           aria-label="Next moment"
           disabled={disabled || cue === 2}
-          onClick={() => {
-            setFull(false);
-            seek(starts[cue + 1]!);
-          }}
+          onClick={() => settle(cue + 1)}
         >
-          ›
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m10 6 6 6-6 6" />
+          </svg>
         </button>
         <button
           className={styles.restartControl}
@@ -194,10 +220,11 @@ export function ExploreStory({
             seek(0);
           }}
         >
-          ↺ Restart
+          <span aria-hidden="true">↺</span>{" "}
+          <span className={e.restartText}>Restart</span>
         </button>
         <label>
-          Explanation position
+          <span className={e.positionLabel}>Explanation position</span>
           <input
             type="range"
             min="0"
@@ -233,10 +260,7 @@ export function ExploreStory({
             disabled={disabled}
             aria-pressed={cue === i}
             aria-current={cue === i ? "step" : undefined}
-            onClick={() => {
-              setFull(false);
-              seek(starts[i]!);
-            }}
+            onClick={() => settle(i)}
           >
             <MomentThumbnail stage={stage} moment={i} />
             <span className={styles.chapterNumber} aria-hidden="true">

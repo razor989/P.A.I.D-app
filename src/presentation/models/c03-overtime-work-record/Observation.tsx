@@ -7,7 +7,7 @@ import {
   projectWorkRecordStory,
 } from "./work-record-story";
 import styles from "./work-record.module.css";
-import { useStoryDock } from "./use-story-dock";
+import { useStoryDock } from "../../activity/public";
 
 /** Accepted C04 continuous-clock transport, adapted locally without Actor state. */
 export function Observation({

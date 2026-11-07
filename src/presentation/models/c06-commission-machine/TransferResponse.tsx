@@ -1,11 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ExactDecimal, quantity } from "@/core/public";
-import type { LearnerResponse } from "@/core/public";
+import type { LearnerResponse, Quantity } from "@/core/public";
+import { displayQuantity } from "./CommissionMachine";
 import type { C06PreparePresentation } from "./public";
 import { parseExploreNumber } from "./explore-input";
 import { TransferRecord } from "./TransferRecord";
 import base from "./commission.module.css";
 import t from "./transfer.module.css";
+import { revealHeading } from "../../activity/public";
 
 const labels = [
   "Read the agreement",
@@ -13,6 +15,16 @@ const labels = [
   "Determine total pay",
 ];
 /** Local panels organize reading; the production Actor checks one full response. */
+const reduceMotion = () =>
+  typeof matchMedia === "function" &&
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** A given from the record, as the model shows it. */
+const given = (value: { kind: string; value?: Quantity } | null | undefined) =>
+  value?.kind === "KNOWN" && value.value
+    ? displayQuantity(value.value).replace(/ \D+$/, "")
+    : "—";
+
 export function TransferResponse(
   props: C06PreparePresentation & {
     panel: number;
@@ -26,7 +38,7 @@ export function TransferResponse(
   useEffect(() => {
     if (!props.blocked) heading.current?.focus({ preventScroll: true });
   }, [panel, props.blocked]);
-  const { frame, response } = props.projection;
+  const { frame, response, model } = props.projection;
   const parts = response?.kind === "COMPOSITE" ? response.parts : [];
   const editable =
     !props.blocked && frame.allowedLearnerIntents.includes("RESPONSE_CHANGED");
@@ -50,9 +62,8 @@ export function TransferResponse(
   }
   function move(next: number) {
     setPanel(next);
-    requestAnimationFrame(() =>
-      heading.current?.focus({ preventScroll: true }),
-    );
+    // The new panel’s heading lands below the floating lesson nav.
+    requestAnimationFrame(() => revealHeading(heading.current, reduceMotion()));
   }
   function field(key: "commission" | "total", label: string) {
     const part = parts.find((item) => item.key === key)?.response;
@@ -138,6 +149,14 @@ export function TransferResponse(
             ][panel]
           }
         </h3>
+        {panel > 0 && (
+          // Phones only: the record’s givens stay in sight beside the
+          // question while the model is scrolled above. Visual echo only.
+          <p className={t.recordEcho} aria-hidden="true">
+            Sales {given(model.sales)} × {given(model.commissionRate)}
+            {panel === 2 && <> · salary {given(model.baseSalary)}</>}
+          </p>
+        )}
         {panel === 0 ? (
           <>
             <p>

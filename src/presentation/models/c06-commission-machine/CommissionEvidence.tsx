@@ -51,6 +51,7 @@ export function CommissionEvidence({
         <section
           className={styles.record}
           aria-label="The workers’ sales and agreements"
+          data-dock
         >
           <SalesIllustration compact />
           <dl className={styles.facts}>

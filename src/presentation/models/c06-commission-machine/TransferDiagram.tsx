@@ -38,6 +38,7 @@ export function TransferDiagram({
   rate = "3%",
   salary = "₱15,000",
   straight = false,
+  entered = {},
 }: {
   solved?: boolean;
   reference?: boolean;
@@ -49,6 +50,8 @@ export function TransferDiagram({
   rate?: string;
   salary?: string;
   straight?: boolean;
+  /** The learner’s own amounts, shown in their slots before checking. */
+  entered?: { commission?: string | undefined; total?: string | undefined };
 }) {
   const [selected, setSelected] = useState<Part | null>(null);
   const id = useId();
@@ -145,8 +148,14 @@ export function TransferDiagram({
       {node(
         "commission",
         "COMMISSION",
-        solved ? commission : reference ? "Sales × rate" : "Your result",
-        "The sales-linked payment",
+        solved
+          ? commission
+          : reference
+            ? "Sales × rate"
+            : (entered.commission ?? "Your result"),
+        !solved && !reference && entered.commission
+          ? "Your entry · not yet checked"
+          : "The sales-linked payment",
       )}
       {!straight && (
         <>
@@ -168,8 +177,14 @@ export function TransferDiagram({
           {node(
             "total",
             "TOTAL COMPENSATION",
-            solved ? total : reference ? "Salary + commission" : "Your result",
-            "For this agreement only",
+            solved
+              ? total
+              : reference
+                ? "Salary + commission"
+                : (entered.total ?? "Your result"),
+            !solved && !reference && entered.total
+              ? "Your entry · not yet checked"
+              : "For this agreement only",
           )}
         </>
       )}

@@ -5,7 +5,7 @@ import { WorkEvidence } from "./WorkEvidence";
 import { Observation } from "./Observation";
 import { NicoIllustration } from "./NicoIllustration";
 import { useWorkRecordMotion } from "./use-work-record-motion";
-import { revealHeading } from "./reveal";
+import { revealHeading } from "../../activity/public";
 import styles from "./work-record.module.css";
 import { LessonMasthead } from "../../navigation/public";
 

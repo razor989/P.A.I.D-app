@@ -20,6 +20,15 @@ export function TransferEvidence({
     value?.resolution.kind === "KNOWN"
       ? `₱${Number(value.resolution.value.magnitude.toString()).toLocaleString("en-PH")}`
       : "Your result";
+  // The learner’s own amounts fill their slots (never the expected ones).
+  const parts =
+    projection.response?.kind === "COMPOSITE" ? projection.response.parts : [];
+  const entry = (key: string) => {
+    const part = parts.find((item) => item.key === key)?.response;
+    return part?.kind === "EXACT_QUANTITY"
+      ? `₱${Number(part.value.magnitude.toString()).toLocaleString("en-PH")}`
+      : undefined;
+  };
   return (
     <section
       className={t.evidence}
@@ -57,6 +66,7 @@ export function TransferEvidence({
         }
         commission={amount(model.commission)}
         total={amount(model.totalCompensation)}
+        entered={{ commission: entry("commission"), total: entry("total") }}
       />
       <dl className={t.visuallyHidden}>
         <div>

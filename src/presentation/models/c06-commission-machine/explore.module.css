@@ -182,7 +182,7 @@
   place-items: center;
   width: 64px;
   height: 64px;
-  margin: 0 auto 24px;
+  margin: 0 0 24px 8px;
   border: 1px solid #879a6b;
   border-radius: 50%;
   background: #dfe7d2;
@@ -373,7 +373,8 @@
   align-items: center;
 }
 .salesReference figcaption strong {
-  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-family: Georgia, "Times New Roman", serif;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 .hundred {
   display: grid;
@@ -390,7 +391,6 @@
 .hundred span[data-share="true"] {
   background: #d7b25e;
   border-color: #987735;
-  animation: share-reveal 1000ms ease-out;
 }
 .salesReference p,
 .inspectHint,
@@ -405,29 +405,11 @@
 }
 .relationship strong {
   display: block;
-  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-family: Georgia, "Times New Roman", serif;
+  font-variant-numeric: lining-nums tabular-nums;
   margin-top: 12px;
   font-size: 14px;
   line-height: 1.8;
-}
-.payPicture {
-  margin: 20px 0;
-  min-width: 0;
-}
-.payPicture figcaption {
-  font-weight: 700;
-}
-.payPicture figcaption > span {
-  display: block;
-  font-weight: 400;
-  font-size: 12px;
-  color: #52645a;
-  margin: 6px 0 14px;
-}
-.payScale {
-  display: flex;
-  min-height: 44px;
-  align-items: stretch;
 }
 .salaryPart,
 .commissionPart {
@@ -448,27 +430,6 @@
   color: #203c33;
   border-radius: 0 5px 5px 0;
 }
-.payScale span {
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 5px;
-}
-.payLabels {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-.payLabels p {
-  font-size: 12px;
-  margin: 12px 0 4px;
-}
-.payLabels strong {
-  display: block;
-  font-family: var(--font-mono, "IBM Plex Mono", monospace);
-  font-size: 15px;
-  margin-top: 4px;
-}
 .salaryKey,
 .commissionKey {
   display: inline-block;
@@ -481,14 +442,6 @@
 }
 .commissionKey {
   background: #d7b25e;
-}
-.totalLabel {
-  border-top: 1px solid #b8c4a6;
-  padding-top: 12px;
-  font-size: 13px;
-}
-.totalLabel strong {
-  font-size: 19px;
 }
 .narration {
   min-width: 0;
@@ -591,12 +544,6 @@
   font-weight: 600;
   font-size: 14px;
 }
-.comparisonStory .paired {
-  grid-template-columns: 1fr;
-}
-.comparisonStory .payLabels {
-  grid-template-columns: 1fr 1fr;
-}
 .comparisonStory .narration {
   max-width: 82ch;
 }
@@ -609,18 +556,6 @@
   border-radius: 8px;
   padding: 14px 18px;
   font-size: 14px;
-}
-.paired {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 28px;
-}
-.paired .payPicture {
-  padding: 18px;
-  background: #f6f3e7;
-  border-radius: 12px;
-  border: 1px solid #bac6a8;
-  margin: 0;
 }
 .causalNote {
   border-left: 3px solid #b19049;
@@ -655,7 +590,8 @@
   width: 34%;
 }
 .comparisonTable td {
-  font-family: var(--font-mono, "IBM Plex Mono", monospace);
+  font-family: Georgia, "Times New Roman", serif;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 .comparisonTable small {
   display: block;
@@ -848,16 +784,6 @@
     padding: 10px 6px;
     font-size: 12px;
   }
-  .paired {
-    gap: 12px;
-  }
-  .paired .payPicture {
-    padding: 12px;
-  }
-  .payLabels {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
   .comparisonTable th,
   .comparisonTable td {
     padding: 10px 8px;
@@ -899,15 +825,6 @@
   .choice > span {
     grid-column: 2;
   }
-  .paired {
-    grid-template-columns: 1fr;
-  }
-  .payLabels {
-    grid-template-columns: 1fr 1fr;
-  }
-  .payScale span {
-    font-size: 10px;
-  }
   .storyHeading {
     flex-wrap: wrap;
   }
@@ -918,5 +835,550 @@
   .workshop *::after {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* ── The sales counter (C06 batch) ──
+   One persistent pay tally on a shared ₱0–₱30,000 scale: the fixed salary,
+   then a hatched commission slot until commission is resolved, then the
+   total. The element a moment changes is ringed; with motion it eases in. */
+.tally {
+  margin: 20px 0 0;
+  min-width: 0;
+}
+.tally figcaption {
+  font-weight: 700;
+}
+.tally figcaption > span {
+  display: block;
+  margin: 4px 0 10px;
+  font-weight: 400;
+  font-size: 12px;
+  color: #52645a;
+}
+.tallyTrack {
+  position: relative;
+  display: flex;
+  min-height: 40px;
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, #c9d2b9 1px, transparent 1px) 0 0 / 33.333% 100%,
+    #eef1e4;
+  box-shadow: inset 0 0 0 1px #c3cdb2;
+}
+.tallyTrack b {
+  overflow: hidden;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.commissionPart {
+  transition: width 450ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.commissionSlot {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  color: #71531d;
+  background: repeating-linear-gradient(
+    135deg,
+    #f3e7c6 0 6px,
+    #fbf5e4 6px 12px
+  );
+  border: 1px dashed #b28248;
+  border-radius: 0 5px 5px 0;
+}
+.tallyEmpty {
+  align-self: center;
+  padding: 0 12px;
+  color: #6b7b6f;
+  font-size: 12px;
+}
+.ruler {
+  position: relative;
+  height: 18px;
+  margin-top: 4px;
+  color: #52645a;
+  font-size: 11px;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.ruler span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.ruler span:first-child {
+  transform: none;
+}
+.ruler span:last-child {
+  transform: translateX(-100%);
+}
+.tallyValues {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 10px 0 0;
+}
+.tallyValues dt {
+  font-size: 12px;
+}
+.tallyValues dd {
+  margin: 3px 0 0;
+  font:
+    600 17px/1.2 Georgia,
+    "Times New Roman",
+    serif;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+.tallyValues .totalValue {
+  margin-left: auto;
+  text-align: right;
+}
+.tallyValues .totalValue dd {
+  font-size: 21px;
+}
+.comparisonDock .tally + .tally {
+  margin-top: 16px;
+}
+.comparisonDock .tally {
+  padding: 14px 16px;
+  background: #f6f3e7;
+  border: 1px solid #bac6a8;
+  border-radius: 12px;
+}
+.sharedAgreement {
+  margin: 0;
+}
+.comparisonDock {
+  display: grid;
+  gap: 12px;
+}
+
+.modelFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 12px;
+}
+.modelFoot .inspectHint {
+  margin: 0;
+}
+
+/* What this moment changed. The ring stays (it is the reduced-motion cue);
+   with motion it also draws in. */
+.model [data-changed="true"],
+.comparisonDock [data-changed="true"] {
+  outline: 2px solid #b28248;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .model [data-changed="true"],
+  .comparisonDock [data-changed="true"] {
+    animation: changed-ring 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  .hundred span[data-share="true"] {
+    animation: share-reveal 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+@keyframes changed-ring {
+  from {
+    outline-color: transparent;
+    outline-offset: 10px;
+  }
+}
+
+/* The caption column lists what is still to come in this idea. */
+.upcoming {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px dashed #c7d0b8;
+  color: #6b7b6f;
+}
+.upcoming p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.upcoming ol {
+  margin: 0;
+  padding-left: 22px;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+/* ── Phone stage: the model dock ──
+   One tree. On a narrow stage the instrument’s wrappers dissolve so the
+   model itself can stay pinned under the floating lesson nav while the
+   captions scroll beneath it and the playback bar holds the foot. */
+.story {
+  container: c06-stage / inline-size;
+}
+@media (orientation: portrait), (min-height: 30.01rem) {
+  @container c06-stage (max-width: 45rem) {
+    .storyLayout,
+    .comparisonStory {
+      display: block;
+    }
+    .instrument,
+    .instrument > div,
+    .instrument [data-inspection-model],
+    .instrument .comparison {
+      display: contents;
+    }
+    .model,
+    .comparisonDock {
+      position: sticky;
+      top: calc(
+        var(--lesson-nav-scroll, 5.5rem) + env(safe-area-inset-top, 0px)
+      );
+      z-index: 3;
+      padding: 10px 12px 12px;
+      border-radius: 0 0 12px 12px;
+      box-shadow: 0 12px 16px -14px #29332699;
+    }
+    .comparisonDock {
+      background: #f6f3e7;
+      border: 1px solid #bac6a8;
+      gap: 6px;
+    }
+    .model .agreement > span,
+    .model .agreement > strong,
+    .salesReference p,
+    .model .tally figcaption,
+    .model .ruler {
+      display: none;
+    }
+    .workshop .model button {
+      min-height: 32px;
+      padding-bottom: 2px;
+      font-size: 14px;
+    }
+    .salesReference figcaption {
+      font-size: 14px;
+    }
+    .salesReference figcaption strong {
+      font-size: 15px;
+    }
+    .model .hundred span {
+      aspect-ratio: auto;
+      height: 9px;
+      border-radius: 1px;
+    }
+    .modelFoot {
+      margin: 12px 0 0;
+    }
+    .agreement {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 14px;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
+    }
+    .agreement > strong {
+      margin: 0;
+      font-size: 15px;
+    }
+    .agreement > div {
+      gap: 4px 14px;
+    }
+    .hundred {
+      grid-template-columns: repeat(50, minmax(0, 1fr));
+      margin: 6px 0 2px;
+      gap: 2px 1px;
+    }
+    .relationship {
+      margin: 4px 0;
+      padding: 4px 0;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .relationship strong {
+      margin: 2px 0 0;
+      font-size: 14px;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+    .tally {
+      margin-top: 8px;
+    }
+    .tallyTrack {
+      min-height: 26px;
+    }
+    .tallyTrack b {
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+    .tallyValues {
+      gap: 4px 16px;
+      margin-top: 4px;
+    }
+    .tallyValues dd {
+      font-size: 15px;
+    }
+    .tallyValues .totalValue dd {
+      font-size: 17px;
+    }
+    .comparisonDock .tally {
+      margin: 0;
+      padding: 0;
+      background: none;
+      border: 0;
+    }
+    .comparisonDock .tally figcaption > span,
+    .comparisonDock .ruler {
+      display: none;
+    }
+    .comparisonDock .sharedAgreement {
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+    .comparisonDock .tally + .tally {
+      margin-top: 2px;
+    }
+    .narration {
+      padding-top: 16px;
+    }
+    .narration .passage {
+      scroll-margin-top: calc(var(--dock-h, 0px) + 12px);
+      scroll-margin-bottom: calc(var(--playback-h, 0px) + 12px);
+    }
+    .story [data-playback] {
+      position: sticky;
+      bottom: 0;
+      z-index: 3;
+      flex-wrap: nowrap;
+      gap: 8px;
+      padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    }
+    .story [data-playback] label {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .story [data-playback] button:first-child,
+    .story [data-playback] button:nth-child(3) {
+      width: 44px;
+      height: 44px;
+    }
+  }
+}
+
+/* Short landscape phones: model and captions side by side, the model pinned
+   in the left column, playback at the foot of the captions. */
+@media (orientation: landscape) and (max-height: 30rem) {
+  .story {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 14px;
+  }
+  .story > * {
+    grid-column: 1 / -1;
+  }
+  .story > .storyLayout,
+  .story > .comparisonStory {
+    display: contents;
+  }
+  .story .instrument {
+    grid-column: 1;
+    grid-row: span 2;
+  }
+  .instrument > div,
+  .instrument [data-inspection-model],
+  .instrument .comparison {
+    display: contents;
+  }
+  .model,
+  .comparisonDock {
+    position: sticky;
+    top: calc(var(--lesson-nav-scroll, 5.5rem) + 4px);
+    z-index: 3;
+    box-shadow: 0 12px 16px -14px #29332699;
+  }
+  .comparisonDock {
+    padding: 8px 10px;
+    background: #f6f3e7;
+    border: 1px solid #bac6a8;
+    border-radius: 12px;
+    gap: 4px;
+  }
+  .comparisonDock .tally {
+    margin: 0;
+    padding: 0;
+    background: none;
+    border: 0;
+  }
+  .comparisonDock .tally figcaption {
+    margin-bottom: 2px;
+    font-size: 13px;
+    line-height: 1.2;
+  }
+  .comparisonDock .tallyValues {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  /* Situation B reuses Situation A’s legend; its words stay for assistive tech. */
+  .comparisonDock .tally + .tally dt {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .comparisonDock .tally figcaption > span,
+  .comparisonDock .ruler {
+    display: none;
+  }
+  .comparisonDock .sharedAgreement {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  .tallyValues {
+    display: grid;
+    grid-auto-flow: column;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .tallyValues .totalValue {
+    margin: 0;
+  }
+  .tallyValues dt {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .tallyValues dd {
+    margin: 1px 0 0;
+  }
+  .salaryKey,
+  .commissionKey {
+    width: 8px;
+    height: 8px;
+    margin-right: 3px;
+  }
+  .comparisonDock .tally + .tally {
+    margin-top: 2px;
+  }
+  .tallyTrack b {
+    padding: 3px 6px;
+    font-size: 11px;
+  }
+  .story .narration {
+    grid-column: 2;
+  }
+  .story > [data-playback] {
+    grid-column: 2;
+    align-self: end;
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    flex-wrap: nowrap;
+    gap: 6px;
+    padding: 6px 10px;
+  }
+  .story > [data-playback] label {
+    flex: 1 1 3.5rem;
+    min-width: 3.5rem;
+  }
+  .model {
+    padding: 10px 12px;
+  }
+  .model .agreement > span,
+  .model .agreement > strong,
+  .salesReference p,
+  .model .tally figcaption,
+  .model .ruler {
+    display: none;
+  }
+  .workshop .model button {
+    min-height: 28px;
+    padding-bottom: 2px;
+    font-size: 12px;
+  }
+  .agreement > div {
+    gap: 2px 10px;
+  }
+  .salesReference figcaption {
+    font-size: 13px;
+  }
+  .model .hundred span {
+    aspect-ratio: auto;
+    height: 7px;
+    border-radius: 1px;
+  }
+  .agreement {
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+  }
+  .agreement > strong {
+    margin: 0 0 4px;
+    font-size: 15px;
+  }
+  .hundred {
+    grid-template-columns: repeat(50, minmax(0, 1fr));
+    margin: 4px 0;
+    gap: 2px 1px;
+  }
+  .relationship {
+    margin: 4px 0;
+    padding: 4px 0;
+    font-size: 13px;
+  }
+  .relationship strong {
+    margin-top: 2px;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+  /* Once worked, the general rule gives way to the worked line. */
+  .relationship:has(strong) .ruleText {
+    display: none;
+  }
+  .relationship:has(strong) strong {
+    display: inline;
+    margin: 0 0 0 4px;
+    font-size: 12px;
+  }
+  .tally {
+    margin-top: 6px;
+  }
+  .tallyTrack {
+    min-height: 22px;
+  }
+  .tallyValues dd,
+  .tallyValues .totalValue dd {
+    font-size: 14px;
+  }
+  .narration .passage {
+    scroll-margin-top: 8px;
+    scroll-margin-bottom: calc(var(--playback-h, 0px) + 8px);
+  }
+}
+
+/* The restart glyph is sized by .restartControl span; its word is not. */
+.story .restartText {
+  font-size: inherit;
+  vertical-align: baseline;
+}
+
+/* On both phone layouts the playback words are kept for assistive tech
+   only; the controls carry their own icons. */
+@media (max-width: 45rem), (orientation: landscape) and (max-height: 30rem) {
+  .restartText,
+  .positionLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }

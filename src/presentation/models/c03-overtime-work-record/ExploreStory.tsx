@@ -7,7 +7,7 @@ import { ExploreGlyph } from "./ExploreGlyph";
 import { exploreBeatDuration, projectExploreStory } from "./explore-story";
 import styles from "./work-record.module.css";
 import explore from "./explore.module.css";
-import { useStoryDock } from "./use-story-dock";
+import { useStoryDock } from "../../activity/public";
 
 const momentTitles = [
   "Start",

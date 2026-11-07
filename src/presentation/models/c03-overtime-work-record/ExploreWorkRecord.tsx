@@ -10,7 +10,7 @@ import { useWorkRecordMotion } from "./use-work-record-motion";
 import styles from "./work-record.module.css";
 import explore from "./explore.module.css";
 import { LessonMasthead } from "../../navigation/public";
-import { revealFeedback, revealHeading } from "./reveal";
+import { revealFeedback, revealHeading } from "../../activity/public";
 
 export function ExploreWorkRecord(props: C03PreparePresentation) {
   const { projection, blocked, onFeedbackPresented } = props;

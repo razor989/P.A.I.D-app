@@ -157,7 +157,7 @@ export function ExploreExperience(props: C06PreparePresentation) {
                 state === "EXP-06" ? "Explain my comparison →" : "Next idea →",
                 true,
               )}
-              {action("REVISE", "Revise my comparison", true)}
+              {action("REVISE", "Revise my comparison")}
               {action("FINISH_ACTIVITY", "Finish Explore and Learn", true)}
             </footer>
           </>

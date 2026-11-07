@@ -3,6 +3,12 @@ import { ExploreRelationship } from "./ExploreModel";
 import styles from "./commission.module.css";
 import e from "./explore.module.css";
 
+/** The learner’s amount, grouped as every other peso value is (₱9,000). */
+const grouped = (amount: string) => {
+  const [whole, fraction] = amount.split(".");
+  return `${whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${fraction ? `.${fraction}` : ""}`;
+};
+
 export function ExploreWorkspace({
   role,
   projection,
@@ -80,8 +86,8 @@ export function ExploreWorkspace({
       {total && commission?.kind === "EXACT_QUANTITY" && (
         <p>
           Your commission response:{" "}
-          <strong>₱{commission.value.magnitude.toString()}</strong>. Add the
-          separate salary—not the sales record.
+          <strong>₱{grouped(commission.value.magnitude.toString())}</strong>.
+          Add the separate salary—not the sales record.
         </p>
       )}
       {guided && (

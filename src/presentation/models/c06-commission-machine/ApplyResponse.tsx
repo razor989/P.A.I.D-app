@@ -1,11 +1,14 @@
 import { useId, useRef, useState } from "react";
 import { ExactDecimal, quantity } from "@/core/public";
+import type { Quantity } from "@/core/public";
+import { displayQuantity } from "./CommissionMachine";
 import type { C06PreparePresentation } from "./public";
 import { ApplyEvidence } from "./ApplyEvidence";
 import { ApplyRecord } from "./ApplyRecord";
 import { parseExploreNumber } from "./explore-input";
 import styles from "./commission.module.css";
 import a from "./apply.module.css";
+import { revealHeading } from "../../activity/public";
 
 const panels = [
   "Read the agreement",
@@ -27,6 +30,16 @@ const fields = [
 ] as const;
 
 /** Reading panels are not assessment gates. One independent composite, one Actor check. */
+const reduceMotion = () =>
+  typeof matchMedia === "function" &&
+  matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** A given from the record, as the model shows it. */
+const given = (value: { kind: string; value?: Quantity } | null | undefined) =>
+  value?.kind === "KNOWN" && value.value
+    ? displayQuantity(value.value).replace(/ \D+$/, "")
+    : "—";
+
 export function ApplyResponse(props: C06PreparePresentation) {
   const id = useId();
   const [panel, setPanel] = useState(0);
@@ -41,7 +54,8 @@ export function ApplyResponse(props: C06PreparePresentation) {
   const blocked = props.blocked || Boolean(props.projection.frame.review);
   function move(next: number) {
     setPanel(next);
-    requestAnimationFrame(() => heading.current?.focus());
+    // The new panel’s heading lands below the floating lesson nav.
+    requestAnimationFrame(() => revealHeading(heading.current, reduceMotion()));
   }
   if (!editable) return <ApplyRecord projection={props.projection} />;
   function choice(role: string) {
@@ -176,6 +190,14 @@ export function ApplyResponse(props: C06PreparePresentation) {
           <h3 ref={heading} tabIndex={-1}>
             {panels[panel]}
           </h3>
+          {panel === 1 && (
+            // Phones only: the record’s givens stay in sight beside the
+            // inputs while the record is scrolled above. Visual echo only.
+            <p className={a.recordEcho} aria-hidden="true">
+              Sale {given(props.projection.model.sales)} · rate{" "}
+              {given(props.projection.model.commissionRate)}
+            </p>
+          )}
           {panel === 0 && (
             <>
               <p>

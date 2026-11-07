@@ -117,7 +117,14 @@ export function ApplyExperience(props: C06PreparePresentation) {
           </section>
         ) : (
           <>
-            <header key={frame.stateId} className={a.heading}>
+            {/* At the recap, the recap’s own title leads; this heading stays
+                for assistive tech and as the focus target. */}
+            <header
+              key={frame.stateId}
+              className={
+                complete ? `${a.heading} ${a.headingQuiet}` : a.heading
+              }
+            >
               <p className={styles.eyebrow}>
                 03 / Apply ·{" "}
                 {complete

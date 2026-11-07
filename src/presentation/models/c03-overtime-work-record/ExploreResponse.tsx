@@ -5,7 +5,7 @@ import type { C03PreparePresentation } from "./public";
 import { ExploreModel } from "./ExploreModel";
 import styles from "./work-record.module.css";
 import explore from "./explore.module.css";
-import { revealFeedback, revealHeading } from "./reveal";
+import { revealFeedback, revealHeading } from "../../activity/public";
 import { usePrefersReducedMotion } from "../../accessibility/public";
 
 const fields = [

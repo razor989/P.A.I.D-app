@@ -695,3 +695,102 @@
     padding: 18px;
   }
 }
+
+/* Phone workspace (C06 batch): the agreement-and-sale record becomes a
+   compact strip so the question starts on the first screen beside it. */
+@media (max-width: 760px) {
+  .workshop .steps {
+    gap: 6px;
+    margin-bottom: 18px;
+  }
+  .workshop .steps button {
+    padding: 8px 6px;
+    font-size: 13px;
+    line-height: 1.3;
+  }
+  .steps button span {
+    font-size: 18px;
+    margin-bottom: 2px;
+  }
+  .evidence {
+    display: grid;
+    grid-template-columns: 76px minmax(0, 1fr);
+    align-items: center;
+    gap: 0 14px;
+    padding: 14px;
+  }
+  .evidence .scene {
+    width: 76px;
+    margin: 0;
+  }
+  .evidence > h3,
+  .evidence > h3 + p {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .evidence .facts,
+  .evidence .note {
+    grid-column: 1 / -1;
+  }
+  .evidence .facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 10px;
+    margin-top: 10px;
+  }
+  .evidence .facts > div:last-child {
+    grid-column: 1 / -1;
+  }
+  .evidence .facts dd {
+    overflow-wrap: normal;
+  }
+  .evidence .facts > div {
+    padding: 8px 0 0;
+  }
+  .evidence[data-focus] [data-evidence] {
+    padding: 8px 6px;
+  }
+  .evidence .facts dt {
+    font-size: 12px;
+  }
+  .evidence .facts dd {
+    margin-top: 4px;
+    font-size: 16px;
+  }
+  .evidence .note {
+    margin-top: 10px !important;
+    line-height: 1.5;
+  }
+}
+
+/* The givens echoed beside the question on phones (aria-hidden). */
+.recordEcho {
+  display: none;
+}
+@media (max-width: 760px) {
+  .recordEcho {
+    display: block;
+    width: fit-content;
+    margin: 6px 0 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: #e8eddc;
+    color: #2e4a3a;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 15px;
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+}
+
+/* The page heading yields to the recap’s own title (no stacked titles). */
+.headingQuiet {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
