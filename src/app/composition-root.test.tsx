@@ -51,6 +51,7 @@ import type { AppSessionActor } from "@/session/app-machine/public";
 import {
   createApplicationCatalog,
   createApplicationRoot,
+  handleHardwareBack,
   StartupShell,
 } from "./composition-root";
 import { createWebTestStore } from "./web-test-store";
@@ -2496,4 +2497,40 @@ it("rejects malformed, duplicate and mixed-stage recording responses", () => {
       parts: [{ ...part, key: "new" }],
     }),
   ).toBe(false);
+});
+
+describe("Android hardware Back", () => {
+  it("is the lesson's own Back, and minimizes only at the Library root", async () => {
+    const root = trackedRoot(createWebTestStore());
+    root.start();
+    await tick();
+    const minimize = vi.fn();
+    expect(handleHardwareBack(root.session, minimize)).toBe("platform-root");
+    expect(minimize).toHaveBeenCalledTimes(1);
+    expect(selectSession(root.session).destination?.kind).toBe("library");
+
+    navigate(root.session, { type: "SELECT_COMPETENCY", competencyId: "C04" });
+    expect(handleHardwareBack(root.session, minimize)).toBe(
+      "destination-changed",
+    );
+    expect(selectSession(root.session).destination?.kind).toBe("library");
+
+    navigate(root.session, { type: "SELECT_ACTIVITY", activityId: "C04-A01" });
+    const actor = selectSession(root.session).currentActivity!;
+    navigate(root.session, { type: "SELECT_ACTIVITY", activityId: "C04-A03" });
+    expect(selectSession(root.session).decision).toBe("activitySwitchChoice");
+    // An open switch dialog is cancelled first, never skipped past.
+    expect(handleHardwareBack(root.session, minimize)).toBe(
+      "destination-changed",
+    );
+    expect(selectSession(root.session).decision).toBe("none");
+    expect(selectSession(root.session).currentActivity).toBe(actor);
+
+    const outcomes: string[] = [];
+    for (let i = 0; i < 10 && minimize.mock.calls.length === 1; i++)
+      outcomes.push(handleHardwareBack(root.session, minimize));
+    expect(outcomes[outcomes.length - 1]).toBe("platform-root");
+    expect(outcomes.slice(0, -1).every((o) => o !== "rejected")).toBe(true);
+    expect(minimize).toHaveBeenCalledTimes(2);
+  });
 });

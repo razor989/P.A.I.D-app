@@ -490,6 +490,8 @@ export default tseslint.config(
         "study/competencies/c04/public",
         "recovery/projection/public",
         "recovery/checkpoint/public",
+        // Android integration: the native shell (checkpoint store, hardware Back).
+        "platform/public",
       ],
     ],
     [

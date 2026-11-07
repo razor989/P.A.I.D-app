@@ -19,7 +19,8 @@
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test tests/e2e --project=chromium",
     "test:a11y": "playwright test tests/a11y --project=chromium",
-    "build": "vite build"
+    "build": "vite build",
+    "android:sync": "vite build && cap sync android"
   },
   "dependencies": {
     "@capacitor/android": "8.5.2",

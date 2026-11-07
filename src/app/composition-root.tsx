@@ -28,7 +28,9 @@ import {
   selectSession,
   acquireSessionCheckpointProducer,
 } from "@/session/app-machine/public";
+import type { AppSessionActor } from "@/session/app-machine/public";
 import { selectLearnerContinuation } from "@/session/completion/public";
+import { detectNativeShell } from "@/platform/public";
 import { createBrowserCheckpointStore } from "./browser-checkpoint-store";
 import { projectC06ActivityFrame } from "@/engine/c06-activity-binding/public";
 import { projectC04Reference } from "./c04-reference-projection";
@@ -193,6 +195,34 @@ export function createApplicationRoot(injectedStore?: RecoveryCheckpointStore) {
   });
 }
 export type ApplicationRoot = ReturnType<typeof createApplicationRoot>;
+
+/** The lesson Back's availability; Android hardware Back obeys the same gate. */
+function canSystemBack(session: AppSessionActor): boolean {
+  const view = selectSession(session);
+  if (view.decision === "activitySwitchChoice")
+    return session
+      .getSnapshot()
+      .can({ type: "CANCEL_PENDING_ACTIVITY_SWITCH" });
+  return !(
+    view.technical !== "idle" ||
+    view.lifecyclePhase === "failed" ||
+    view.lifecyclePhase === "finish-clear-in-flight" ||
+    view.lifecyclePhase === "abandon-clear-in-flight" ||
+    view.decision !== "none"
+  );
+}
+
+/** Android hardware Back is the lesson's own Back; at the Library root the
+ * app goes to the background instead of closing, as Android does. */
+export function handleHardwareBack(
+  session: AppSessionActor,
+  minimize: () => void,
+) {
+  if (!canSystemBack(session)) return "rejected" as const;
+  const outcome = navigate(session, { type: "SYSTEM_BACK" });
+  if (outcome === "platform-root") minimize();
+  return outcome;
+}
 
 export function StartupShell({ root }: { root: ApplicationRoot }) {
   const [lifecycle] = useState(() => ({ mounted: false }));
@@ -1058,11 +1088,7 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
                 ? "A technical problem prevents navigation. Your current destination is preserved."
                 : null
           }
-          canBack={
-            view.decision === "activitySwitchChoice"
-              ? snapshot.can({ type: "CANCEL_PENDING_ACTIVITY_SWITCH" })
-              : !blocked
-          }
+          canBack={canSystemBack(root.session)}
           canReturn={!blocked && snapshot.can({ type: "RETURN_TO_LIBRARY" })}
           onBack={() => {
             navigate(root.session, { type: "SYSTEM_BACK" });
@@ -1169,9 +1195,11 @@ export function CompositionRoot() {
   const [sound] = useState(() =>
     createSoundEngine(createBrowserSoundPreferenceStore()),
   );
+  // Android only: native checkpoint storage and hardware Back. Null in a browser.
+  const [native] = useState(() => detectNativeShell());
   useEffect(() => {
     // A new effect setup owns fresh resources, never a restarted stopped actor.
-    const current = createApplicationRoot();
+    const current = createApplicationRoot(native?.checkpointStore);
     try {
       current.start();
       setRoot(current);
@@ -1179,8 +1207,17 @@ export function CompositionRoot() {
       current.stop();
       throw error;
     }
-    return () => current.stop();
-  }, []);
+    const shell = native;
+    const releaseBack = shell
+      ? shell.onHardwareBack(() => {
+          handleHardwareBack(current.session, () => shell.minimize());
+        })
+      : null;
+    return () => {
+      releaseBack?.();
+      current.stop();
+    };
+  }, [native]);
   return (
     <SoundProvider engine={sound}>
       {root ? (
