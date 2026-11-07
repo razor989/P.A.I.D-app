@@ -4,6 +4,7 @@ import type { C04Presentation } from "./public";
 import { ApplyQuantity } from "./ApplyQuantity";
 import { ApplyOffer } from "./ApplyOffer";
 import { normalizeApplyNumber } from "./apply-draft";
+import { recordedNumber } from "./recorded-number";
 import styles from "./apply.module.css";
 
 const labels: Readonly<Record<string, string>> = {
@@ -115,7 +116,11 @@ export function ApplyResponse(props: C04Presentation) {
             .map(([role, value]) => (
               <div key={role}>
                 <dt>{labels[role] ?? role}</dt>
-                <dd>{value === "UNDEFINED" ? "Undefined" : value}</dd>
+                <dd>
+                  {value === "UNDEFINED"
+                    ? "Undefined"
+                    : recordedNumber(value, role === "percentage" ? "%" : "₱")}
+                </dd>
               </div>
             ))}
         </dl>

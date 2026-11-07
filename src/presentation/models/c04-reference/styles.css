@@ -458,7 +458,7 @@
     border-color: #93a78b;
   }
   .step-num {
-    font-size: 10px;
+    font-size: 11px;
     display: grid;
     place-items: center;
     width: 25px;
@@ -524,7 +524,7 @@
     width: 64px;
   }
   .employee-head .eyebrow {
-    font-size: 9px;
+    font-size: 11px;
     letter-spacing: 1.4px;
   }
   .employee h3 {
@@ -544,7 +544,7 @@
     max-width: 52%;
   }
   .small-label {
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 0.6px;
     font-weight: 700;
     display: block;
@@ -688,7 +688,7 @@
     color: var(--muted);
   }
   .scale-note {
-    font-size: 10px;
+    font-size: 11px;
     text-align: center;
     color: #52634d;
     margin-top: 17px;
@@ -1142,7 +1142,7 @@
       font-size: 27px;
     }
     .pay-ticket small {
-      font-size: 10px;
+      font-size: 11px;
     }
     .art-title {
       margin-top: 24px;
@@ -1165,14 +1165,14 @@
       font-size: 13px;
     }
     .entry-meta {
-      font-size: 10px;
+      font-size: 12px;
       gap: 10px;
     }
     .entry-meta span + span:before {
       padding-right: 10px;
     }
     .site-footer {
-      font-size: 10px;
+      font-size: 12px;
       gap: 15px;
       padding: 20px 18px;
       line-height: 1.6;
@@ -1322,7 +1322,7 @@
       padding: 13px;
     }
     .scale-note {
-      font-size: 9px;
+      font-size: 11px;
     }
   }
   .entry-art {

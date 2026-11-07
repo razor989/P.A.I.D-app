@@ -76,6 +76,7 @@ export function PrepareSituation({
         <svg
           className={styles.documents}
           viewBox="0 0 470 340"
+          data-dock={interactive || undefined}
           role={interactive ? "group" : "img"}
           aria-label={`Maya’s salary review.${before ? " Before the review: ₱18,000 per month." : ""}${after ? " After the review: ₱18,000 per month." : ""}`}
         >

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import type { RefObject } from "react";
 import type { C04Presentation } from "./public";
 import { PrepareLegacyResponse } from "./PrepareLegacyResponse";
 import { PrepareV3Experience } from "./PrepareV3Experience";
@@ -14,6 +15,21 @@ import "../c04-reference/refinement.css";
 import "../c04-reference/instructional-enhancement.css";
 import styles from "./prepare.module.css";
 import { LessonMasthead } from "../../navigation/public";
+import { revealHeading, useStoryDock } from "../../activity/public";
+
+/** Mounts with the story so the dock hook sees the story element. */
+function StoryDock({
+  stage,
+  moment,
+  reduced,
+}: {
+  stage: RefObject<HTMLDivElement | null>;
+  moment: number;
+  reduced: boolean;
+}) {
+  useStoryDock(stage, "[data-dock]", moment, reduced);
+  return null;
+}
 
 export function PrepareExperience(props: C04Presentation) {
   if (props.prepareContractId === "C04-A01-interpretation-v1")
@@ -83,7 +99,9 @@ function PrepareWorkshop(props: C04Presentation) {
   }, [playing, blocked, showStory, story.end]);
   useEffect(() => {
     if (blocked) return;
-    heading.current?.focus({ preventScroll: true });
+    // A new screen’s heading lands below the floating lesson nav rather than
+    // keeping the previous screen’s scroll position.
+    revealHeading(heading.current, reduced);
     if (reduced || !surface.current) return;
     const animations: Animation[] = [];
     const animate = (
@@ -185,6 +203,8 @@ function PrepareWorkshop(props: C04Presentation) {
     )
       onPresented?.("feedback", feedback.current);
   }, [blocked, reviewing, frame, onPresented]);
+  // Phones: Maya’s statements stay pinned while the captions change.
+  const storyRef = useRef<HTMLDivElement>(null);
   function seek(value: number) {
     if (blocked) return;
     setPlaying(false);
@@ -260,9 +280,15 @@ function PrepareWorkshop(props: C04Presentation) {
             </section>
             <section className="workbench">
               <div
+                ref={storyRef}
                 className="employee-story"
                 data-playing={playing && time < story.end}
               >
+                <StoryDock
+                  stage={storyRef}
+                  moment={story.index * 3 + story.cue}
+                  reduced={reduced}
+                />
                 <div className="story-composition">
                   <PrepareSituation
                     before={story.showBefore}
@@ -281,6 +307,7 @@ function PrepareWorkshop(props: C04Presentation) {
                         key={caption}
                         hidden={index > story.cue}
                         className={`story-caption ${index === story.cue ? "is-current" : ""}`}
+                        data-current={index === story.cue}
                       >
                         {caption}
                       </p>
@@ -291,6 +318,7 @@ function PrepareWorkshop(props: C04Presentation) {
                   className="story-playback"
                   role="group"
                   aria-label="Situation playback"
+                  data-playback
                 >
                   <button
                     className="story-skip"
@@ -331,10 +359,13 @@ function PrepareWorkshop(props: C04Presentation) {
                     disabled={blocked}
                     onClick={() => seek(0)}
                   >
-                    <span aria-hidden="true">↺</span> Restart
+                    <span aria-hidden="true">↺</span>{" "}
+                    <span className={styles.restartText}>Restart</span>
                   </button>
                   <label>
-                    Situation position
+                    <span className={styles.positionLabel}>
+                      Situation position
+                    </span>
                     <input
                       type="range"
                       min="0"

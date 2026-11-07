@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { C04Presentation } from "./public";
 import { TransferModel } from "./TransferModel";
+import { recordedNumber } from "./recorded-number";
 import { TransferSynthesis } from "./TransferSynthesis";
 import { TransferStory } from "./TransferStory";
 import styles from "./transfer.module.css";
@@ -41,9 +42,7 @@ export function TransferCompletion(
       ? "Undefined"
       : value === undefined
         ? "Not available in this record"
-        : unit === "₱"
-          ? `₱${value}`
-          : `${value}%`;
+        : recordedNumber(value, unit === "₱" ? "₱" : "%");
   };
   if (story)
     return (

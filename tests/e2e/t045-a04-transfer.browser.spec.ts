@@ -343,7 +343,7 @@ for (const wrong of [false, true])
     const record = page.getByRole("region", {
       name: "Your recorded response",
     });
-    await expect(record).toContainText(wrong ? "₱0" : "₱1500");
+    await expect(record).toContainText(wrong ? "₱0" : "₱1,500");
     await expect(record).toContainText(
       wrong ? "Look again" : "Your answer holds",
     );

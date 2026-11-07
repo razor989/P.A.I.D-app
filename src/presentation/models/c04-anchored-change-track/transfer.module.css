@@ -1162,7 +1162,7 @@
 }
 .transferStory :global(.eyebrow) {
   color: var(--story-gold);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.16em;
 }
 .workshop .transferStory p {
@@ -1320,7 +1320,7 @@
     flex-wrap: wrap;
   }
   .storyProgress button {
-    font-size: 10px;
+    font-size: 11px;
   }
   .storyCinema,
   .storyConnections {
