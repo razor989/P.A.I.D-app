@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { C03WorkRecordProjection } from "./public";
 import { WorkEvidence } from "./WorkEvidence";
 import {
@@ -7,6 +7,7 @@ import {
   projectWorkRecordStory,
 } from "./work-record-story";
 import styles from "./work-record.module.css";
+import { useStoryDock } from "./use-story-dock";
 
 /** Accepted C04 continuous-clock transport, adapted locally without Actor state. */
 export function Observation({
@@ -50,6 +51,13 @@ export function Observation({
   useEffect(() => {
     if (time === story.end) setPlaying(false);
   }, [time, story.end]);
+  const surface = useRef<HTMLDivElement>(null);
+  useStoryDock(
+    surface,
+    "[data-inspection-model] > figure",
+    story.index,
+    reduced,
+  );
   function seek(next: number) {
     if (blocked) return;
     setPlaying(false);
@@ -57,7 +65,7 @@ export function Observation({
   }
   return (
     <>
-      <div className={styles.storySurface}>
+      <div ref={surface} className={styles.storySurface}>
         <div className={styles.observation}>
           <WorkEvidence
             projection={projection}
@@ -89,6 +97,7 @@ export function Observation({
           className={styles.playback}
           role="group"
           aria-label="Work Record playback"
+          data-playback
           data-playing={playing}
         >
           <button
@@ -133,10 +142,11 @@ export function Observation({
             disabled={blocked}
             onClick={() => seek(0)}
           >
-            <span aria-hidden="true">↺</span> Restart
+            <span aria-hidden="true">↺</span>{" "}
+            <span className={styles.restartText}>Restart</span>
           </button>
           <label>
-            Workday position
+            <span className={styles.positionLabel}>Workday position</span>
             <input
               type="range"
               min="0"

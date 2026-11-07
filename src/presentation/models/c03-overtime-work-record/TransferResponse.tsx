@@ -5,6 +5,9 @@ import type { C03PreparePresentation } from "./public";
 import { ExploreGlyph } from "./ExploreGlyph";
 import base from "./work-record.module.css";
 import styles from "./transfer.module.css";
+import { pesos } from "./WorkEvidence";
+import { revealHeading } from "./reveal";
+import { usePrefersReducedMotion } from "../../accessibility/public";
 
 const keys = ["condition", "multiplier", "overtimePay"] as const;
 const number = (text: string) =>
@@ -37,20 +40,17 @@ export function TransferResponse({
       ? drafts[key].text
       : canonical(key);
   const heading = useRef<HTMLHeadingElement>(null);
+  const reduced = usePrefersReducedMotion();
   const id = useId();
   const editable =
     !blocked && frame.allowedLearnerIntents.includes("RESPONSE_CHANGED");
   useEffect(() => {
-    if (!blocked && frame.stateId === "REVISION") {
-      heading.current?.focus({ preventScroll: true });
-      heading.current?.scrollIntoView({ block: "nearest" });
-    }
-  }, [blocked, frame.stateId]);
+    if (!blocked && frame.stateId === "REVISION")
+      revealHeading(heading.current, reduced);
+  }, [blocked, frame.stateId, reduced]);
   const move = (n: number) => {
     onStep(n);
-    requestAnimationFrame(() =>
-      heading.current?.focus({ preventScroll: true }),
-    );
+    requestAnimationFrame(() => revealHeading(heading.current, reduced));
   };
   function publish(key: (typeof keys)[number], text: string) {
     const r: LearnerResponse | null =
@@ -157,7 +157,9 @@ export function TransferResponse({
             <div className={styles.reasoningChain}>
               <span>{canonical("condition") || "Your condition"}</span>
               <ExploreGlyph name="next" />
-              <strong>× {shown("multiplier") || "?"}</strong>
+              <strong className={styles.slotEnter}>
+                × {shown("multiplier") || "?"}
+              </strong>
               {step === 2 && (
                 <>
                   <span>× 3 extra hours</span>
@@ -212,7 +214,11 @@ export function TransferResponse({
                       ? "Your multiplier"
                       : "Your overtime pay"}
                 </dt>
-                <dd>{shown(key) || "Not yet entered"}</dd>
+                <dd>
+                  {key === "overtimePay" && canonical(key)
+                    ? pesos(canonical(key))
+                    : shown(key) || "Not yet entered"}
+                </dd>
               </div>
             ))}
           </dl>

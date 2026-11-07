@@ -7,6 +7,7 @@ import { ExploreGlyph } from "./ExploreGlyph";
 import { exploreBeatDuration, projectExploreStory } from "./explore-story";
 import styles from "./work-record.module.css";
 import explore from "./explore.module.css";
+import { useStoryDock } from "./use-story-dock";
 
 const momentTitles = [
   "Start",
@@ -122,52 +123,7 @@ export function ExploreStory({
   const settle = (i: number) =>
     seek((starts[i] ?? 0) + (durations[i] ?? 0) - 1);
   const story = useRef<HTMLElement>(null);
-  // Narrow stages dock the model under the lesson nav. Publish the dock and
-  // playback heights so the current caption can be kept clear of both.
-  useEffect(() => {
-    const element = story.current;
-    const dock = element?.querySelector<HTMLElement>("[data-cue]");
-    const bar = element?.querySelector<HTMLElement>("[data-playback]");
-    if (!element || !dock || !bar || typeof ResizeObserver !== "function")
-      return;
-    const observer = new ResizeObserver(() => {
-      element.style.setProperty("--dock-h", `${dock.offsetHeight}px`);
-      element.style.setProperty("--playback-h", `${bar.offsetHeight}px`);
-    });
-    observer.observe(dock);
-    observer.observe(bar);
-    return () => observer.disconnect();
-  }, []);
-  const shownMoment = useRef(index);
-  useEffect(() => {
-    if (shownMoment.current === index) return;
-    shownMoment.current = index;
-    const element = story.current;
-    const dock = element?.querySelector<HTMLElement>("[data-cue]");
-    const bar = element?.querySelector<HTMLElement>("[data-playback]");
-    const caption = element?.querySelector<HTMLElement>(
-      '[data-current="true"]',
-    );
-    // Only a pinned model (phone dock, or the landscape column) needs this.
-    const pinned = [dock, dock?.parentElement].some(
-      (item) => item && getComputedStyle(item).position === "sticky",
-    );
-    if (!dock || !caption || !pinned) return;
-    const box = caption.getBoundingClientRect();
-    const model = dock.getBoundingClientRect();
-    const stacked = model.left < box.right && box.left < model.right;
-    const top = stacked
-      ? model.bottom
-      : parseFloat(
-          getComputedStyle(document.documentElement).scrollPaddingBlockStart,
-        ) || 0;
-    const bottom = bar?.getBoundingClientRect().top ?? window.innerHeight;
-    if (box.top < top || box.bottom > bottom)
-      caption.scrollIntoView?.({
-        block: "nearest",
-        behavior: reduced ? "auto" : "smooth",
-      });
-  }, [index, reduced]);
+  useStoryDock(story, "[data-cue]", index, reduced);
   return (
     <ExploreInspection
       projection={projection}

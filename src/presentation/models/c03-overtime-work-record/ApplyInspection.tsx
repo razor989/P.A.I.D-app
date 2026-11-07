@@ -14,6 +14,7 @@ import type { C03WorkRecordProjection } from "./public";
 import { pesos } from "./WorkEvidence";
 import explore from "./explore.module.css";
 import { anchorInspection } from "./anchor-inspection";
+import { useHoverIntent } from "./hover-intent";
 
 export type ApplyPart = "rate" | "hours" | "condition" | "multiplier" | "pay";
 const Inspection = createContext<{
@@ -33,6 +34,10 @@ export function ApplyInspectable({
   className?: string | undefined;
 }) {
   const context = useContext(Inspection);
+  const hover = useHoverIntent(
+    (target) => context?.open(part, target),
+    () => context?.leave(),
+  );
   return (
     <button
       type="button"
@@ -41,11 +46,7 @@ export function ApplyInspectable({
       className={className ?? explore.proseTrigger}
       aria-expanded={context?.active === part}
       aria-controls={context?.id}
-      onPointerEnter={(event) => {
-        if (event.pointerType !== "touch")
-          context?.open(part, event.currentTarget);
-      }}
-      onPointerLeave={() => context?.leave()}
+      {...hover}
       onFocus={(event) => context?.open(part, event.currentTarget)}
       onBlur={() => context?.leave()}
       onClick={(event) => context?.open(part, event.currentTarget, true)}
@@ -251,7 +252,7 @@ export function ApplyInspection({
                     key={n}
                     transform={`translate(${32 + (n % 5) * 58} ${25 + Math.floor(n / 5) * 49}) scale(.8)`}
                   >
-                    <ExploreHourMark />
+                    <ExploreHourMark n={n + 1} />
                   </g>
                 ))
               ) : (

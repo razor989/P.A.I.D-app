@@ -5,6 +5,7 @@ import { WorkEvidence } from "./WorkEvidence";
 import { Observation } from "./Observation";
 import { NicoIllustration } from "./NicoIllustration";
 import { useWorkRecordMotion } from "./use-work-record-motion";
+import { revealHeading } from "./reveal";
 import styles from "./work-record.module.css";
 import { LessonMasthead } from "../../navigation/public";
 
@@ -27,9 +28,20 @@ export function PrepareWorkRecord(props: C03PreparePresentation) {
     !blocked && frame.allowedLearnerIntents.some((item) => item === intent);
   const copy = (role: string) =>
     frame.contentReferences.find((item) => item.id === `c03/S01/${role}`)?.text;
+  // The first view keeps the shell’s entry placement; each later view opens
+  // at its heading, below the floating nav (§K4.1).
+  const revealed = useRef("");
   useEffect(() => {
-    if (!blocked) heading.current?.focus({ preventScroll: true });
-  }, [identity, blocked]);
+    if (blocked) return;
+    const first = revealed.current === "";
+    if (revealed.current === identity) {
+      heading.current?.focus({ preventScroll: true });
+      return;
+    }
+    revealed.current = identity;
+    if (first) heading.current?.focus({ preventScroll: true });
+    else revealHeading(heading.current, reduced);
+  }, [identity, blocked, reduced]);
   useEffect(() => {
     const element = feedback.current;
     if (

@@ -10,6 +10,7 @@ import { useWorkRecordMotion } from "./use-work-record-motion";
 import base from "./work-record.module.css";
 import styles from "./transfer.module.css";
 import { LessonMasthead } from "../../navigation/public";
+import { revealFeedback, revealHeading } from "./reveal";
 
 export function TransferWorkRecord(props: C03PreparePresentation) {
   const { projection, blocked, onFeedbackPresented } = props;
@@ -25,7 +26,7 @@ export function TransferWorkRecord(props: C03PreparePresentation) {
   const id = useId();
   const supporting = Boolean(frame.review);
   const disabled = blocked || supporting;
-  useWorkRecordMotion(surface, frame.stateId, disabled);
+  const reduced = useWorkRecordMotion(surface, frame.stateId, disabled);
   useEffect(() => {
     if (blocked) return;
     if (supporting) {
@@ -40,11 +41,26 @@ export function TransferWorkRecord(props: C03PreparePresentation) {
       return;
     }
     if (previousState.current !== frame.stateId) {
+      // The first state keeps the shell’s own entry placement; REVISION is
+      // placed by the response, and an outcome by its feedback (below).
+      const first = previousState.current === "";
       previousState.current = frame.stateId;
-      if (frame.stateId !== "REVISION")
-        heading.current?.focus({ preventScroll: true });
+      if (frame.stateId === "REVISION") return;
+      if (first) heading.current?.focus({ preventScroll: true });
+      else if (frame.stateId === "COMPLETE" || !frame.feedbackState)
+        revealHeading(heading.current, reduced);
     }
-  }, [blocked, supporting, frame.stateId]);
+  }, [blocked, supporting, frame.stateId, frame.feedbackState, reduced]);
+  // A new outcome opens at its feedback, never scrolled past it (§K4.1–4.2).
+  const shownFeedback = frame.feedbackState
+    ? frame.feedbackState.outcome + "/" + frame.feedbackState.content.id
+    : "";
+  const revealedFeedback = useRef("");
+  useEffect(() => {
+    if (disabled || shownFeedback === revealedFeedback.current) return;
+    revealedFeedback.current = shownFeedback;
+    if (shownFeedback) revealFeedback(feedback.current, reduced, "outcome");
+  }, [shownFeedback, disabled, reduced]);
   useEffect(() => {
     const node = feedback.current;
     if (

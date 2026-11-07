@@ -19,7 +19,7 @@ export function TransferGuidance({
       ? ([
           "condition",
           "Let the day choose the rule.",
-          "Compare your identification with the day explicitly stated in the record.",
+          "Compare your identification with the day stated in the record.",
           0,
         ] as const)
       : projection.diagnostic === "CONDITION_MULTIPLIER"
@@ -109,7 +109,7 @@ export function TransferGuidance({
                   {kind === "condition"
                     ? "The work record states regular holiday. No date or calendar inference is needed. Compare that evidence with your identification."
                     : kind === "multiplier"
-                      ? `Your identification is “${read("condition")}”. The record establishes a regular holiday. The multiplier must follow from that condition, not from the number of hours.`
+                      ? `Your identification is “${read("condition")}”. The record states a regular holiday. The multiplier must follow from that condition, not from the number of hours.`
                       : kind === "units"
                         ? "The multiplier changes the pay for an hour; it is not itself a peso payment. The final response names the payment for all three extra hours."
                         : `${pesos(projection.workEvidence.rate.magnitude.toString())} is already the regular hourly rate. Keep it as the starting factor—no wage conversion is required.`}

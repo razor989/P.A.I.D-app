@@ -54,8 +54,11 @@ export function ExploreGlyph({
   );
 }
 
-/** One equal hour unit, reused in the work record and its inspection miniature. */
-export function ExploreHourMark() {
+/** One equal hour unit, reused in the work records and their inspection
+ * miniatures. `n` numbers the hour within its record (1, 2, 3 …). The
+ * former 6-unit "EXTRA HOUR" label was unreadable at every size; captions
+ * beside each model say what the marks are. */
+export function ExploreHourMark({ n = 1 }: { n?: number }) {
   return (
     <g>
       <rect
@@ -67,35 +70,24 @@ export function ExploreHourMark() {
         fill="#fff2dc"
         stroke="#b28248"
       />
-      <path d="M-14-16h28" stroke="#d6ad5b" strokeWidth="2" />
-      <circle cx="-13" cy="0" r="6" fill="none" stroke="#8b672c" />
+      <path d="M-14-15h28" stroke="#d6ad5b" strokeWidth="2" />
+      <circle cx="-12" cy="4" r="6.5" fill="none" stroke="#8b672c" />
       <path
-        d="M-13-4v4l3 2"
+        d="M-12 0v4l3 2"
         fill="none"
         stroke="#8b672c"
         strokeLinecap="round"
       />
       <text
-        x="7"
-        y="6"
+        x={n > 9 ? 9 : 8}
+        y="12"
         textAnchor="middle"
         fill="#493a22"
         fontFamily="Georgia, serif"
         fontWeight="bold"
-        fontSize="23"
+        fontSize={n > 9 ? 19 : 23}
       >
-        1
-      </text>
-      <text
-        x="0"
-        y="18"
-        textAnchor="middle"
-        fill="#71531d"
-        fontFamily="Arial, sans-serif"
-        fontSize="6"
-        letterSpacing=".5"
-      >
-        EXTRA HOUR
+        {n}
       </text>
     </g>
   );

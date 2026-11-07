@@ -14,6 +14,7 @@ import type { C03WorkRecordProjection } from "./public";
 import { pesos } from "./WorkEvidence";
 import explore from "./explore.module.css";
 import { anchorInspection } from "./anchor-inspection";
+import { useHoverIntent } from "./hover-intent";
 
 export type ExplorePart = "rate" | "hours" | "condition" | "multiplier" | "pay";
 const Inspection = createContext<{
@@ -32,7 +33,10 @@ export function Inspectable({
   className?: string | undefined;
 }) {
   const context = useContext(Inspection);
-  const hovered = useRef(false);
+  const hover = useHoverIntent(
+    (target) => context?.open(part, target),
+    () => context?.leave(),
+  );
   return (
     <button
       type="button"
@@ -40,22 +44,7 @@ export function Inspectable({
       className={className ?? explore.proseTrigger}
       aria-expanded={context?.active === part}
       aria-controls={context?.id}
-      // Hover intent needs a real movement over the fact. A new screen that
-      // lands under a resting pointer (after a click) must not open a panel.
-      onPointerMove={(event) => {
-        if (
-          event.pointerType === "touch" ||
-          hovered.current ||
-          (event.movementX === 0 && event.movementY === 0)
-        )
-          return;
-        hovered.current = true;
-        context?.open(part, event.currentTarget);
-      }}
-      onPointerLeave={() => {
-        hovered.current = false;
-        context?.leave();
-      }}
+      {...hover}
       onFocus={(event) => context?.open(part, event.currentTarget)}
       onBlur={() => context?.leave()}
       onClick={(event) => context?.open(part, event.currentTarget, true)}
@@ -254,7 +243,7 @@ export function ExploreInspection({
                     key={n}
                     transform={`translate(${105 + (n % 2) * 90} ${26 + Math.floor(n / 2) * 48}) scale(.85)`}
                   >
-                    <ExploreHourMark />
+                    <ExploreHourMark n={(n % 2) + 1} />
                   </g>
                 ))
               ) : (

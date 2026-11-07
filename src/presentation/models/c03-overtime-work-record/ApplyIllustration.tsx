@@ -83,7 +83,7 @@ export function ApplyIllustration({
               key={i}
               transform={`translate(${28 + (i % 5) * 39} ${95 + Math.floor(i / 5) * 35}) scale(.58)`}
             >
-              <ExploreHourMark />
+              <ExploreHourMark n={i + 1} />
             </g>
           ))}
         </g>

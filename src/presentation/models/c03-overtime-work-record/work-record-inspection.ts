@@ -63,6 +63,9 @@ export function createWorkRecordInspection(
   let hover: ReturnType<typeof setTimeout> | undefined,
     dismiss: ReturnType<typeof setTimeout> | undefined,
     hold: ReturnType<typeof setTimeout> | undefined;
+  // Hover intent (§K4.3): the trigger under the pointer, armed only by a
+  // real movement, so a new screen under a resting cursor opens nothing.
+  let hovering: HTMLElement | null = null;
   let point = { x: 0, y: 0 },
     touching = false,
     held = false;
@@ -199,8 +202,8 @@ export function createWorkRecordInspection(
       if (!element || element.contains(event.relatedTarget as Node)) return;
       clearTimeout(dismiss);
       clearTimeout(hover);
+      hovering = null;
       point = { x: event.clientX, y: event.clientY };
-      hover = setTimeout(() => open(element), 180);
     },
     { signal },
   );
@@ -213,9 +216,18 @@ export function createWorkRecordInspection(
       )
         clearTimeout(hold);
       if (pinned || touching || event.pointerType === "touch") return;
-      if (target(event)) {
+      const element = target(event);
+      if (element) {
         point = { x: event.clientX, y: event.clientY };
         position();
+        if (
+          element !== hovering &&
+          (event.movementX !== 0 || event.movementY !== 0)
+        ) {
+          hovering = element;
+          clearTimeout(hover);
+          hover = setTimeout(() => open(element), 180);
+        }
       }
     },
     { signal },
@@ -226,6 +238,7 @@ export function createWorkRecordInspection(
       const element = target(event);
       if (!element || element.contains(event.relatedTarget as Node)) return;
       clearTimeout(hover);
+      hovering = null;
       laterClose();
     },
     { signal },

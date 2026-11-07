@@ -73,7 +73,7 @@ export function ExploreWorkRecord(props: C03PreparePresentation) {
     // Only a newly shown outcome moves the view; re-renders do not.
     if (disabled || shownFeedback === revealedFeedback.current) return;
     revealedFeedback.current = shownFeedback;
-    if (shownFeedback) revealFeedback(feedback.current, reduced);
+    if (shownFeedback) revealFeedback(feedback.current, reduced, "outcome");
   }, [shownFeedback, disabled, reduced]);
   if (frame.activityId !== "C03-A02")
     throw new TypeError("Explore requires the canonical C03-A02 projection");

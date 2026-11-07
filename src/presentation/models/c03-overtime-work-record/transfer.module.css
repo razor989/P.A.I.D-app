@@ -1573,3 +1573,83 @@
     visibility: hidden;
   }
 }
+
+/* ── Phone workspace (C03 batch) ──
+   One tree: on a narrow workspace the record tightens so the question is
+   close below it, and the reasoning chain stays pinned under the floating
+   lesson nav while the learner answers. */
+.workspace {
+  container: transfer-workspace / inline-size;
+}
+@container transfer-workspace (max-width: 45rem) {
+  .record {
+    padding: 14px;
+  }
+  .record header {
+    margin-bottom: 10px;
+  }
+  .record header > svg,
+  .inspectHint {
+    display: none;
+  }
+  .record h3 {
+    margin-top: 4px;
+    font-size: 21px;
+  }
+  .workshop .record button {
+    padding: 10px 12px;
+  }
+  .record button strong {
+    margin: 3px 0;
+    font-size: 21px;
+  }
+  .workshop .hours {
+    margin-block: 10px;
+  }
+  .workshop .hours > svg {
+    max-height: 5.5rem;
+    margin: 6px 0 4px;
+  }
+  .chain {
+    margin-top: 8px !important;
+  }
+  .chain span {
+    margin-top: 2px;
+    font-size: 20px;
+  }
+  .pay strong {
+    font-size: 26px !important;
+  }
+  .responseBody .reasoningChain {
+    position: sticky;
+    top: calc(var(--lesson-nav-scroll, 5.5rem) + env(safe-area-inset-top, 0px));
+    z-index: 2;
+    gap: 10px;
+    margin: 16px 0;
+    padding: 12px 14px;
+    box-shadow: 0 10px 14px -14px #29332680;
+  }
+  .reasoningChain strong {
+    font-size: 23px;
+  }
+}
+
+/* The committed multiplier settles into its place in the reasoning chain. */
+@media (prefers-reduced-motion: no-preference) {
+  .slotEnter {
+    animation: slot-enter 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+@keyframes slot-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(1.25);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(0) scale(0.96);
+  }
+  to {
+    transform: none;
+  }
+}

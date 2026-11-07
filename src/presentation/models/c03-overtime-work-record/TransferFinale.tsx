@@ -19,7 +19,7 @@ const scenes = [
     title: "The hours alone cannot tell the whole story.",
     question: "What must we know before choosing the rule?",
     reading:
-      "An ordinary day, a rest day and a regular holiday are not interchangeable conditions. Mara’s record shows a regular holiday. That condition links her calculation to its approved multiplier.",
+      "An ordinary day, a rest day and a regular holiday are not interchangeable conditions. Mara’s record shows a regular holiday. That condition links her calculation to its multiplier.",
     closing: "Let the condition choose the rule.",
   },
   {
@@ -27,7 +27,7 @@ const scenes = [
     title: "Every factor has a job.",
     question: "How do the pieces become one meaningful amount?",
     reading:
-      "The rate establishes pay for one regular hour. The applicable multiplier accounts for the overtime condition. The overtime hours tell us how much extra time the calculation covers.",
+      "The rate sets the pay for one regular hour. The applicable multiplier accounts for the overtime condition. The overtime hours tell us how much extra time the calculation covers.",
     closing: "Connect the rule to the rate and the hours.",
   },
   {
@@ -176,7 +176,7 @@ export function TransferFinale({
                     data-motion="hour"
                     data-order={i}
                   >
-                    <ExploreHourMark />
+                    <ExploreHourMark n={i + 1} />
                   </g>
                 ))}
                 <text

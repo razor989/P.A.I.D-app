@@ -10,6 +10,7 @@ import { useWorkRecordMotion } from "./use-work-record-motion";
 import base from "./work-record.module.css";
 import styles from "./apply.module.css";
 import { LessonMasthead } from "../../navigation/public";
+import { revealFeedback, revealHeading } from "./reveal";
 
 export function ApplyWorkRecord(props: C03PreparePresentation) {
   const { projection, blocked, onFeedbackPresented } = props;
@@ -27,7 +28,7 @@ export function ApplyWorkRecord(props: C03PreparePresentation) {
   const disabled = blocked || supporting;
   const entry = frame.stateId === "ENTRY";
   const complete = frame.stateId === "COMPLETE";
-  useWorkRecordMotion(surface, frame.stateId, disabled);
+  const reduced = useWorkRecordMotion(surface, frame.stateId, disabled);
   const can = (intent: string) =>
     !disabled && frame.allowedLearnerIntents.some((item) => item === intent);
   const copy = (role: string) =>
@@ -45,10 +46,32 @@ export function ApplyWorkRecord(props: C03PreparePresentation) {
       return;
     }
     if (focused.current !== frame.stateId) {
+      // The first state keeps the shell’s own entry placement.
+      const first = focused.current === "";
       focused.current = frame.stateId;
-      heading.current?.focus({ preventScroll: true });
+      if (first) heading.current?.focus({ preventScroll: true });
+      // An outcome with feedback is placed (and focused) at its feedback.
+      else if (complete || !frame.feedbackState)
+        revealHeading(heading.current, reduced);
     }
-  }, [frame.stateId, blocked, supporting]);
+  }, [
+    frame.stateId,
+    frame.feedbackState,
+    complete,
+    blocked,
+    supporting,
+    reduced,
+  ]);
+  // A new outcome is brought into view (§K4.2); re-renders do not move it.
+  const shownFeedback = frame.feedbackState
+    ? frame.feedbackState.outcome + "/" + frame.feedbackState.content.id
+    : "";
+  const revealedFeedback = useRef("");
+  useEffect(() => {
+    if (disabled || shownFeedback === revealedFeedback.current) return;
+    revealedFeedback.current = shownFeedback;
+    if (shownFeedback) revealFeedback(feedback.current, reduced, "outcome");
+  }, [shownFeedback, disabled, reduced]);
   useEffect(() => {
     const element = feedback.current;
     if (

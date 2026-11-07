@@ -80,7 +80,7 @@ export function TransferModel({
             />
             {[0, 1, 2].map((i) => (
               <g key={i} transform={`translate(${256 + i * 55} 48) scale(.72)`}>
-                <ExploreHourMark />
+                <ExploreHourMark n={i + 1} />
               </g>
             ))}
             <text x="113" y="112" textAnchor="middle">
@@ -191,7 +191,7 @@ export function MaraIllustration() {
         ))}
         {[0, 1, 2].map((i) => (
           <g key={i} transform={`translate(${270 + i * 52} 128) scale(.65)`}>
-            <ExploreHourMark />
+            <ExploreHourMark n={i + 1} />
           </g>
         ))}
       </g>

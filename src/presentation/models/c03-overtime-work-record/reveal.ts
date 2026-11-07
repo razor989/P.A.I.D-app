@@ -25,18 +25,46 @@ export function revealHeading(
 ): void {
   if (!heading) return;
   heading.focus({ preventScroll: true });
-  const top = heading.getBoundingClientRect().top;
+  // Measured from layout, not the painted box: entrance motion may still be
+  // translating the heading, and the scroll must land where it settles.
+  const top = layoutTop(heading) - window.scrollY;
   const offset = navOffset();
   if (top < offset || top > offset + window.innerHeight * 0.3)
-    heading.scrollIntoView?.({ block: "start", behavior: behavior(reduced) });
+    window.scrollTo?.({
+      top: Math.max(0, window.scrollY + top - offset),
+      behavior: behavior(reduced),
+    });
+}
+
+/** Document position of an element, ignoring any CSS transforms. */
+function layoutTop(element: HTMLElement): number {
+  let top = 0;
+  let node: HTMLElement | null = element;
+  while (node) {
+    top += node.offsetTop;
+    node = node.offsetParent as HTMLElement | null;
+  }
+  return top;
 }
 
 /** Make newly shown feedback visible without taking it to the top. */
 export function revealFeedback(
   element: HTMLElement | null,
   reduced: boolean,
+  focus: "outcome" | "if-lost" = "if-lost",
 ): void {
   if (!element) return;
+  // An outcome takes focus at its heading: the control that produced it is
+  // about to be replaced or disabled. Inline feedback only catches focus that
+  // would otherwise fall to the page body.
+  const active = document.activeElement;
+  if (focus === "outcome" || !active || active === document.body) {
+    const title = element.querySelector<HTMLElement>("h2, h3, h4");
+    if (title) {
+      if (!title.hasAttribute("tabindex")) title.tabIndex = -1;
+      title.focus({ preventScroll: true });
+    }
+  }
   const box = element.getBoundingClientRect();
   if (box.top < navOffset() || box.bottom > window.innerHeight)
     element.scrollIntoView?.({

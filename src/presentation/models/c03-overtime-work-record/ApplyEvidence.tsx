@@ -99,7 +99,7 @@ export function ApplyEvidence({
                 key={i}
                 transform={`translate(${38 + (i % 5) * 68} ${33 + Math.floor(i / 5) * 64})`}
               >
-                <ExploreHourMark />
+                <ExploreHourMark n={i + 1} />
               </g>
             ))}
             <path
@@ -115,7 +115,13 @@ export function ApplyEvidence({
         <div className={styles.payPath}>
           <span aria-hidden="true">↓</span>
           <ApplyInspectable part="pay" className={styles.payFact}>
-            <span>{math ? "Confirmed overtime pay" : "Your overtime pay"}</span>
+            <span>
+              {math
+                ? "Confirmed overtime pay"
+                : projection.frame.stateId === "REVISION" && submittedPay
+                  ? "Your last overtime pay · recheck it"
+                  : "Your overtime pay"}
+            </span>
             <strong>{pay}</strong>
             <small>For the extra hours only</small>
           </ApplyInspectable>

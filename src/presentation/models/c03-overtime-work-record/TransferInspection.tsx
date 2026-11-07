@@ -14,6 +14,7 @@ import type { C03WorkRecordProjection } from "./public";
 import { pesos } from "./WorkEvidence";
 import explore from "./explore.module.css";
 import { anchorInspection } from "./anchor-inspection";
+import { useHoverIntent } from "./hover-intent";
 
 export type TransferPart =
   "rate" | "hours" | "condition" | "multiplier" | "pay";
@@ -34,6 +35,10 @@ export function TransferInspectable({
   className?: string | undefined;
 }) {
   const context = useContext(Inspection);
+  const hover = useHoverIntent(
+    (target) => context?.open(part, target),
+    () => context?.leave(),
+  );
   return (
     <button
       type="button"
@@ -42,11 +47,7 @@ export function TransferInspectable({
       className={className ?? explore.proseTrigger}
       aria-expanded={context?.active === part}
       aria-controls={context?.id}
-      onPointerEnter={(event) => {
-        if (event.pointerType !== "touch")
-          context?.open(part, event.currentTarget);
-      }}
-      onPointerLeave={() => context?.leave()}
+      {...hover}
       onFocus={(event) => context?.open(part, event.currentTarget)}
       onBlur={() => context?.leave()}
       onClick={(event) => context?.open(part, event.currentTarget, true)}
@@ -92,13 +93,13 @@ export function TransferInspection({
     ],
     condition: [
       "Read the day before the numbers",
-      "The scenario explicitly establishes a regular holiday. You do not need a calendar or a guessed date. Identify that condition, then find the multiplier linked to it in the relationship reference.",
+      "Mara’s record states that the day is a regular holiday. You do not need a calendar or a guessed date. Identify that condition, then find the multiplier linked to it in the relationship reference.",
     ],
     multiplier: [
       "A rule linked to the day",
       math
         ? `Regular-holiday overtime uses ${math.multiplier.magnitude.toString()}. The multiplier follows from the condition; it does not change the number of hours.`
-        : "Your multiplier is your proposed application of the day’s rule, not a free setting that changes the work record. Open the relationship reference if you need the approved regular-holiday rule.",
+        : "Your multiplier is your proposed application of the day’s rule, not a free setting that changes the work record. Open the relationship reference if you need the regular-holiday rule.",
     ],
     pay: [
       "Overtime pay—not all holiday earnings",
@@ -252,7 +253,7 @@ export function TransferInspection({
                     key={n}
                     transform={`translate(${32 + (n % 5) * 58} ${25 + Math.floor(n / 5) * 49}) scale(.8)`}
                   >
-                    <ExploreHourMark />
+                    <ExploreHourMark n={n + 1} />
                   </g>
                 ))
               ) : (

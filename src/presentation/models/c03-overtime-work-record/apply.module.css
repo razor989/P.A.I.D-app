@@ -609,3 +609,91 @@
     padding: 20px 16px;
   }
 }
+
+/* ── Phone workspace (C03 batch) ──
+   One tree: on a narrow workspace the record tightens so the question is
+   close below it, and the response's equation strip stays pinned under the
+   floating lesson nav while the learner answers. */
+.workspace {
+  container: apply-workspace / inline-size;
+}
+@container apply-workspace (max-width: 45rem) {
+  .record {
+    padding: 14px;
+  }
+  .recordHeader {
+    padding-bottom: 10px;
+  }
+  .recordHeader h3 {
+    margin-top: 4px;
+    font-size: 21px;
+  }
+  .recordHeader > svg,
+  .modelHint {
+    display: none;
+  }
+  .conditionPath {
+    margin-bottom: 10px;
+  }
+  .workshop .record button {
+    padding: 10px 12px;
+  }
+  .record button strong {
+    margin: 3px 0;
+    font-size: 21px;
+  }
+  .factorLink strong {
+    margin-top: 2px;
+    font-size: 24px;
+  }
+  .workshop .hoursFact {
+    margin-top: 10px;
+    padding: 10px 8px 8px;
+  }
+  .workshop .hoursFact > svg {
+    max-height: 5.5rem;
+    margin-top: 4px;
+  }
+  .payPath > span {
+    margin: 0;
+    font-size: 20px;
+  }
+  .payFact strong {
+    font-size: 26px !important;
+  }
+  .responseBody .relationship {
+    position: sticky;
+    top: calc(var(--lesson-nav-scroll, 5.5rem) + env(safe-area-inset-top, 0px));
+    z-index: 2;
+    margin: 16px 0;
+    padding: 12px 14px;
+    box-shadow: 0 10px 14px -14px #29332680;
+  }
+  .relationship strong {
+    margin-top: 4px;
+    font-size: 21px;
+  }
+  .responseBody h3 {
+    font-size: 27px;
+  }
+}
+
+/* The committed multiplier settles into its slot in the equation. */
+@media (prefers-reduced-motion: no-preference) {
+  .slotEnter {
+    animation: slot-enter 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+}
+@keyframes slot-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(1.25);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(0) scale(0.96);
+  }
+  to {
+    transform: none;
+  }
+}

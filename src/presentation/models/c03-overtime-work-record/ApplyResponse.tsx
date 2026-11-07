@@ -5,6 +5,8 @@ import base from "./work-record.module.css";
 import styles from "./apply.module.css";
 import { ExploreGlyph } from "./ExploreGlyph";
 import { pesos } from "./WorkEvidence";
+import { revealHeading } from "./reveal";
+import { usePrefersReducedMotion } from "../../accessibility/public";
 
 const labels = {
   multiplier: "Applicable overtime multiplier",
@@ -39,6 +41,7 @@ export function ApplyResponse({
     Record<string, { text: string; canonical: string }>
   >({});
   const heading = useRef<HTMLHeadingElement>(null);
+  const reduced = usePrefersReducedMotion();
   const id = useId();
   const editable =
     !blocked && frame.allowedLearnerIntents.includes("RESPONSE_CHANGED");
@@ -47,9 +50,7 @@ export function ApplyResponse({
   const field = fields[panel]!;
   function move(next: number) {
     onPanel(next);
-    requestAnimationFrame(() =>
-      heading.current?.focus({ preventScroll: true }),
-    );
+    requestAnimationFrame(() => revealHeading(heading.current, reduced));
   }
   function publish(key: (typeof fields)[number], text: string) {
     const normalized = text.trim().replace(/\.$/, "");
@@ -130,7 +131,10 @@ export function ApplyResponse({
               </span>
               <b>×</b>
               <span>
-                Your multiplier<strong>{shown("multiplier") || "?"}</strong>
+                Your multiplier
+                <strong className={styles.slotEnter}>
+                  {shown("multiplier") || "?"}
+                </strong>
               </span>
               <b>×</b>
               <span>
