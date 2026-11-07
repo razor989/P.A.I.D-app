@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useStoryAccents, useStoryCues } from "../../audio/public";
 import type { C06CommissionProjection } from "./public";
 import { CommissionEvidence } from "./CommissionEvidence";
 import { MomentIllustration } from "./CommissionIllustrations";
@@ -98,6 +99,19 @@ export function CommissionObservation({
   // Phones: the record stays pinned while the captions change beneath it.
   const surface = useRef<HTMLDivElement>(null);
   useStoryDock(surface, "[data-dock]", index * 3 + cue, reduced);
+  // Moments turn the page; caption changes inside a moment stay silent.
+  const cues = useStoryCues(index, { playing, ended: time >= end });
+  // The sales record and then the commission terms join the evidence
+  // (CommissionEvidence's moment gates), just after the page turns.
+  useStoryAccents(time, playing, reduced, [
+    { at: duration + 300, cue: "story.appear" },
+    { at: 2 * duration + 300, cue: "story.appear", rate: 1.05 },
+  ]);
+  /** A deliberate move to a moment. */
+  function step(value: number) {
+    cues.stepped();
+    seek(value);
+  }
   function seek(value: number) {
     if (!blocked) {
       setPlaying(false);
@@ -139,7 +153,7 @@ export function CommissionObservation({
             className={styles.skipControl}
             aria-label="Previous moment"
             disabled={blocked || index === 0}
-            onClick={() => seek((index - 1) * duration)}
+            onClick={() => step((index - 1) * duration)}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m14 6-6 6 6 6" />
@@ -151,6 +165,7 @@ export function CommissionObservation({
             disabled={blocked}
             onClick={() => {
               if (time === end) setTime(0);
+              cues.toggled(!playing || time === end);
               setPlaying(!playing || time === end);
             }}
           >
@@ -164,7 +179,7 @@ export function CommissionObservation({
             className={styles.skipControl}
             aria-label="Next moment"
             disabled={blocked || index === moments.length - 1}
-            onClick={() => seek((index + 1) * duration)}
+            onClick={() => step((index + 1) * duration)}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m10 6 6 6-6 6" />
@@ -173,7 +188,7 @@ export function CommissionObservation({
           <button
             className={styles.restartControl}
             disabled={blocked}
-            onClick={() => seek(0)}
+            onClick={() => step(0)}
           >
             <span aria-hidden="true">↺</span>{" "}
             <span className={styles.restartText}>Restart</span>
@@ -188,7 +203,10 @@ export function CommissionObservation({
               value={time}
               disabled={blocked}
               aria-valuetext={`${moment.label}, ${(time / 1000).toFixed(1)} seconds`}
-              onChange={(event) => seek(Number(event.currentTarget.value))}
+              onChange={(event) => {
+                cues.scrubbing();
+                seek(Number(event.currentTarget.value));
+              }}
             />
           </label>
           <span className={styles.time} aria-hidden="true">
@@ -201,7 +219,7 @@ export function CommissionObservation({
               key={item.label}
               disabled={blocked}
               aria-current={index === n ? "step" : undefined}
-              onClick={() => seek(n * duration)}
+              onClick={() => step(n * duration)}
             >
               <span className={styles.chapterNumber} aria-hidden="true">
                 0{n + 1}

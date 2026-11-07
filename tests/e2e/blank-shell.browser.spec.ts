@@ -13,8 +13,8 @@ test("real T036 bootstrap resolves the genuine empty memory read", async ({
     "Learning Library",
   );
   // One Library: hero entrance, previous/next/pause, three competency cards
-  // and one continue-learning action.
-  await expect(page.getByRole("button")).toHaveCount(8);
+  // one continue-learning action and the sound-effects switch.
+  await expect(page.getByRole("button")).toHaveCount(9);
   await expect(
     page.getByText(/Recovery Choice|C04-A0|lesson complete/i),
   ).toHaveCount(0);

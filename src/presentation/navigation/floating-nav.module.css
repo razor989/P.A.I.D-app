@@ -210,10 +210,36 @@
 
 /* ─── Detached raised action ─── */
 
-.raised {
+/* The trailing cluster: the sound switch beside the raised action. The
+   cluster itself never catches presses; only its visible parts do. */
+.trail {
   grid-area: raised;
   justify-self: end;
   display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  pointer-events: none;
+}
+
+.trail > * {
+  pointer-events: auto;
+}
+
+.raised {
+  display: flex;
+}
+
+.dock .sound {
+  inline-size: 46px;
+  block-size: 46px;
+  border-color: var(--ink);
+  background: rgb(253 250 243 / 0.95);
+  box-shadow: 0 14px 34px -22px rgb(32 60 51 / 0.55);
+  backdrop-filter: blur(12px) saturate(1.15);
+}
+
+.dock .sound:hover {
+  background: var(--paper);
 }
 
 .raised:empty {
@@ -376,6 +402,10 @@
     padding-inline: 1.05rem;
     font-size: 0.84rem;
   }
+  .dock .sound {
+    inline-size: 44px;
+    block-size: 44px;
+  }
 }
 
 @media (max-height: 30rem) {
@@ -454,6 +484,7 @@
 @media (forced-colors: active) {
   .capsule,
   .island,
+  .dock .sound,
   .dock .raised > button {
     border-color: CanvasText;
   }

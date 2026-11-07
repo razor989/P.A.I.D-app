@@ -1,3 +1,4 @@
+import { useSound, useStoryAccents, useStoryCues } from "../../audio/public";
 import { useEffect, useId, useRef, useState } from "react";
 import { AccessibilityCoordinator } from "@/presentation/accessibility/public";
 import { FeedbackSurface } from "@/presentation/feedback/public";
@@ -93,6 +94,39 @@ function PrepareWorkshop(props: C04Presentation) {
     });
     return () => cancelAnimationFrame(request);
   }, [supportOpen, blocked]);
+  const cues = useStoryCues(story.index, {
+    playing,
+    ended: story.position >= story.end,
+  });
+  // The model's flags (prepare-v3-story): the new amount appears, the two
+  // align, then the difference, the reference and the percentage join.
+  useStoryAccents(time, playing, reduced, [
+    { at: momentDuration + 250, cue: "story.appear" },
+    { at: 2 * momentDuration + 250, cue: "story.grow" },
+    { at: 4 * momentDuration + 250, cue: "story.appear" },
+    { at: 5 * momentDuration + 250, cue: "story.appear", rate: 1.04 },
+    { at: 6 * momentDuration + 250, cue: "story.appear", rate: 1.08 },
+  ]);
+  // The inline inspection whispers open, ticks between parts and closes.
+  const sound = useSound();
+  const inspected = useRef(inspection);
+  useEffect(() => {
+    const before = inspected.current;
+    inspected.current = inspection;
+    if (before === inspection) return;
+    sound.play(
+      before === null
+        ? "inspect.open"
+        : inspection === null
+          ? "inspect.close"
+          : "inspect.switch",
+    );
+  }, [inspection, sound]);
+  /** A deliberate move to a moment. */
+  function step(value: number) {
+    cues.stepped();
+    seek(value);
+  }
   function seek(value: number) {
     if (!disabled) {
       setPlaying(false);
@@ -407,6 +441,7 @@ function PrepareWorkshop(props: C04Presentation) {
                   onClick={() => {
                     if (time >= story.end) setTime(0);
                     setInspection(null);
+                    cues.toggled(!playing || story.position >= story.end);
                     setPlaying(!playing || story.position >= story.end);
                   }}
                 >
@@ -414,7 +449,7 @@ function PrepareWorkshop(props: C04Presentation) {
                 </button>
                 <button
                   disabled={disabled || story.index === 0}
-                  onClick={() => seek((story.index - 1) * momentDuration)}
+                  onClick={() => step((story.index - 1) * momentDuration)}
                 >
                   Previous moment
                 </button>
@@ -428,16 +463,19 @@ function PrepareWorkshop(props: C04Presentation) {
                     value={story.position}
                     disabled={disabled}
                     aria-valuetext={story.moment.name}
-                    onChange={(e) => seek(Number(e.currentTarget.value))}
+                    onChange={(e) => {
+                      cues.scrubbing();
+                      seek(Number(e.currentTarget.value));
+                    }}
                   />
                 </label>
                 <button
                   disabled={disabled || story.index === (checked ? 6 : 3)}
-                  onClick={() => seek((story.index + 1) * momentDuration)}
+                  onClick={() => step((story.index + 1) * momentDuration)}
                 >
                   Next moment
                 </button>
-                <button disabled={disabled} onClick={() => seek(0)}>
+                <button disabled={disabled} onClick={() => step(0)}>
                   Restart
                 </button>
               </div>
@@ -449,7 +487,7 @@ function PrepareWorkshop(props: C04Presentation) {
                       key={moment.name}
                       disabled={disabled}
                       aria-current={story.index === index ? "step" : undefined}
-                      onClick={() => seek(index * momentDuration)}
+                      onClick={() => step(index * momentDuration)}
                     >
                       <span>{String(index + 1).padStart(2, "0")}</span>{" "}
                       {moment.name}
@@ -631,7 +669,7 @@ function PrepareWorkshop(props: C04Presentation) {
                 <div className={styles.actions}>
                   <button
                     disabled={disabled}
-                    onClick={() => seek(4 * momentDuration)}
+                    onClick={() => step(4 * momentDuration)}
                   >
                     Explore the checked relationship
                   </button>

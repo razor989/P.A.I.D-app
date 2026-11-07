@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  useCueOnChange,
+  useStoryAccents,
+  useStoryCues,
+} from "../../audio/public";
+import type { StoryAccent } from "../../audio/public";
 import type { C06PreparePresentation } from "./public";
 import { ExploreComparison, ExploreModel } from "./ExploreModel";
 import { exploreChapters, exploreMoment } from "./explore-story";
@@ -7,6 +13,26 @@ import { MomentThumbnail } from "./MomentThumbnail";
 import { useStoryDock } from "../../activity/public";
 import styles from "./commission.module.css";
 import e from "./explore.module.css";
+
+/**
+ * Heard while the explanation plays by itself, on the `cue + progress`
+ * scale ExploreModel draws from: the three shared hundredths light up, then
+ * commission and total pay join the comparison (ExploreModel's gates).
+ */
+function exploreAccents(stage: number): StoryAccent[] {
+  if (stage === 1)
+    return [0, 1, 2].map((i) => ({
+      at: 1 + i * 0.08,
+      cue: "story.piece",
+      rate: 1 + i * 0.03,
+    }));
+  if (stage === 2 || stage === 3)
+    return [
+      { at: 1, cue: "story.appear" },
+      { at: 2, cue: "story.appear", rate: 1.05 },
+    ];
+  return [];
+}
 
 export function ExploreStory({
   stage,
@@ -60,6 +86,21 @@ export function ExploreStory({
   useEffect(() => {
     setPlaying(false);
   }, [selected]);
+  const cues = useStoryCues(cue, {
+    playing: playing && !full,
+    ended: time >= end,
+  });
+  useStoryAccents(
+    cue + progress,
+    playing && !full,
+    reduced,
+    exploreAccents(stage),
+  );
+  /** A deliberate move to a moment. */
+  function step(value: number) {
+    cues.stepped();
+    seek(value);
+  }
   function seek(value: number) {
     if (!disabled) {
       setPlaying(false);
@@ -70,11 +111,12 @@ export function ExploreStory({
   // is visible at once (CSS eases it in). Only scrubbing shows in-betweens.
   const settle = (i: number) => {
     setFull(false);
-    seek((starts[i + 1] ?? end) - 1);
+    step((starts[i + 1] ?? end) - 1);
   };
   const story = useRef<HTMLElement>(null);
   useStoryDock(story, "[data-dock]", cue, reduced);
   const switcher = props.projection.frame.modelSelectionControl;
+  useCueOnChange(switcher?.selectedId, "model.select");
   return (
     <section
       ref={story}
@@ -191,6 +233,7 @@ export function ExploreStory({
           onClick={() => {
             setFull(false);
             if (time >= end - 1) setTime(0);
+            cues.toggled(!playing);
             setPlaying(!playing);
           }}
         >
@@ -217,7 +260,7 @@ export function ExploreStory({
           disabled={disabled}
           onClick={() => {
             setFull(false);
-            seek(0);
+            step(0);
           }}
         >
           <span aria-hidden="true">↺</span>{" "}
@@ -235,6 +278,7 @@ export function ExploreStory({
             aria-valuetext={`${chapter.moments[cue]![0]}, moment ${cue + 1} of 3`}
             onChange={(event) => {
               setFull(false);
+              cues.scrubbing();
               seek(Number(event.currentTarget.value));
             }}
           />

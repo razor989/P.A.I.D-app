@@ -48,8 +48,11 @@ import { SessionProvider, useSessionSnapshot } from "./session-provider";
 import { StartupRecoveryGateway } from "./startup-recovery-gateway";
 import {
   AppShell,
+  createSoundEngine,
+  SoundProvider,
   StartupIdent,
   signalStartupSurface,
+  useSound,
 } from "@/presentation/shell/public";
 import type {
   C04Presentation,
@@ -67,6 +70,11 @@ import {
   c04A01V3Contract,
 } from "@/study/competencies/c04/public";
 import { constructC04Response } from "./c04-response-adapter";
+import { createBrowserSoundPreferenceStore } from "./browser-sound-preference-store";
+import {
+  createCheckObserver,
+  createCompletionObserver,
+} from "./sound-observer";
 
 const actorIdentities = new WeakMap<object, number>();
 let nextActorIdentity = 0;
@@ -225,6 +233,36 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
     getActivitySnapshot,
   );
   const activitySnapshot = getActivitySnapshot();
+  // Sound only follows authoritative results: the actor's own check and the
+  // Session's finalized completion. Presentation never decides either.
+  const sound = useSound();
+  const [observeCheck] = useState(createCheckObserver);
+  const [observeCompletion] = useState(createCompletionObserver);
+  useEffect(() => {
+    if (!actor || !activitySnapshot || activitySnapshot.status !== "active")
+      return;
+    const context = activitySnapshot.context;
+    const outcome = observeCheck({
+      actor: actorIdentity(actor),
+      responseRevision: context.responseRevision,
+      checkedRevision: context.checkedRevision,
+      responseStage: context.responseStage ?? null,
+      outcome: context.evaluation?.outcome ?? null,
+    });
+    if (!outcome) return;
+    // Prepare records participation; it never scores, so it never sounds
+    // like a judgement either way.
+    const prepare =
+      root.catalog.activities.get(context.activityId)?.instructionalFamily ===
+      "Prepare";
+    sound.play(
+      prepare
+        ? "response.recorded"
+        : outcome === "CONFIRMED"
+          ? "feedback.affirm"
+          : "feedback.reconsider",
+    );
+  }, [root, actor, activitySnapshot, observeCheck, sound]);
   useEffect(() => {
     if (
       !actor ||
@@ -269,6 +307,15 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
     snapshot.status === "active" && view.startup === "clear-pending",
     snapshot.context.startupTransaction,
   );
+  useEffect(() => {
+    if (
+      observeCompletion({
+        lifecyclePhase: view.lifecyclePhase,
+        completion: view.completion,
+      })
+    )
+      sound.play("activity.complete");
+  }, [view.lifecyclePhase, view.completion, observeCompletion, sound]);
   // Display signal only: the startup ident may reveal once the authorised
   // startup surface (destination or recovery choice) is on screen.
   const startupSurface = settled || view.startup !== "pending";
@@ -1098,6 +1145,10 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
 
 export function CompositionRoot() {
   const [root, setRoot] = useState<ApplicationRoot | null>(null);
+  // Decorative sound effects live for the page; their preference persists.
+  const [sound] = useState(() =>
+    createSoundEngine(createBrowserSoundPreferenceStore()),
+  );
   useEffect(() => {
     // A new effect setup owns fresh resources, never a restarted stopped actor.
     const current = createApplicationRoot();
@@ -1111,7 +1162,7 @@ export function CompositionRoot() {
     return () => current.stop();
   }, []);
   return (
-    <>
+    <SoundProvider engine={sound}>
       {root ? (
         <SessionProvider session={root.session}>
           <StartupShell root={root} />
@@ -1123,6 +1174,6 @@ export function CompositionRoot() {
         </main>
       )}
       <StartupIdent />
-    </>
+    </SoundProvider>
   );
 }

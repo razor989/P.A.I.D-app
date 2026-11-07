@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 import { createSalaryExploration } from "../c04-reference/employee-exploration";
+import { useInspectionSound } from "../../audio/public";
 import type { C04Presentation } from "./public";
 import { offerMoney } from "./ApplyOffer";
 import styles from "./apply.module.css";
@@ -10,6 +11,9 @@ export function ApplyComparison({ frame, apply, blocked }: C04Presentation) {
     live = useRef(blocked),
     id = useId();
   live.current = blocked;
+  const inspectionSound = useInspectionSound();
+  const voice = useRef(inspectionSound);
+  voice.current = inspectionSound;
   const difference = frame.exposedDerivedFacts.find(
     (f) => f.id === "c04/S03/checked/difference",
   );
@@ -48,6 +52,7 @@ export function ApplyComparison({ frame, apply, blocked }: C04Presentation) {
         if (node) node.textContent = text;
       },
       copyDistance: 0,
+      sound: (event, detail) => voice.current(event, detail),
       lessons: {
         original: {
           title: "The original is your reference whole.",

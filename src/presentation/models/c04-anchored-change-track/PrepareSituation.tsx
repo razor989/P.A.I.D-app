@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { createSalaryExploration } from "../c04-reference/employee-exploration";
+import { useInspectionSound } from "../../audio/public";
 import styles from "./prepare.module.css";
 
 const lessons = {
@@ -40,6 +41,9 @@ export function PrepareSituation({
   inspectionId: string;
 }) {
   const root = useRef<HTMLDivElement>(null);
+  const inspectionSound = useInspectionSound();
+  const voice = useRef(inspectionSound);
+  voice.current = inspectionSound;
   const latest = useRef({ blocked, pause, announce });
   useEffect(() => {
     latest.current = { blocked, pause, announce };
@@ -55,6 +59,7 @@ export function PrepareSituation({
       announce: (text) => latest.current.announce?.(text),
       lessons,
       copyDistance: 0,
+      sound: (event, detail) => voice.current(event, detail),
     });
     return () => control.dispose();
   }, [interactive]);

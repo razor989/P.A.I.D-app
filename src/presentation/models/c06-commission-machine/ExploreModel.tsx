@@ -209,6 +209,7 @@ export function ExploreRelationship({ kind }: { kind: string }) {
               </text>
               <rect
                 data-mini-piece
+                data-sound-grow
                 className={e.grow}
                 x="23"
                 width="130"
@@ -219,6 +220,7 @@ export function ExploreRelationship({ kind }: { kind: string }) {
               {total && (
                 <rect
                   data-mini-piece
+                  data-sound-grow
                   className={e.grow}
                   x="153"
                   width={n ? 130 : 78}

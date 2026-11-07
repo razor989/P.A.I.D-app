@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { useCueOnChange, useCueOnEnter } from "../../audio/public";
 import base from "./commission.module.css";
 import t from "./transfer.module.css";
 import { TransferDiagram } from "./TransferDiagram";
@@ -34,6 +35,8 @@ const connections = [
 export function TransferSynthesis({ blocked }: { blocked: boolean }) {
   const [selected, setSelected] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  useCueOnChange(selected, "model.select");
+  useCueOnEnter(revealed, "model.reveal");
   const id = useId();
   const item = connections[selected]!;
   return (

@@ -8,6 +8,7 @@ import {
 } from "@/presentation/navigation/public";
 import type { ActivityName } from "@/presentation/navigation/public";
 import { TransitionStage, worldOf } from "@/presentation/transitions/public";
+import { SoundToggle } from "@/presentation/audio/public";
 import type { ActivityId } from "@/core/public";
 import type { CompetencySummary, ShellProps } from "./public";
 import { DestinationView } from "./DestinationView";
@@ -208,6 +209,7 @@ export function AppShell(props: ShellProps) {
                   </>
                 )}
               </nav>
+              <SoundToggle className={styles.sound} />
             </header>
           )}
           {lesson && (

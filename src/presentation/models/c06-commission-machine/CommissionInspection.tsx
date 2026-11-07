@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from "react";
 import type { ReactNode } from "react";
 import { createWorkRecordInspection } from "./commission-inspection";
 import { RelationshipDiagram } from "./CommissionIllustrations";
+import { useInspectionSound } from "../../audio/public";
 import styles from "./commission.module.css";
 
 type Fact = { id: string; title: string; copy: string };
@@ -27,9 +28,10 @@ export function CommissionInspection({
 }) {
   const root = useRef<HTMLDivElement>(null);
   const id = useId();
-  const latest = useRef({ facts, blocked, onInspection });
+  const sound = useInspectionSound();
+  const latest = useRef({ facts, blocked, onInspection, sound });
   useEffect(() => {
-    latest.current = { facts, blocked, onInspection };
+    latest.current = { facts, blocked, onInspection, sound };
   });
   useEffect(() => {
     if (!root.current) return;
@@ -37,6 +39,7 @@ export function CommissionInspection({
       blocked: () => latest.current.blocked,
       opened: (open) => latest.current.onInspection?.(open),
       facts: () => latest.current.facts,
+      sound: (event, detail) => latest.current.sound(event, detail),
     });
     return () => control.dispose();
   }, []);

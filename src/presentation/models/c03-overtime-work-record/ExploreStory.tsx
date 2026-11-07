@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useStoryAccents, useStoryCues } from "../../audio/public";
 import type { C03WorkRecordProjection } from "./public";
-import { ExploreModel } from "./ExploreModel";
+import { ExploreModel, exploreModelAccents } from "./ExploreModel";
 import { ExploreInspection, Inspectable } from "./ExploreInspection";
 import type { ExplorePart } from "./ExploreInspection";
 import { ExploreGlyph } from "./ExploreGlyph";
@@ -112,6 +113,17 @@ export function ExploreStory({
   useEffect(() => {
     if (time === total) setPlaying(false);
   }, [time, total]);
+  const cues = useStoryCues(index, { playing, ended: time >= total });
+  const accents = useMemo(
+    () => exploreModelAccents(projection, stage),
+    [projection, stage],
+  );
+  useStoryAccents(index + progress, playing, reduced, accents);
+  /** A deliberate move to a moment. */
+  function step(value: number) {
+    cues.stepped();
+    seek(value);
+  }
   function seek(value: number) {
     if (!blocked) {
       setPlaying(false);
@@ -121,7 +133,7 @@ export function ExploreStory({
   // Stepping lands on a moment’s finished state, so the change it describes
   // is visible at once (CSS eases it in). Only scrubbing shows in-betweens.
   const settle = (i: number) =>
-    seek((starts[i] ?? 0) + (durations[i] ?? 0) - 1);
+    step((starts[i] ?? 0) + (durations[i] ?? 0) - 1);
   const story = useRef<HTMLElement>(null);
   useStoryDock(story, "[data-cue]", index, reduced);
   return (
@@ -235,6 +247,7 @@ export function ExploreStory({
             onClick={() => {
               // At (or settled on) the end, Play starts the stage again.
               if (time >= total - 1) setTime(0);
+              cues.toggled(!playing);
               setPlaying(!playing);
             }}
           >
@@ -251,7 +264,7 @@ export function ExploreStory({
           <button
             className={styles.restartControl}
             disabled={blocked}
-            onClick={() => seek(0)}
+            onClick={() => step(0)}
           >
             <ExploreGlyph name="replay" />{" "}
             <span className={explore.restartText}>Restart</span>
@@ -266,7 +279,10 @@ export function ExploreStory({
               value={time}
               disabled={blocked}
               aria-valuetext={`Moment ${index + 1} of ${passages.length}`}
-              onChange={(event) => seek(Number(event.currentTarget.value))}
+              onChange={(event) => {
+                cues.scrubbing();
+                seek(Number(event.currentTarget.value));
+              }}
             />
           </label>
           <span className={styles.time}>

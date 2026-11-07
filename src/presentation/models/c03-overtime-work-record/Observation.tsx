@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useStoryAccents, useStoryCues } from "../../audio/public";
+import type { StoryAccent } from "../../audio/public";
 import type { C03WorkRecordProjection } from "./public";
 import { WorkEvidence } from "./WorkEvidence";
 import {
@@ -8,6 +10,14 @@ import {
 } from "./work-record-story";
 import styles from "./work-record.module.css";
 import { useStoryDock } from "../../activity/public";
+
+/** Heard while the workday plays by itself (ms): the hourly rate joins the
+ * record, then the two overtime hours are placed (WorkEvidence, c03-hour). */
+const observationAccents: readonly StoryAccent[] = [
+  { at: 16_000, cue: "story.appear" },
+  { at: 24_000, cue: "story.piece" },
+  { at: 24_055, cue: "story.piece", rate: 1.04 },
+];
 
 /** Accepted C04 continuous-clock transport, adapted locally without Actor state. */
 export function Observation({
@@ -58,6 +68,16 @@ export function Observation({
     story.index,
     reduced,
   );
+  const cues = useStoryCues(story.index, {
+    playing,
+    ended: time >= story.end,
+  });
+  useStoryAccents(time, playing, reduced, observationAccents);
+  /** A deliberate move to a moment. */
+  function step(value: number) {
+    cues.stepped();
+    seek(value);
+  }
   function seek(next: number) {
     if (blocked) return;
     setPlaying(false);
@@ -104,7 +124,7 @@ export function Observation({
             className={styles.skipControl}
             aria-label="Previous moment"
             disabled={blocked || story.index === 0}
-            onClick={() => seek((story.index - 1) * momentDuration)}
+            onClick={() => step((story.index - 1) * momentDuration)}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m14 6-6 6 6 6" />
@@ -116,6 +136,7 @@ export function Observation({
             disabled={blocked}
             onClick={() => {
               if (time === story.end) setTime(0);
+              cues.toggled(!playing || time === story.end);
               setPlaying(!playing || time === story.end);
             }}
           >
@@ -131,7 +152,7 @@ export function Observation({
             className={styles.skipControl}
             aria-label="Next moment"
             disabled={blocked || story.index === moments.length - 1}
-            onClick={() => seek((story.index + 1) * momentDuration)}
+            onClick={() => step((story.index + 1) * momentDuration)}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="m10 6 6 6-6 6" />
@@ -140,7 +161,7 @@ export function Observation({
           <button
             className={styles.restartControl}
             disabled={blocked}
-            onClick={() => seek(0)}
+            onClick={() => step(0)}
           >
             <span aria-hidden="true">↺</span>{" "}
             <span className={styles.restartText}>Restart</span>
@@ -155,7 +176,10 @@ export function Observation({
               value={time}
               disabled={blocked}
               aria-valuetext={`${story.moment.label}, ${(time / 1000).toFixed(1)} seconds`}
-              onChange={(event) => seek(Number(event.currentTarget.value))}
+              onChange={(event) => {
+                cues.scrubbing();
+                seek(Number(event.currentTarget.value));
+              }}
             />
           </label>
           <span className={styles.time} aria-hidden="true">
@@ -168,7 +192,7 @@ export function Observation({
               key={item.label}
               disabled={blocked}
               aria-current={story.index === index ? "step" : undefined}
-              onClick={() => seek(index * momentDuration)}
+              onClick={() => step(index * momentDuration)}
             >
               <span className={styles.chapterNumber} aria-hidden="true">
                 0{index + 1}

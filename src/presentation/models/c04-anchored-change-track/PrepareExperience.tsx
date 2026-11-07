@@ -1,3 +1,4 @@
+import { useStoryAccents, useStoryCues } from "../../audio/public";
 import { useEffect, useId, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { C04Presentation } from "./public";
@@ -205,6 +206,21 @@ function PrepareWorkshop(props: C04Presentation) {
   }, [blocked, reviewing, frame, onPresented]);
   // Phones: Maya’s statements stay pinned while the captions change.
   const storyRef = useRef<HTMLDivElement>(null);
+  const cues = useStoryCues(story.index, {
+    playing,
+    ended: time >= story.end,
+  });
+  // Maya's statements arrive: the "before" document, then the "after" one
+  // (PrepareSituation's showBefore / showAfter), just after the page turns.
+  useStoryAccents(time, playing, reduced, [
+    { at: momentDuration + 300, cue: "story.appear" },
+    { at: 3 * momentDuration + 300, cue: "story.appear", rate: 1.05 },
+  ]);
+  /** A deliberate move to a moment. */
+  function step(value: number) {
+    cues.stepped();
+    seek(value);
+  }
   function seek(value: number) {
     if (blocked) return;
     setPlaying(false);
@@ -324,7 +340,7 @@ function PrepareWorkshop(props: C04Presentation) {
                     className="story-skip"
                     aria-label="Previous moment"
                     disabled={blocked || story.index === 0}
-                    onClick={() => seek((story.index - 1) * momentDuration)}
+                    onClick={() => step((story.index - 1) * momentDuration)}
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="m14 6-6 6 6 6" />
@@ -340,6 +356,7 @@ function PrepareWorkshop(props: C04Presentation) {
                     disabled={blocked}
                     onClick={() => {
                       if (time === story.end) setTime(0);
+                      cues.toggled(!playing || time === story.end);
                       setPlaying(!playing || time === story.end);
                     }}
                   ></button>
@@ -347,7 +364,7 @@ function PrepareWorkshop(props: C04Presentation) {
                     className="story-skip"
                     aria-label="Next moment"
                     disabled={blocked || story.index === 5}
-                    onClick={() => seek((story.index + 1) * momentDuration)}
+                    onClick={() => step((story.index + 1) * momentDuration)}
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="m10 6 6 6-6 6" />
@@ -357,7 +374,7 @@ function PrepareWorkshop(props: C04Presentation) {
                     className="story-restart"
                     aria-label="Replay from start"
                     disabled={blocked}
-                    onClick={() => seek(0)}
+                    onClick={() => step(0)}
                   >
                     <span aria-hidden="true">↺</span>{" "}
                     <span className={styles.restartText}>Restart</span>
@@ -374,9 +391,10 @@ function PrepareWorkshop(props: C04Presentation) {
                       value={time}
                       disabled={blocked}
                       aria-valuetext={`${story.moment.name}, ${(time / 1000).toFixed(1)} seconds`}
-                      onChange={(event) =>
-                        seek(Number(event.currentTarget.value))
-                      }
+                      onChange={(event) => {
+                        cues.scrubbing();
+                        seek(Number(event.currentTarget.value));
+                      }}
                     />
                   </label>
                   <span className="story-time" aria-hidden="true">
@@ -394,7 +412,7 @@ function PrepareWorkshop(props: C04Presentation) {
                       aria-label={`0${index + 1} ${moment.name}`}
                       disabled={blocked}
                       aria-pressed={index === story.index}
-                      onClick={() => seek(index * momentDuration)}
+                      onClick={() => step(index * momentDuration)}
                     >
                       <span className="chapter-number">0{index + 1}</span>
                       <svg viewBox="0 0 66 28" aria-hidden="true">

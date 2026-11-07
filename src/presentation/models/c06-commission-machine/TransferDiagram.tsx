@@ -1,4 +1,5 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useSound } from "../../audio/public";
 import { useWorkRecordMotion } from "./use-commission-motion";
 import t from "./transfer.module.css";
 
@@ -54,6 +55,21 @@ export function TransferDiagram({
   entered?: { commission?: string | undefined; total?: string | undefined };
 }) {
   const [selected, setSelected] = useState<Part | null>(null);
+  // Choosing a part reveals it; moving to another ticks; letting go closes.
+  const sound = useSound();
+  const shown = useRef(selected);
+  useEffect(() => {
+    const before = shown.current;
+    shown.current = selected;
+    if (before === selected) return;
+    sound.play(
+      before === null
+        ? "model.reveal"
+        : selected === null
+          ? "inspect.close"
+          : "inspect.switch",
+    );
+  }, [selected, sound]);
   const id = useId();
   const surface = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);

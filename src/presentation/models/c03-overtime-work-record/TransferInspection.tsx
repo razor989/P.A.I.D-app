@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useInspectionCues, useSound } from "../../audio/public";
 import { ExploreGlyph, ExploreHourMark } from "./ExploreGlyph";
 import type { C03WorkRecordProjection } from "./public";
 import { pesos } from "./WorkEvidence";
@@ -75,6 +76,8 @@ export function TransferInspection({
     left: number;
     top: number;
   } | null>(null);
+  useInspectionCues(active?.part ?? null, active?.pinned ?? false);
+  const sound = useSound();
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const suppressFocus = useRef(false);
   const dismissed = useRef<HTMLElement | null>(null);
@@ -134,6 +137,10 @@ export function TransferInspection({
     if (!pin && dismissed.current === target) return;
     dismissed.current = null;
     if (active?.pinned && !pin) return;
+    // A deliberate (click or Enter) inspection opens with a quiet reveal;
+    // hover and focus previews stay silent.
+    if (pin && !(active?.pinned && active.target === target))
+      sound.play("model.reveal");
     clearTimeout(timer.current);
     const show = () => {
       const box = target.getBoundingClientRect();
@@ -300,7 +307,10 @@ export function TransferInspection({
             <footer>
               <button
                 aria-pressed={active.pinned}
-                onClick={() => setActive({ ...active, pinned: !active.pinned })}
+                onClick={() => {
+                  sound.play(active.pinned ? "ui.toggle.off" : "ui.toggle.on");
+                  setActive({ ...active, pinned: !active.pinned });
+                }}
               >
                 {active.pinned ? "Unpin" : "Keep open"}
               </button>

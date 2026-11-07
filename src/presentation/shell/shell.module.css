@@ -19,6 +19,11 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
+  /* Navigation and the sound switch share the trailing edge. */
+  margin-inline-start: auto;
+}
+.header > .sound {
+  margin-inline-start: calc(var(--space-3) - var(--layout-gap));
 }
 .shell
   button:where(
@@ -145,6 +150,17 @@
 }
 .shell[data-destination="library"] > .header > nav:empty {
   display: none;
+}
+/* The centred wordmark stays centred: the switch rides the trailing edge. */
+.shell[data-destination="library"] > .header {
+  position: relative;
+}
+.shell[data-destination="library"] > .header > .sound {
+  position: absolute;
+  inset-inline-end: var(--layout-gutter);
+  inset-block-start: 50%;
+  margin: 0;
+  transform: translateY(-50%);
 }
 .shell[data-destination="library"] > .main {
   padding-block-start: var(--space-2);

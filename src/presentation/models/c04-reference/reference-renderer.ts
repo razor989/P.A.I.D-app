@@ -1,3 +1,5 @@
+import { silentReference } from "./story-sound";
+import type { ReferenceSound } from "./story-sound";
 import type { C04Presentation } from "../c04-anchored-change-track/public";
 import { recap } from "./recap";
 import { createEmployeeExplanation } from "./employee-explanation";
@@ -34,14 +36,18 @@ type ReadingState = {
   help: number;
   attempt: string | null;
 };
+export type { ReferenceCue, ReferenceSound } from "./story-sound";
+
 export function createReferenceRenderer(
   main: HTMLElement,
   announce: (text: string) => void,
+  sound: ReferenceSound = silentReference,
 ) {
-  const employeeExplanation = createEmployeeExplanation(announce);
-  const employeeBExplanation = createEmployeeExplanation(announce, "B");
-  const comparisonExplanation = createComparisonExplanation(announce);
-  const formulaExplanation = createFormulaExplanation(announce);
+  const cue = sound.cue;
+  const employeeExplanation = createEmployeeExplanation(announce, "A", sound);
+  const employeeBExplanation = createEmployeeExplanation(announce, "B", sound);
+  const comparisonExplanation = createComparisonExplanation(announce, sound);
+  const formulaExplanation = createFormulaExplanation(announce, sound);
   let viewportIdentity = "";
   let recapHost: HTMLElement | null = null;
   let recapVisible = false;
@@ -1148,6 +1154,7 @@ export function createReferenceRenderer(
         return;
       }
       if (state.beats[s]! < lastBeats[s]!) {
+        cue("model.step");
         state.beats[s]!++;
         if ((s === 1 || s === 2) && state.beats[s] === 2)
           state.modelView = "percent";
@@ -1163,6 +1170,7 @@ export function createReferenceRenderer(
     }
     if (action === "back") {
       if (state.beats[s]! > 0) {
+        cue("model.step");
         state.beats[s]!--;
         render(true, "back");
       } else if (state.reviewing) {
@@ -1180,9 +1188,12 @@ export function createReferenceRenderer(
       if (s === 1 || s === 2) props.onSelect("C04-S02-" + employee);
       if (action === "match") state.matched = !state.matched;
       else state.modelView = state.modelView === "pesos" ? "percent" : "pesos";
-    } else if (action === "view")
-      state.compareView = button.dataset.view ?? "pesos";
-    else if (action === "predict")
+      cue("model.select");
+    } else if (action === "view") {
+      const view = button.dataset.view ?? "pesos";
+      if (view !== state.compareView) cue("model.select");
+      state.compareView = view;
+    } else if (action === "predict")
       state.prediction = button.dataset.value ?? null;
     else if (action === "role") state.role = button.dataset.role ?? null;
     else return;

@@ -1,3 +1,5 @@
+import type { InspectionSound } from "../../audio/public";
+
 /** Narrow local adaptation of C04 employee-exploration: no private imports.
  * Retains placement candidates, hover/dismiss/hold timings, pinning, pause,
  * keyboard and touch semantics. Salary-specific teaching is intentionally absent.
@@ -52,6 +54,8 @@ export function createWorkRecordInspection(
   options: {
     blocked: () => boolean;
     opened: (open: boolean) => void;
+    /** Decorative sound for opening, closing and the mini-animation. */
+    sound?: InspectionSound;
     facts: () => readonly { id: string; title: string; copy: string }[];
   },
 ) {
@@ -74,6 +78,8 @@ export function createWorkRecordInspection(
   const target = (event: Event) =>
     (event.target as Element).closest<HTMLElement>("[data-explore]");
   let animation: number | undefined;
+  // Pieces already heard in the current animated run (none when instant).
+  let placed: Set<number> | null = null;
   const motion =
     typeof matchMedia === "function"
       ? matchMedia("(prefers-reduced-motion: reduce)")
@@ -89,6 +95,10 @@ export function createWorkRecordInspection(
     );
     pieces.forEach((piece, index) => {
       const local = Math.max(0, Math.min(1, eased * 1.4 - index * 0.05));
+      if (placed && local > 0 && !placed.has(index)) {
+        placed.add(index);
+        options.sound?.("piece", { index });
+      }
       piece.style.opacity = String(local);
       piece.style.transform = `translateY(${18 * (1 - local)}px)`;
     });
@@ -96,10 +106,13 @@ export function createWorkRecordInspection(
   }
   function replay() {
     cancelMotion();
+    placed = null;
     if (motion?.matches) {
       project(1);
       return;
     }
+    placed = new Set();
+    grown();
     const started = performance.now();
     project(0);
     const tick = () => {
@@ -133,7 +146,8 @@ export function createWorkRecordInspection(
     panel.style.left = placed ? `${placed.x}px` : "";
     panel.style.top = placed ? `${placed.y}px` : "";
   }
-  function close(restore = false) {
+  function close(restore = false, quiet = false) {
+    if (!quiet && !panel.hidden && active) options.sound?.("close");
     cancelMotion();
     clearTimeout(hover);
     clearTimeout(dismiss);
@@ -156,6 +170,9 @@ export function createWorkRecordInspection(
       .find((item) => item.id === element.dataset.explore);
     if (!fact) return;
     clearTimeout(dismiss);
+    const wasOpen = !panel.hidden && active !== null;
+    const wasPinned = pinned;
+    const was = active;
     trigger?.setAttribute("aria-expanded", "false");
     trigger = element;
     trigger.setAttribute("aria-expanded", "true");
@@ -177,6 +194,12 @@ export function createWorkRecordInspection(
         });
     }
     panel.hidden = false;
+    // A deliberate pin reveals; hover or focus whispers; moving straight to
+    // another part ticks. Re-pinning what is already pinned stays quiet.
+    if (pin) {
+      if (!(wasPinned && was === fact.id)) options.sound?.("pin");
+    } else if (!wasOpen) options.sound?.("open");
+    else if (changed) options.sound?.("switch");
     if (changed) replay();
     position();
   }
@@ -368,10 +391,16 @@ export function createWorkRecordInspection(
   );
   window.addEventListener("resize", position, { signal });
   window.addEventListener("scroll", position, { signal, capture: true });
+  /** CSS growth inside the shown diagram is heard as it starts. */
+  function grown() {
+    if (panel.querySelector(`[data-diagram="${active}"] [data-sound-grow]`))
+      options.sound?.("grow");
+  }
   return {
-    close,
+    // Closes asked for by the story (a new moment, a block) stay quiet.
+    close: (restore = false) => close(restore, true),
     dispose() {
-      close();
+      close(false, true);
       controller.abort();
     },
   };

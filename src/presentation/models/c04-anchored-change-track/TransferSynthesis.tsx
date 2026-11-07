@@ -1,4 +1,5 @@
 import { useId, useState } from "react";
+import { useCueOnChange, useCueOnEnter } from "../../audio/public";
 import styles from "./transfer.module.css";
 
 const comparisons = [
@@ -14,6 +15,8 @@ export function TransferSynthesis({ blocked }: { blocked: boolean }) {
     comparisons[0],
   );
   const [revealed, setRevealed] = useState(false);
+  useCueOnChange(example.original, "model.select");
+  useCueOnEnter(revealed, "model.reveal");
   const id = useId();
   return (
     <section

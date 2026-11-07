@@ -7,6 +7,7 @@ import { ExploreGlyph } from "./ExploreGlyph";
 import { pesos } from "./WorkEvidence";
 import { revealHeading } from "../../activity/public";
 import { usePrefersReducedMotion } from "../../accessibility/public";
+import { useSound } from "../../audio/public";
 
 const labels = {
   multiplier: "Applicable overtime multiplier",
@@ -17,6 +18,8 @@ const valid = (text: string) =>
   /^[+]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text.trim());
 
 /** Two reading panels, one independent composite response and one authoritative Check. */
+const SLOT_LANDS_MS = 273;
+
 export function ApplyResponse({
   projection,
   blocked,
@@ -42,6 +45,7 @@ export function ApplyResponse({
   >({});
   const heading = useRef<HTMLHeadingElement>(null);
   const reduced = usePrefersReducedMotion();
+  const sound = useSound();
   const id = useId();
   const editable =
     !blocked && frame.allowedLearnerIntents.includes("RESPONSE_CHANGED");
@@ -174,7 +178,14 @@ export function ApplyResponse({
           <button
             className={base.primary}
             disabled={blocked || !valid(shown(field))}
-            onClick={() => move(1)}
+            onClick={() => {
+              // Heard as the multiplier drops into its slot: `slot-enter`
+              // reaches rest at its 65% keyframe (273 ms of 420 ms).
+              sound.play("model.snap", {
+                delayMs: reduced ? 0 : SLOT_LANDS_MS,
+              });
+              move(1);
+            }}
           >
             Use this multiplier <ExploreGlyph name="next" />
           </button>

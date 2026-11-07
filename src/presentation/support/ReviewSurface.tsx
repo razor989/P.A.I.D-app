@@ -1,6 +1,7 @@
-import { useId } from "react";
+import { useEffect, useId } from "react";
 import type { ActivityId } from "@/core/public";
 import { ActionButton } from "@/presentation/controls/public";
+import { useSound } from "../audio/public";
 import styles from "./support.module.css";
 
 /** Presentation does not interpret phase strings or decide return eligibility. */
@@ -30,6 +31,8 @@ export function ReviewSurface({
   onClose,
 }: ReviewSurfaceProps) {
   const titleId = useId();
+  const sound = useSound();
+  useEffect(() => sound.play("ui.open"), [sound]);
   return (
     <section className={styles.content} aria-labelledby={titleId}>
       <h2 id={titleId}>Review</h2>
@@ -50,7 +53,10 @@ export function ReviewSurface({
       </ul>
       <ActionButton
         label={closeLabel}
-        onAction={() => onClose({ mode: "REVIEW", origin: review.origin })}
+        onAction={() => {
+          sound.play("ui.close");
+          onClose({ mode: "REVIEW", origin: review.origin });
+        }}
       />
     </section>
   );

@@ -8,6 +8,8 @@ import {
   coverPalette,
 } from "../destinations/art/ActivityCoverArt";
 import { competencyStories } from "../destinations/content";
+import { useSound } from "../audio/public";
+import type { SequenceLayer } from "../audio/public";
 import { destinationIdentity, planTransition, worldOf } from "./plan";
 import type { TransitionPlan } from "./plan";
 import {
@@ -136,6 +138,13 @@ const ease = {
   away: "cubic-bezier(.55,0,.8,.25)",
   pull: "cubic-bezier(.5,0,.75,0)",
 };
+/** The settle easing first reaches its rest at ~60% of its duration (then
+ * overshoots a whisper): that is when a moving part visibly lands. */
+const SETTLE_LANDS = 0.6;
+const landsAt = (delay: number, duration: number) =>
+  Math.round(delay + duration * SETTLE_LANDS);
+/** Sound accents of a run, written beside the timings they follow. */
+type Accents = SequenceLayer[];
 
 function TransitionOverlay({
   run,
@@ -144,6 +153,7 @@ function TransitionOverlay({
   const root = useRef<HTMLDivElement>(null);
   const stillHost = useRef<HTMLDivElement>(null);
   const mounted = useRef(false);
+  const sound = useSound();
   const { plan, capture } = run;
   const family = capture.mode === "reduced" ? "fallback" : plan.family;
   const w = window.innerWidth;
@@ -159,21 +169,39 @@ function TransitionOverlay({
         /* no still: the overlay simply starts from its own layers */
       }
     }
+    const origin = performance.now();
     const motion = new MotionRun(() => onDone(run.key));
-    const stop = watchInterruptions(motion.finish);
     const node = root.current;
+    const accents: Accents = [];
     const total = node
       ? family === "accordion"
-        ? accordion(motion, node, plan, capture.origin, w, h)
+        ? accordion(motion, node, plan, capture.origin, w, h, accents)
         : family === "chapter"
-          ? chapter(motion, node, plan, capture.origin, w, h)
-          : fallback(motion, node, capture.mode)
+          ? chapter(motion, node, plan, capture.origin, w, h, accents)
+          : fallback(motion, node, capture.mode, accents)
       : 0;
-    motion.at(total, motion.finish);
+    // Sound follows the motion that actually runs; an interrupted run takes
+    // its pending accents with it, a completed one lets its tails ring out.
+    const sequence = sound.sequence(
+      `${family}.${plan.direction}`,
+      accents,
+      origin,
+    );
+    let completed = false;
+    const complete = () => {
+      completed = true;
+      motion.finish();
+    };
+    const stop = watchInterruptions(() => {
+      sequence.cancel();
+      motion.finish();
+    });
+    motion.at(total, complete);
     // Belt and braces: the layer always goes, even if a timer is throttled.
-    motion.at(total + 400, motion.finish);
+    motion.at(total + 400, complete);
     return () => {
       stop();
+      if (!completed) sequence.cancel();
       motion.dispose();
     };
     // One run per mount; the key changes for every new transition.
@@ -207,9 +235,15 @@ function hideStill(node: HTMLElement) {
   if (still) still.style.visibility = "hidden";
 }
 
-function fallback(motion: MotionRun, node: HTMLElement, mode: MotionMode) {
+function fallback(
+  motion: MotionRun,
+  node: HTMLElement,
+  mode: MotionMode,
+  accents: Accents,
+) {
   // Non-spatial: the departing screen simply gives way.
   const duration = mode === "reduced" ? 140 : 220;
+  accents.push({ cue: "nav.fallback", at: 0 });
   motion.animate(
     node.querySelector('[data-part="still"]'),
     [{ opacity: 1 }, { opacity: 0 }],
@@ -308,6 +342,7 @@ function accordion(
   origin: Rect | null,
   w: number,
   h: number,
+  accents: Accents,
 ) {
   const { axis, count, size } = accordionGeometry(w, h);
   const fold = node.querySelector<HTMLElement>('[data-part="fold"]');
@@ -342,9 +377,17 @@ function accordion(
         easing: ease.glide,
       },
     );
+    accents.push({ cue: "nav.air.rise", at: 0 });
     // B–C: connected panels unfold from the card, one hinge after another.
     panels.forEach((panel, i) => {
       const timing = { duration: 260, delay: 40 + i * 30, easing: ease.settle };
+      // Each panel touches down: a light ripple, brightening as it opens.
+      accents.push({
+        cue: "nav.tick",
+        at: landsAt(timing.delay, timing.duration),
+        rate: 1 + i * 0.025,
+        gainDb: -i * 1.2,
+      });
       motion.animate(
         panel,
         [{ transform: folded(i, at) }, { transform: open }],
@@ -358,6 +401,8 @@ function accordion(
     });
     const covered = 40 + (count - 1) * 30 + 260;
     motion.at(covered, () => hideStill(node));
+    // The publication is fully open: it settles.
+    accents.push({ cue: "nav.settle", at: covered });
     // D: the publication opens onto the gallery, folding off the far edge.
     panels.forEach((panel, i) => {
       const timing: KeyframeAnimationOptions = {
@@ -387,6 +432,13 @@ function accordion(
       delay: 30 + (count - 1 - i) * 35,
       easing: ease.settle,
     };
+    // The same ripple, travelling the other way and a shade lower.
+    accents.push({
+      cue: "nav.tick",
+      at: landsAt(timing.delay, timing.duration),
+      rate: 0.92 + (count - 1 - i) * 0.02,
+      gainDb: -(count - 1 - i) * 1.2,
+    });
     motion.animate(
       panel,
       [{ transform: folded(i, edge) }, { transform: open }],
@@ -395,6 +447,11 @@ function accordion(
     motion.animate(shades[i], [{ opacity: 0.5 }, { opacity: rest(i) }], timing);
   });
   const covered = 30 + (count - 1) * 35 + 260;
+  // The air releases as the publication closes; it lands on its card.
+  accents.push(
+    { cue: "nav.air.fall", at: covered - 60 },
+    { cue: "nav.land", at: covered + 260 },
+  );
   // …then close into the card the learner opened it from.
   motion.at(covered, () => {
     hideStill(node);
@@ -568,6 +625,7 @@ function chapter(
   origin: Rect | null,
   w: number,
   h: number,
+  accents: Accents,
 ) {
   const { cover } = chapterGeometry(w, h);
   const wrap = node.querySelector<HTMLElement>('[data-part="wrap"]');
@@ -586,6 +644,7 @@ function chapter(
     // A–B: the chosen cover lifts and grows into the chapter sheet.
     const seed = clampRect(origin, w, h);
     const lift = { duration: 300, easing: ease.glide };
+    accents.push({ cue: "chapter.slide", at: 0 });
     motion.animate(
       wrap,
       [{ clipPath: insetOf(seed, w, h, 10) }, { clipPath: full }],
@@ -607,6 +666,7 @@ function chapter(
       ],
       { duration: 120, delay: 260, easing: "ease-out" },
     );
+    accents.push({ cue: "chapter.perforation", at: 260 });
     motion.animate(perf, [{ opacity: 1 }, { opacity: 0 }], {
       duration: 80,
       delay: 400,
@@ -622,6 +682,13 @@ function chapter(
     });
     const ta = tear(tornA, "translate(-5px, -4px) rotate(-0.8deg)", 330);
     const tb = tear(tornB, "translate(4px, 3px) rotate(0.5deg)", 360);
+    // Each half lets go at the peak of its small pull (offset 0.2).
+    const release = (t: typeof ta) =>
+      Math.round(t.options.delay + t.options.duration * 0.2);
+    accents.push(
+      { cue: "chapter.release", at: release(ta) },
+      { cue: "chapter.release", at: release(tb), rate: 0.94, gainDb: -3 },
+    );
     motion.animate(a, ta.keyframes, ta.options);
     motion.animate(b, tb.keyframes, tb.options);
     motion.animate(
@@ -633,11 +700,18 @@ function chapter(
         easing: ease.away,
       },
     );
+    // The stub clears the edge: the lesson is open.
+    accents.push({ cue: "nav.tick", at: 380 + 180, gainDb: -4, rate: 0.9 });
     // D–E: the lesson is already live beneath; the run then removes itself.
     return 680;
   }
 
   // Chapter Return: the torn halves swing back together over the lesson…
+  accents.push(
+    { cue: "chapter.slide.back", at: 0 },
+    // The later half (delay 30) meets the first: the chapter seals.
+    { cue: "chapter.seal", at: landsAt(30, 300) },
+  );
   motion.animate(a, [{ transform: tornA }, { transform: "none" }], {
     duration: 300,
     easing: ease.settle,
@@ -663,7 +737,9 @@ function chapter(
       duration: 420,
     },
   );
-  // …and the sealed chapter cover settles back into its place.
+  // …and the sealed chapter cover settles back into its place (the glide
+  // arrives just before its 280 ms end).
+  accents.push({ cue: "nav.land", at: 340 + 260, gainDb: -2 });
   motion.at(340, () => {
     hideStill(node);
     const chapterId = plan.chapter?.activityId;

@@ -1,3 +1,5 @@
+import { silentReference, storyAccents } from "./story-sound";
+import type { ReferenceSound } from "./story-sound";
 import {
   createSalaryExploration,
   explorationMarkup,
@@ -59,7 +61,20 @@ function markup(avatar: string) {
     <div class="story-moments" role="group" aria-label="Choose a formula moment">${chapters.map((c, i) => `<button type="button" data-moment="${i}"><span class="chapter-number">0${i + 1}</span><svg viewBox="0 0 66 28" aria-hidden="true"><rect x="2" y="9" width="44" height="12"/><path d="M50 9h6v12h-6z"/></svg><span>${c.title}</span></button>`).join("")}</div>
   </section>`;
 }
-export function createFormulaExplanation(announce: (text: string) => void) {
+// Heard only while the formula plays by itself (seconds).
+const formulaAccents = storyAccents(
+  [
+    { at: 12, cue: "story.grow" },
+    { at: 24, cue: "story.piece" },
+  ],
+  chapterDuration,
+  duration,
+);
+
+export function createFormulaExplanation(
+  announce: (text: string) => void,
+  sound: ReferenceSound = silentReference,
+) {
   let root: HTMLElement | null = null,
     time = 0,
     playing = false,
@@ -203,7 +218,9 @@ export function createFormulaExplanation(announce: (text: string) => void) {
     lastTick = performance.now();
     timer = setTimeout(() => {
       if (!playing) return;
+      const before = time;
       time = Math.min(duration, time + (performance.now() - lastTick) / 1000);
+      formulaAccents(sound, before, time, motion?.matches ?? false);
       if (time === duration) pause();
       draw();
       notify();
@@ -240,6 +257,7 @@ export function createFormulaExplanation(announce: (text: string) => void) {
           const action = b.dataset.story,
             index = formulaFrame(time).index;
           if (action === "play") {
+            sound.cue(playing ? "ui.toggle.off" : "ui.toggle.on");
             if (playing) pause();
             else {
               if (time === duration) time = 0;
@@ -248,13 +266,19 @@ export function createFormulaExplanation(announce: (text: string) => void) {
               schedule();
             }
             draw();
-          } else if (action === "previous")
+          } else if (action === "previous") {
+            sound.cue("model.step");
             seek(Math.max(0, index - 1) * chapterDuration);
-          else if (action === "next")
+          } else if (action === "next") {
+            sound.cue("model.step");
             seek(Math.min(3, index + 1) * chapterDuration);
-          else if (action === "replay") seek(0);
-          else if (b.dataset.moment !== undefined)
+          } else if (action === "replay") {
+            sound.cue("model.step");
+            seek(0);
+          } else if (b.dataset.moment !== undefined) {
+            sound.cue("model.step");
             seek(Number(b.dataset.moment) * chapterDuration);
+          }
         };
         root.oninput = (event) => {
           if (!blocked && event.target instanceof HTMLInputElement)
@@ -269,6 +293,7 @@ export function createFormulaExplanation(announce: (text: string) => void) {
           reduced: () => motion?.matches ?? false,
           announce,
           lessons: formulaLessons,
+          sound: sound.inspection,
         });
       }
       if (parentBeat !== beat) {

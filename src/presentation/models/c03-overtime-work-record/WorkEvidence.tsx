@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import { createWorkRecordInspection } from "./work-record-inspection";
 import { InspectionDiagram } from "./InspectionDiagram";
+import { useInspectionSound } from "../../audio/public";
 import type { C03WorkRecordProjection } from "./public";
 import styles from "./work-record.module.css";
 
@@ -61,7 +62,10 @@ export function WorkEvidence({
   const control = useRef<ReturnType<typeof createWorkRecordInspection> | null>(
     null,
   );
+  const inspectionSound = useInspectionSound();
+  const sound = useRef(inspectionSound);
   useEffect(() => {
+    sound.current = inspectionSound;
     latest.current = { blocked, onInspection };
     currentFacts.current = facts;
   });
@@ -71,6 +75,7 @@ export function WorkEvidence({
       blocked: () => latest.current.blocked,
       opened: (open) => latest.current.onInspection?.(open),
       facts: () => currentFacts.current,
+      sound: (event, detail) => sound.current(event, detail),
     });
     control.current = inspection;
     return () => {

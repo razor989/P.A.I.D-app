@@ -1,0 +1,7 @@
+SOFT SIGNAL — SIMPLE SOUND ASSET LICENSE
+
+You may use and modify the included sounds for personal or commercial purposes, including in games, apps, videos, prototypes, commercial client work and commercial end products. You may synchronize them with your project and distribute them only as an integrated part of that project, where they are not offered as standalone sound assets.
+
+You may not sell, share, sublicense or redistribute the sounds as standalone files or as this pack; repackage them into another sound-effects collection; or use them to create a competing sound asset pack.
+
+This license is nonexclusive. The sounds are provided as-is, without a promise of uniqueness, fitness for a particular purpose, or continued availability.

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useCueOnEnter } from "../../audio/public";
 import type { C03PreparePresentation } from "./public";
 import { TransferModel } from "./TransferModel";
 import { TransferSynthesis } from "./TransferSynthesis";
@@ -16,6 +17,7 @@ export function TransferCompletion(
 ) {
   const [view, setView] = useState<"recap" | "synthesis" | "finale">("recap");
   const [inspect, setInspect] = useState(false);
+  useCueOnEnter(inspect, "model.reveal");
   const heading = useRef<HTMLHeadingElement>(null);
   const surface = useRef<HTMLDivElement>(null);
   useEffect(() => {

@@ -6,6 +6,7 @@ import { competencyStories } from "../content";
 import type { CompetencyStory } from "../content";
 import { CompetencyArt } from "../art/CompetencyArt";
 import { StampBadge, WaveRule } from "../art/Motifs";
+import { useSound } from "../../audio/public";
 import { useSlideshow } from "./useSlideshow";
 import styles from "./library.module.css";
 
@@ -31,6 +32,12 @@ export function HeroSlideshow({
     return story ? [{ summary, story }] : [];
   });
   const show = useSlideshow(featured.length, blocked);
+  // Only the learner's own choices sound; autoplay advances silently.
+  const sound = useSound();
+  const choose = (i: number) => {
+    if (i !== show.index) sound.play("ui.select");
+    show.goTo(i);
+  };
   const base = useId();
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const rotation = useRef<HTMLButtonElement>(null);
@@ -61,7 +68,7 @@ export function HeroSlideshow({
     if (target === null) return;
     event.preventDefault();
     const wrapped = (target + featured.length) % featured.length;
-    show.goTo(wrapped);
+    choose(wrapped);
     tabs.current[wrapped]?.focus();
   };
   return (
@@ -166,7 +173,7 @@ export function HeroSlideshow({
                 aria-controls={`${base}-slide-${i}`}
                 tabIndex={selected ? 0 : -1}
                 disabled={blocked}
-                onClick={() => show.goTo(i)}
+                onClick={() => choose(i)}
                 onKeyDown={(event) => moveTab(event, i)}
               >
                 <span className={styles.tabNumber}>{story.number}</span>
@@ -189,7 +196,10 @@ export function HeroSlideshow({
             className={styles.roundButton}
             aria-label="Previous competency"
             disabled={blocked}
-            onClick={show.previous}
+            onClick={() => {
+              sound.play("ui.select");
+              show.previous();
+            }}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path
@@ -208,7 +218,10 @@ export function HeroSlideshow({
             className={styles.roundButton}
             aria-label="Next competency"
             disabled={blocked}
-            onClick={show.next}
+            onClick={() => {
+              sound.play("ui.select");
+              show.next();
+            }}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path
@@ -227,7 +240,10 @@ export function HeroSlideshow({
             data-paid-nav
             className={styles.playButton}
             disabled={blocked}
-            onClick={show.togglePlaying}
+            onClick={() => {
+              sound.play(show.playing ? "ui.toggle.off" : "ui.toggle.on");
+              show.togglePlaying();
+            }}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               {show.playing ? (

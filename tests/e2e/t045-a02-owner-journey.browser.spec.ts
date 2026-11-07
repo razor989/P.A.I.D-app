@@ -128,7 +128,8 @@ test("Recovery storage failure retries honestly and malformed checkpoint require
     const original = Storage.prototype.getItem;
     let reads = 0;
     Storage.prototype.getItem = function (key) {
-      if (reads++ < 2 && key === "paid.recovery.checkpoint.v1") {
+      // Count checkpoint reads only: other preferences (sound) read too.
+      if (key === "paid.recovery.checkpoint.v1" && reads++ < 2) {
         throw new Error("intentional browser recovery read failure");
       }
       return original.call(this, key);

@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { useCueOnChange } from "../../audio/public";
 import styles from "./transfer.module.css";
 
 const scenes = [
@@ -57,6 +58,8 @@ export function TransferStory({
   const [scene, setScene] = useState(startOpen ? 0 : -1);
   const [revealed, setRevealed] = useState(false);
   const [replay, setReplay] = useState(0);
+  // Each "follow"/"replay" press re-tells the connection.
+  useCueOnChange(replay, "model.reveal");
   const heading = useRef<HTMLHeadingElement>(null);
   const resultId = useId();
   const example = scenes[scene];

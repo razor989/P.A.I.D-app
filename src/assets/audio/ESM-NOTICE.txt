@@ -1,0 +1,10 @@
+Epic Stock Media — Smart UI (Notification one-shots)
+
+Used here: one processed derivative (startup-tone.ogg), from
+"Abstract_03_Dry_Single_Water" in One_Shots/Notification/Abstract.
+
+The source WAV files carry the embedded notice "© Epic Stock Media,
+All Rights Reserved". No end-user licence agreement was present in the
+library folder supplied for this project. The owner must confirm that a
+valid Epic Stock Media licence covers this use (bundled in a distributed
+application, not as standalone files) before release.

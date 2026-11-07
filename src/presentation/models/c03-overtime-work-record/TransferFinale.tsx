@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { useCueOnChange } from "../../audio/public";
 import type { C03WorkRecordProjection } from "./public";
 import { ExploreGlyph, ExploreHourMark } from "./ExploreGlyph";
 import { pesos } from "./WorkEvidence";
@@ -54,6 +55,8 @@ export function TransferFinale({
   const [scene, setScene] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [replay, setReplay] = useState(0);
+  // Each "follow"/"replay" press re-tells the connection.
+  useCueOnChange(replay, "model.reveal");
   const heading = useRef<HTMLHeadingElement>(null);
   const surface = useRef<HTMLElement>(null);
   const id = useId();

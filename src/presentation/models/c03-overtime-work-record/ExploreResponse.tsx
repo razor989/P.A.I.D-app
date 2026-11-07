@@ -7,6 +7,7 @@ import styles from "./work-record.module.css";
 import explore from "./explore.module.css";
 import { revealFeedback, revealHeading } from "../../activity/public";
 import { usePrefersReducedMotion } from "../../accessibility/public";
+import { useSound } from "../../audio/public";
 
 const fields = [
   "invariants",
@@ -54,6 +55,7 @@ export function ExploreResponse({
     Record<string, { text: string; canonical: string }>
   >({});
   const [help, setHelp] = useState(false);
+  const sound = useSound();
   const heading = useRef<HTMLHeadingElement>(null);
   const partFeedback = useRef<HTMLDivElement>(null);
   const reduced = usePrefersReducedMotion();
@@ -332,6 +334,12 @@ export function ExploreResponse({
                   onClick={() => {
                     const result = onCheckPart?.(field);
                     if (result) {
+                      // The engine's per-part result, never presentation's.
+                      sound.play(
+                        result.outcome === "CONFIRMED"
+                          ? "feedback.part.affirm"
+                          : "feedback.part.reconsider",
+                      );
                       setChecks({
                         ...checks,
                         [field]: { result, fingerprint: fingerprint(field) },

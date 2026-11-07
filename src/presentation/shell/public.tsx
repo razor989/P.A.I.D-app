@@ -12,6 +12,14 @@ export type C04RoutePresentation = C04Presentation;
 export { AppShell } from "./AppShell";
 /** Decorative startup ident and its display-only readiness signal. */
 export { StartupIdent, signalStartupSurface } from "../transitions/public";
+/** Optional, decorative sound effects: the engine, its provider and types. */
+export {
+  createSoundEngine,
+  silentEngine,
+  SoundProvider,
+  useSound,
+} from "../audio/public";
+export type { SoundEngine, SoundPreferences } from "../audio/public";
 export type ActivitySummary = Readonly<{
   id: ActivityId;
   label: string;

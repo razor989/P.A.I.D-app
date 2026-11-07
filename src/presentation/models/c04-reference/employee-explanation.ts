@@ -1,3 +1,5 @@
+import { silentReference, storyAccents } from "./story-sound";
+import type { ReferenceSound } from "./story-sound";
 import {
   createSalaryExploration,
   explorationMarkup,
@@ -141,9 +143,25 @@ export function employeeStoryFrame(seconds: number, reduced = false) {
     percent: time >= 39.5,
   };
 }
+// Heard only while the explanation plays by itself (seconds).
+const employeeAccents = storyAccents(
+  [
+    { at: 8.5, cue: "story.appear" },
+    { at: 17, cue: "story.grow" },
+    { at: 19.5, cue: "story.appear" },
+    { at: 25.5, cue: "story.piece" },
+    { at: 28, cue: "story.stamp" },
+    { at: 36.5, cue: "story.grow" },
+    { at: 39.5, cue: "story.appear" },
+  ],
+  chapterDuration,
+  employeeStoryDuration,
+);
+
 export function createEmployeeExplanation(
   announce: (text: string) => void,
   employee: "A" | "B" = "A",
+  sound: ReferenceSound = silentReference,
 ) {
   const isB = employee === "B";
   const storyChapters = isB ? employeeBChapters : chapters;
@@ -395,11 +413,13 @@ export function createEmployeeExplanation(
         draw();
         return;
       }
+      const before = time;
       time = Math.min(
         employeeStoryDuration,
         Math.round((time + (performance.now() - lastTick) / 1000) * 1000) /
           1000,
       );
+      employeeAccents(sound, before, time, motion?.matches ?? false);
       if (time === employeeStoryDuration) pause();
       draw();
       notify();
@@ -421,6 +441,7 @@ export function createEmployeeExplanation(
       if (!button || button.disabled || isBlocked) return;
       const action = button.dataset.story;
       if (action === "play") {
+        sound.cue(playing ? "ui.toggle.off" : "ui.toggle.on");
         if (playing) pause();
         else {
           if (time === employeeStoryDuration) time = 0;
@@ -432,6 +453,13 @@ export function createEmployeeExplanation(
         return;
       }
       const index = frameAt(time).index;
+      if (
+        action === "previous" ||
+        action === "next" ||
+        action === "replay" ||
+        button.dataset.moment !== undefined
+      )
+        sound.cue("model.step");
       if (action === "previous") seek(Math.max(0, index - 1) * chapterDuration);
       else if (action === "next")
         seek(Math.min(5, index + 1) * chapterDuration);
@@ -482,6 +510,7 @@ export function createEmployeeExplanation(
           announce,
           lessons: isB ? employeeBLessons : undefined,
           copyDistance: isB ? 126 : 246,
+          sound: sound.inspection,
         });
       }
       if (parentBeat !== beat) {

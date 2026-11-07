@@ -1,0 +1,53 @@
+/* Sound-effects switch: an outlined circle in the navigation's own pill
+   language. Placement belongs to the host (shell header, lesson island). */
+
+.toggle {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  inline-size: 44px;
+  block-size: 44px;
+  padding: 0;
+  border: 1.5px solid rgb(38 49 40 / 0.28);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.toggle:hover {
+  border-color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.toggle:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+/* Off reads as quieter ink plus a crossed glyph, never colour alone. */
+.toggle[aria-pressed="false"] {
+  color: var(--color-text-secondary);
+}
+
+.glyph {
+  inline-size: 20px;
+  block-size: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.speaker {
+  fill: currentColor;
+  fill-opacity: 0.16;
+}
+
+@media (forced-colors: active) {
+  .toggle {
+    border-color: ButtonText;
+    color: ButtonText;
+  }
+}

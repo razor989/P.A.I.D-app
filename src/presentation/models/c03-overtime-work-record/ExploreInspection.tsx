@@ -9,6 +9,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useInspectionCues, useSound } from "../../audio/public";
 import { ExploreGlyph, ExploreHourMark } from "./ExploreGlyph";
 import type { C03WorkRecordProjection } from "./public";
 import { pesos } from "./WorkEvidence";
@@ -72,7 +73,18 @@ export function ExploreInspection({
     left: number;
     top: number;
   } | null>(null);
+  useInspectionCues(active?.part ?? null, active?.pinned ?? false);
+  const sound = useSound();
   const [replay, setReplay] = useState(0);
+  // The mini-record's extension grows (inspection-grow, 1400 ms) on every
+  // open, switch and replay; heard only where it actually moves.
+  const growing =
+    active !== null && active.part !== "rate" && active.part !== "hours";
+  useEffect(() => {
+    if (!growing) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    sound.play("story.grow", { delayMs: 150 });
+  }, [growing, active?.part, replay, sound]);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const suppressFocus = useRef(false);
   const panel = useRef<HTMLElement>(null);
@@ -128,6 +140,10 @@ export function ExploreInspection({
   function open(part: ExplorePart, target: HTMLElement, pin = false) {
     if (blocked || suppressFocus.current) return;
     if (active?.pinned && !pin) return;
+    // A deliberate (click or Enter) inspection opens with a quiet reveal;
+    // hover and focus previews stay silent.
+    if (pin && !(active?.pinned && active.target === target))
+      sound.play("model.reveal");
     clearTimeout(timer.current);
     const show = () => {
       const box = target.getBoundingClientRect();
@@ -290,7 +306,10 @@ export function ExploreInspection({
                 <ExploreGlyph name="replay" /> Replay
               </button>
               <button
-                onClick={() => setActive({ ...active, pinned: !active.pinned })}
+                onClick={() => {
+                  sound.play(active.pinned ? "ui.toggle.off" : "ui.toggle.on");
+                  setActive({ ...active, pinned: !active.pinned });
+                }}
               >
                 {active.pinned ? "Unpin" : "Keep open"}
               </button>

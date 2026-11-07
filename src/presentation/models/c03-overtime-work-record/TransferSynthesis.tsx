@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from "react";
+import { useCueOnChange, useCueOnEnter } from "../../audio/public";
 import type { C03WorkRecordProjection } from "./public";
 import { pesos } from "./WorkEvidence";
 import { ExploreGlyph } from "./ExploreGlyph";
@@ -15,6 +16,8 @@ export function TransferSynthesis({
 }) {
   const [selected, setSelected] = useState(0);
   const [revealed, setRevealed] = useState(false);
+  useCueOnChange(selected, "model.select");
+  useCueOnEnter(revealed, "model.reveal");
   const surface = useRef<HTMLElement>(null);
   const id = useId();
   useWorkRecordMotion(surface, `${selected}/${revealed}`, blocked);

@@ -10,6 +10,7 @@ import { activityStory, competencyStories } from "../content";
 import { initialFeatured } from "./featured";
 import { ActivityCoverArt } from "../art/ActivityCoverArt";
 import { WaveRule } from "../art/Motifs";
+import { useSound } from "../../audio/public";
 import styles from "./gallery.module.css";
 
 type Status = "in-progress" | "finished" | "suggested" | "unavailable" | null;
@@ -34,6 +35,7 @@ export function ActivityGallery({
     initialFeatured(competency, continuation),
   );
   const base = useId();
+  const sound = useSound();
   const radios = useRef<(HTMLButtonElement | null)[]>([]);
   const strip = useRef<HTMLDivElement>(null);
   const activities = competency.activities;
@@ -77,6 +79,7 @@ export function ActivityGallery({
       : undefined;
   const select = (i: number, focus: boolean) => {
     const next = (i + count) % count;
+    if (next !== index) sound.play("ui.select");
     setSelected(next);
     if (focus) radios.current[next]?.focus();
   };

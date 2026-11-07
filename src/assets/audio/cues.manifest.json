@@ -1,0 +1,978 @@
+[
+  {
+    "file": "ui-select-1.ogg",
+    "category": "ui",
+    "role": "Routine selection (cover, slide, tab, inspection pin).",
+    "targetDb": -24,
+    "channels": 1,
+    "durationMs": 81,
+    "levelDb": -24,
+    "peakDb": -19.5,
+    "bytes": 2043,
+    "sha256": "13ad91c8261d582de28ebaa8c5162cc28321def68630fcbb220b7496beff4b21",
+    "layers": [
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/03_Button_Tap_Soft_01.wav",
+        "cents": -15,
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "ui-select-2.ogg",
+    "category": "ui",
+    "role": "Round-robin partner of ui-select-1.",
+    "targetDb": -24,
+    "channels": 1,
+    "durationMs": 76,
+    "levelDb": -24,
+    "peakDb": -19.3,
+    "bytes": 2062,
+    "sha256": "3e016e6ebc6104e188c4263734b697b9e1b41e103bf9bd4358b60335906c1db3",
+    "layers": [
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/04_Button_Tap_Soft_02.wav",
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "ui-toggle-on.ogg",
+    "category": "ui",
+    "role": "A control switched on (play, keep open, sound on).",
+    "targetDb": -22,
+    "channels": 1,
+    "durationMs": 124,
+    "levelDb": -22,
+    "peakDb": -17.2,
+    "bytes": 2954,
+    "sha256": "cdf877f4cacf1a33843b2d1c7ce0c90e9651ccbc26201bffe433070e308237ba",
+    "layers": [
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/09_Toggle_On_01.wav",
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "ui-toggle-off.ogg",
+    "category": "ui",
+    "role": "A control switched off (pause, release pin).",
+    "targetDb": -23,
+    "channels": 1,
+    "durationMs": 125,
+    "levelDb": -23,
+    "peakDb": -18.2,
+    "bytes": 2927,
+    "sha256": "c732b3e0c54b56f2aeb44d47acb0e94ad8073c65144477c62c026144a2de976f",
+    "layers": [
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/10_Toggle_Off_01.wav",
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "ui-open.ogg",
+    "category": "ui",
+    "role": "Island, dialog or help panel opens (rising A–C#–E).",
+    "targetDb": -22,
+    "channels": 1,
+    "durationMs": 202,
+    "levelDb": -22,
+    "peakDb": -17,
+    "bytes": 3315,
+    "sha256": "c9dfa16affe80fe41adfcc9286d4ddf9554949f09ec362cf66d09f48e2a2e632",
+    "layers": [
+      {
+        "lib": "E",
+        "source": "Soft-Signal-Free-Minimal-UI-SFX-Pack-v1.0.0/WAV/panel_open.wav",
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "ui-close.ogg",
+    "category": "ui",
+    "role": "Island, dialog or help panel closes (falling A–F#–D inverse).",
+    "targetDb": -23,
+    "channels": 1,
+    "durationMs": 199,
+    "levelDb": -23,
+    "peakDb": -17.7,
+    "bytes": 3222,
+    "sha256": "180979ab59f2fcd02a0b6e27aa97ee11666b9be684f925aad9b30fa51aedaa78",
+    "layers": [
+      {
+        "lib": "E",
+        "source": "Soft-Signal-Free-Minimal-UI-SFX-Pack-v1.0.0/WAV/panel_close.wav",
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "model-step-1.ogg",
+    "category": "model",
+    "role": "A story model settles on a moment (prev/next/moment buttons); quieter at runtime for scrub ticks.",
+    "targetDb": -24,
+    "channels": 1,
+    "durationMs": 267,
+    "levelDb": -24,
+    "peakDb": -7.9,
+    "bytes": 3539,
+    "sha256": "fd3123c94ebf21885417a2bd93bdd259b8269ce248519548e9ca8d2ecba62f83",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/02-wood1.wav",
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "model-step-2.ogg",
+    "category": "model",
+    "role": "A story model settles on a moment (prev/next/moment buttons); quieter at runtime for scrub ticks.",
+    "targetDb": -24,
+    "channels": 1,
+    "durationMs": 169,
+    "levelDb": -24,
+    "peakDb": -4.5,
+    "bytes": 2572,
+    "sha256": "a043a6eef24de7baecd4bb9708937f916b52c976a80f9e3c7cf3ff6f26242804",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/03-wood2.wav",
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "model-step-3.ogg",
+    "category": "model",
+    "role": "A story model settles on a moment (prev/next/moment buttons); quieter at runtime for scrub ticks.",
+    "targetDb": -24,
+    "channels": 1,
+    "durationMs": 264,
+    "levelDb": -24,
+    "peakDb": -8.6,
+    "bytes": 4011,
+    "sha256": "02b21251dfa213bced6ea84811c5fbcebe7f00fb6dcac778c51873638d7a5290",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/04-wood3.wav",
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "model-step-4.ogg",
+    "category": "model",
+    "role": "A story model settles on a moment (prev/next/moment buttons); quieter at runtime for scrub ticks.",
+    "targetDb": -24,
+    "channels": 1,
+    "durationMs": 196,
+    "levelDb": -24,
+    "peakDb": -7.7,
+    "bytes": 3232,
+    "sha256": "d49f63220eb5d9c751d975ce1ae1c40788e2802f69e3b94cd8b4f6614a966fde",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/05-wood4.wav",
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "model-select.ogg",
+    "category": "model",
+    "role": "A representation, situation or record switch took effect.",
+    "targetDb": -23,
+    "channels": 1,
+    "durationMs": 312,
+    "levelDb": -23,
+    "peakDb": -18.4,
+    "bytes": 4542,
+    "sha256": "fdafb21f9ddd5944fedfebc6315b5abf2f6be2508b7bae75ade9f004fb587304",
+    "layers": [
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/13_Focus_01.wav",
+        "cents": -15,
+        "highpassHz": 90
+      },
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/21-cardboard1.wav",
+        "gainDb": -9,
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "model-snap.ogg",
+    "category": "model",
+    "role": "A value lands in its graphical slot (graphical operation complete, not correctness).",
+    "targetDb": -22,
+    "channels": 1,
+    "durationMs": 138,
+    "levelDb": -22,
+    "peakDb": -10.4,
+    "bytes": 2689,
+    "sha256": "660b27c279b4ac057e2b624edfcd721b97c3e415fe58872969d270c60055dabd",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/20-lotion_lid.wav",
+        "endMs": 140,
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      },
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/01_Button_Tap_Clicky_01.wav",
+        "gainDb": -8,
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "model-reveal.ogg",
+    "category": "model",
+    "role": "A relationship or connection is revealed in the model.",
+    "targetDb": -22,
+    "channels": 1,
+    "durationMs": 251,
+    "levelDb": -22,
+    "peakDb": -16,
+    "bytes": 3934,
+    "sha256": "c2c52f1babf1d2ad3d1b0e2720bc458ab1ad2271addc0a47e55de014530f7a7e",
+    "layers": [
+      {
+        "lib": "E",
+        "source": "Soft-Signal-Free-Minimal-UI-SFX-Pack-v1.0.0/WAV/clue_reveal.wav",
+        "cents": 65,
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "response-recorded.ogg",
+    "category": "feedback",
+    "role": "A Prepare response was recorded (participation, never a score).",
+    "targetDb": -21,
+    "channels": 1,
+    "durationMs": 169,
+    "levelDb": -21,
+    "peakDb": -16,
+    "bytes": 3124,
+    "sha256": "ac17d2bfe7435f20dd43a323901b1a7503b0ab82907ab6192a8d101572b78c35",
+    "layers": [
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/07_Button_Tap_Confirm_01.wav",
+        "cents": -33,
+        "highpassHz": 90
+      },
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/03-wood2.wav",
+        "gainDb": -8,
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "feedback-affirm.ogg",
+    "category": "feedback",
+    "role": "Engine CONFIRMED a scored response (gentle C–E–G–C resolution).",
+    "targetDb": -19,
+    "channels": 1,
+    "durationMs": 333,
+    "levelDb": -19,
+    "peakDb": -13.1,
+    "bytes": 5537,
+    "sha256": "cf513122f552f1c1e241e034cf9e2ad4b4e181453144c0ff13eeab2559ffba3f",
+    "layers": [
+      {
+        "lib": "E",
+        "source": "Soft-Signal-Free-Minimal-UI-SFX-Pack-v1.0.0/WAV/success.wav",
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "feedback-reconsider.ogg",
+    "category": "feedback",
+    "role": "Engine asks the learner to reconsider (inviting E–B–G, never a buzzer).",
+    "targetDb": -20,
+    "channels": 1,
+    "durationMs": 256,
+    "levelDb": -20,
+    "peakDb": -14.5,
+    "bytes": 4472,
+    "sha256": "6ab812dd2b14b76741be6011eb64606930d17e49101f3fe1bbaba1ae0cd13e2c",
+    "layers": [
+      {
+        "lib": "E",
+        "source": "Soft-Signal-Free-Minimal-UI-SFX-Pack-v1.0.0/WAV/hint_available.wav",
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "activity-complete.ogg",
+    "category": "milestone",
+    "role": "Session finalized an activity: thump + C-major motif resolving on a G chord (IV→I).",
+    "targetDb": -16,
+    "channels": 2,
+    "durationMs": 907,
+    "levelDb": -16,
+    "peakDb": -9.8,
+    "bytes": 17778,
+    "sha256": "299b72d7b0bdb9d4f030073efd4504dbeced0b0adb7e6f21610a221a7b7ae8aa",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/22-cardboard2.wav",
+        "gainDb": -6,
+        "endMs": 160,
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      },
+      {
+        "lib": "E",
+        "source": "Soft-Signal-Free-Minimal-UI-SFX-Pack-v1.0.0/WAV/success.wav",
+        "gainDb": -5,
+        "highpassHz": 90
+      },
+      {
+        "lib": "C",
+        "source": "MACOS GOLDEN GATE SFX/breeze.mp3",
+        "atMs": 210,
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "nav-air-rise.ogg",
+    "category": "navigation",
+    "role": "Paper-air swell under the accordion unfold.",
+    "targetDb": -30,
+    "channels": 2,
+    "durationMs": 441,
+    "levelDb": -30,
+    "peakDb": -19.5,
+    "bytes": 7571,
+    "sha256": "8e5fd5f212c58f50ebb8159deeeae2fe7977fc23765a08e8378c483a8ba680e5",
+    "layers": [
+      {
+        "lib": "S",
+        "source": "generated:air-rise"
+      }
+    ]
+  },
+  {
+    "file": "nav-air-fall.ogg",
+    "category": "navigation",
+    "role": "Paper-air release under the accordion fold.",
+    "targetDb": -30,
+    "channels": 2,
+    "durationMs": 381,
+    "levelDb": -30,
+    "peakDb": -19.6,
+    "bytes": 6550,
+    "sha256": "d2086f8f367e14027bf0b4b78943700f6b17f45e1bd22df004da16193827b80a",
+    "layers": [
+      {
+        "lib": "S",
+        "source": "generated:air-fall"
+      }
+    ]
+  },
+  {
+    "file": "nav-tick-1.ogg",
+    "category": "navigation",
+    "role": "A folded panel touches down (one per hinge).",
+    "targetDb": -31,
+    "channels": 1,
+    "durationMs": 70,
+    "levelDb": -31,
+    "peakDb": -17.7,
+    "bytes": 1706,
+    "sha256": "5bafcae576423a94a124592edd031e4ae284af8e3b469b3dd0a301cc7dfb7083",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/21-cardboard1.wav",
+        "endMs": 70,
+        "highpassHz": 200,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "nav-tick-2.ogg",
+    "category": "navigation",
+    "role": "Round-robin partner of nav-tick-1.",
+    "targetDb": -31,
+    "channels": 1,
+    "durationMs": 191,
+    "levelDb": -31,
+    "peakDb": -14.2,
+    "bytes": 2975,
+    "sha256": "07a77ea9c50015598d4a84de6d0a9722f88bb01d7a4e08e6f579573478a61f4a",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/05-wood4.wav",
+        "gainDb": -2,
+        "highpassHz": 200,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "nav-settle.ogg",
+    "category": "navigation",
+    "role": "The unfolded publication settles (accordion covered).",
+    "targetDb": -24,
+    "channels": 1,
+    "durationMs": 312,
+    "levelDb": -24,
+    "peakDb": -19.2,
+    "bytes": 4071,
+    "sha256": "73706bf26b7eed124fc88eda72c7d9850face3e559007961f1f82947822ec99e",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/21-cardboard1.wav",
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      },
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/03_Button_Tap_Soft_01.wav",
+        "gainDb": -4,
+        "cents": -15,
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "nav-land.ogg",
+    "category": "navigation",
+    "role": "A folded sheet or chapter cover lands back on its card.",
+    "targetDb": -24,
+    "channels": 1,
+    "durationMs": 120,
+    "levelDb": -24,
+    "peakDb": -19,
+    "bytes": 2532,
+    "sha256": "094cb1956ac3c15c4f2de21b8b10dd7d5bd0da2586f60a26ce28e850cf06f096",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/22-cardboard2.wav",
+        "endMs": 120,
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      },
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/04_Button_Tap_Soft_02.wav",
+        "gainDb": -8,
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "chapter-slide.ogg",
+    "category": "navigation",
+    "role": "The chapter cover lifts into a sheet.",
+    "targetDb": -28,
+    "channels": 2,
+    "durationMs": 303,
+    "levelDb": -28,
+    "peakDb": -16.8,
+    "bytes": 5844,
+    "sha256": "4abc232dd1f5764c4e9ba3c4682228707ad9cd53fb85ffb6ca6878e9c73ffb2b",
+    "layers": [
+      {
+        "lib": "S",
+        "source": "generated:paper-slide"
+      }
+    ]
+  },
+  {
+    "file": "chapter-slide-back.ogg",
+    "category": "navigation",
+    "role": "The torn halves swing shut.",
+    "targetDb": -28,
+    "channels": 2,
+    "durationMs": 279,
+    "levelDb": -28,
+    "peakDb": -16.7,
+    "bytes": 5603,
+    "sha256": "5d4e2e014b09250e96320fe4319a221448b73062219093e175895f6e3faae0e0",
+    "layers": [
+      {
+        "lib": "S",
+        "source": "generated:paper-slide-back"
+      }
+    ]
+  },
+  {
+    "file": "chapter-perforation.ogg",
+    "category": "navigation",
+    "role": "The perforation line draws in.",
+    "targetDb": -31,
+    "channels": 1,
+    "durationMs": 122,
+    "levelDb": -31,
+    "peakDb": -11.3,
+    "bytes": 3179,
+    "sha256": "23b730b8c4a111cd3656b9d3d3ea209f3929fb435e3bbbcf641526fe731247f7",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/15-pencil1.wav",
+        "highpassHz": 1500,
+        "shelf8kDb": -3
+      },
+      {
+        "lib": "S",
+        "source": "generated:perforation",
+        "gainDb": -4
+      }
+    ]
+  },
+  {
+    "file": "chapter-release.ogg",
+    "category": "navigation",
+    "role": "The perforated sheet releases (soft, never a rip).",
+    "targetDb": -27,
+    "channels": 1,
+    "durationMs": 312,
+    "levelDb": -27,
+    "peakDb": -16.2,
+    "bytes": 4405,
+    "sha256": "fbbf7e8925250fb9101254411a8bf47e5bb57de43125e60fa4cd8fd3a746e5a9",
+    "layers": [
+      {
+        "lib": "S",
+        "source": "generated:release"
+      },
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/21-cardboard1.wav",
+        "gainDb": -6,
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "chapter-seal.ogg",
+    "category": "navigation",
+    "role": "The chapter closes: halves meet.",
+    "targetDb": -23,
+    "channels": 1,
+    "durationMs": 110,
+    "levelDb": -23,
+    "peakDb": -18.5,
+    "bytes": 2207,
+    "sha256": "bee9ceff82e2f2eb45a81d05168f351aa0dd4c50d1f7833fddeed10be51808d0",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/22-cardboard2.wav",
+        "endMs": 110,
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      },
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/03_Button_Tap_Soft_01.wav",
+        "gainDb": -5,
+        "cents": -15,
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "nav-fallback.ogg",
+    "category": "navigation",
+    "role": "Reduced-motion or same-depth destination change.",
+    "targetDb": -27,
+    "channels": 1,
+    "durationMs": 49,
+    "levelDb": -27,
+    "peakDb": -21.4,
+    "bytes": 1374,
+    "sha256": "2129b60d6475e34ca710cd8d2f07684f856c780de89bbb4589c7b825c2d664cb",
+    "layers": [
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/11_Hover_Soft_01.wav",
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "startup-air.ogg",
+    "category": "startup",
+    "role": "Faint movement while the plates travel into register.",
+    "targetDb": -33,
+    "channels": 2,
+    "durationMs": 499,
+    "levelDb": -33,
+    "peakDb": -22,
+    "bytes": 8381,
+    "sha256": "aa81501da617e63cf7ef102c40e6d1e4cfb4aeb2fb75ba70462a946ab7515443",
+    "layers": [
+      {
+        "lib": "S",
+        "source": "generated:startup-air"
+      }
+    ]
+  },
+  {
+    "file": "startup-pin.ogg",
+    "category": "startup",
+    "role": "A colour plate drops onto its registration pin (played three times, rising).",
+    "targetDb": -26,
+    "channels": 1,
+    "durationMs": 267,
+    "levelDb": -26,
+    "peakDb": -10,
+    "bytes": 3541,
+    "sha256": "4d568abe393c2f77d59373cef6fba02c9677f7fdf789154520fea28ea42374a2",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/02-wood1.wav",
+        "highpassHz": 150,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "startup-tone.ogg",
+    "category": "startup",
+    "role": "The key plate locks in: a single ink-drop tone.",
+    "targetDb": -22,
+    "channels": 2,
+    "durationMs": 513,
+    "levelDb": -22,
+    "peakDb": -7.8,
+    "bytes": 8795,
+    "sha256": "b817f28c0bf685e047d5d3719df73412eebb59953bf396da4cc1382f540e2099",
+    "layers": [
+      {
+        "lib": "A",
+        "source": "Epic Stock Media - Smart UI/One_Shots/Notification/Abstract/ESM_One_Shot_FX_Notification_UI_Abstract_03_LoFi_Expressive_Reverb_UI_Dry_Single_Water_Liquid_Em.wav",
+        "highpassHz": 120
+      }
+    ]
+  },
+  {
+    "file": "startup-reveal.ogg",
+    "category": "startup",
+    "role": "The registered sheet parts to reveal the application.",
+    "targetDb": -29,
+    "channels": 2,
+    "durationMs": 322,
+    "levelDb": -29,
+    "peakDb": -19.3,
+    "bytes": 5814,
+    "sha256": "86653e0e2fe26db5a67ded4d6cdadeeacea97daaee9210af69849a98fdfaa9fb",
+    "layers": [
+      {
+        "lib": "S",
+        "source": "generated:split-swish"
+      }
+    ]
+  },
+  {
+    "file": "story-moment.ogg",
+    "category": "story",
+    "role": "Playback moves on to the next moment by itself: a soft page turn.",
+    "targetDb": -28,
+    "channels": 1,
+    "durationMs": 241,
+    "levelDb": -28,
+    "peakDb": -18.2,
+    "bytes": 3617,
+    "sha256": "ca011f09e55bf1872d0b875e88c835c169450161448ff7d0721b3d4691b962ce",
+    "layers": [
+      {
+        "lib": "S",
+        "source": "generated:page-turn"
+      },
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/21-cardboard1.wav",
+        "atMs": 110,
+        "gainDb": -10,
+        "endMs": 80,
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "story-grow.ogg",
+    "category": "story",
+    "role": "A bar extends or a grid scales in the model (pitched per use).",
+    "targetDb": -31,
+    "channels": 1,
+    "durationMs": 363,
+    "levelDb": -31,
+    "peakDb": -20.7,
+    "bytes": 4792,
+    "sha256": "2545ed359491e5c90e263054a3b197932eb77b28142543dfb935872d3eb73d0a",
+    "layers": [
+      {
+        "lib": "S",
+        "source": "generated:grow"
+      }
+    ]
+  },
+  {
+    "file": "story-appear.ogg",
+    "category": "story",
+    "role": "An amount, label or document appears in the model.",
+    "targetDb": -29,
+    "channels": 1,
+    "durationMs": 271,
+    "levelDb": -29,
+    "peakDb": -24.4,
+    "bytes": 4411,
+    "sha256": "73bef9b6fe256b0b4942b5074cd105da38b796445288d2f41e00b5b77b18a55f",
+    "layers": [
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/13_Focus_01.wav",
+        "cents": -15,
+        "highpassHz": 90
+      },
+      {
+        "lib": "E",
+        "source": "Soft-Signal-Free-Minimal-UI-SFX-Pack-v1.0.0/WAV/clue_reveal.wav",
+        "atMs": 20,
+        "gainDb": -14,
+        "cents": 65,
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "story-stamp.ogg",
+    "category": "story",
+    "role": "A stamp or tag lands on the record.",
+    "targetDb": -27,
+    "channels": 1,
+    "durationMs": 196,
+    "levelDb": -27,
+    "peakDb": -20,
+    "bytes": 3293,
+    "sha256": "ec22d8d36a7c2dc7c866134851769fd0dac3feeefee5efddcc361be463a2143a",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/05-wood4.wav",
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      },
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/01_Button_Tap_Clicky_01.wav",
+        "gainDb": -10,
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "story-draw.ogg",
+    "category": "story",
+    "role": "A reference line draws across the model.",
+    "targetDb": -31,
+    "channels": 1,
+    "durationMs": 476,
+    "levelDb": -31,
+    "peakDb": -8.5,
+    "bytes": 6307,
+    "sha256": "14f4ca0e0aa309487f05f129cf87a365b34f21facd06a736c7da7aded38787d1",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/16-pencil2.wav",
+        "highpassHz": 900,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "story-piece-1.ogg",
+    "category": "story",
+    "role": "A tile or cell is placed (variant 1 of 3; rate rises along a stagger).",
+    "targetDb": -33,
+    "channels": 1,
+    "durationMs": 58,
+    "levelDb": -33,
+    "peakDb": -17,
+    "bytes": 1645,
+    "sha256": "dd9735dabf058d5d00d15b020f57dd2e3629d94335d5790938f3011867dbc5c8",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/02-wood1.wav",
+        "endMs": 60,
+        "highpassHz": 200,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "story-piece-2.ogg",
+    "category": "story",
+    "role": "A tile or cell is placed (variant 2 of 3).",
+    "targetDb": -33,
+    "channels": 1,
+    "durationMs": 60,
+    "levelDb": -33,
+    "peakDb": -17.6,
+    "bytes": 1879,
+    "sha256": "0029123f6805927e1c290890feb1bdd4a11dbfcf1dc588d2c6f6167e02fb1f89",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/04-wood3.wav",
+        "endMs": 60,
+        "highpassHz": 200,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "story-piece-3.ogg",
+    "category": "story",
+    "role": "A tile or cell is placed (variant 3 of 3).",
+    "targetDb": -33,
+    "channels": 1,
+    "durationMs": 50,
+    "levelDb": -33,
+    "peakDb": -19.4,
+    "bytes": 1350,
+    "sha256": "144ec8dc7fecb9d41a534462e3dce08dec9c7be2cc8ecbc088ab8d732d1edbc6",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/21-cardboard1.wav",
+        "endMs": 50,
+        "highpassHz": 250,
+        "shelf8kDb": -3
+      }
+    ]
+  },
+  {
+    "file": "story-end.ogg",
+    "category": "story",
+    "role": "The explanation reaches its end: a quiet settle.",
+    "targetDb": -28,
+    "channels": 1,
+    "durationMs": 120,
+    "levelDb": -28,
+    "peakDb": -23.3,
+    "bytes": 2578,
+    "sha256": "3c64947291f276e689d72ee24b30c518a8c4ceb9e196293d929ecce82c6fcac7",
+    "layers": [
+      {
+        "lib": "B",
+        "source": "Free Natural SFX Pack/22-cardboard2.wav",
+        "endMs": 120,
+        "highpassHz": 120,
+        "shelf8kDb": -3
+      },
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/04_Button_Tap_Soft_02.wav",
+        "atMs": 30,
+        "gainDb": -6,
+        "highpassHz": 90
+      }
+    ]
+  },
+  {
+    "file": "inspect-open.ogg",
+    "category": "inspect",
+    "role": "A hover or focus inspection opens: a whisper.",
+    "targetDb": -31,
+    "channels": 1,
+    "durationMs": 201,
+    "levelDb": -31,
+    "peakDb": -25.9,
+    "bytes": 3318,
+    "sha256": "953cceed481a4a73b24cec1e24a8442c6f8f38bfc45db6e031cc10c9732a33ae",
+    "layers": [
+      {
+        "lib": "E",
+        "source": "Soft-Signal-Free-Minimal-UI-SFX-Pack-v1.0.0/WAV/panel_open.wav",
+        "highpassHz": 300
+      }
+    ]
+  },
+  {
+    "file": "inspect-close.ogg",
+    "category": "inspect",
+    "role": "A hover or focus inspection closes.",
+    "targetDb": -33,
+    "channels": 1,
+    "durationMs": 194,
+    "levelDb": -33,
+    "peakDb": -27.7,
+    "bytes": 3247,
+    "sha256": "762eae6ff0f64fa06a55a98be55d975863f6a00cb8ffa443ef0c34a43da6d7c1",
+    "layers": [
+      {
+        "lib": "E",
+        "source": "Soft-Signal-Free-Minimal-UI-SFX-Pack-v1.0.0/WAV/panel_close.wav",
+        "highpassHz": 300
+      }
+    ]
+  },
+  {
+    "file": "inspect-switch.ogg",
+    "category": "inspect",
+    "role": "The inspection moves straight to another part.",
+    "targetDb": -32,
+    "channels": 1,
+    "durationMs": 62,
+    "levelDb": -32,
+    "peakDb": -27.1,
+    "bytes": 1792,
+    "sha256": "1c1ae48bc08bf220f015043d3f9b983bd9322ef3c38b9ca29a7401640e046252",
+    "layers": [
+      {
+        "lib": "D",
+        "source": "Clean UI - 20 Minimal Interaction Sounds/WAV_48kHz_24bit/12_Hover_Soft_02.wav",
+        "cents": -15,
+        "highpassHz": 90
+      }
+    ]
+  }
+]

@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import type { CSSProperties } from "react";
+import { SoundToggle, useSound } from "@/presentation/audio/public";
 import { useLessonSlot } from "./slot";
 import { useIslandState } from "./useIslandState";
 import styles from "./floating-nav.module.css";
@@ -44,6 +45,7 @@ export function FloatingLessonNav({
     identity,
   );
   const compact = mode === "compact";
+  const sound = useSound();
 
   // Each part gathers toward the island: measure its untransformed layout
   // offset to the island centre (offsets ignore transforms).
@@ -113,6 +115,7 @@ export function FloatingLessonNav({
         ) {
           event.preventDefault();
           close();
+          sound.play("ui.close");
           requestAnimationFrame(() => island.current?.focus());
         }
       }}
@@ -177,12 +180,19 @@ export function FloatingLessonNav({
           )}
         </ul>
       </nav>
-      <div
-        ref={slot?.setExit}
-        className={styles.raised}
-        data-part="raised"
-        inert={compact}
-      />
+      <div className={styles.trail}>
+        <SoundToggle
+          className={styles.sound}
+          data-part="sound"
+          inert={compact}
+        />
+        <div
+          ref={slot?.setExit}
+          className={styles.raised}
+          data-part="raised"
+          inert={compact}
+        />
+      </div>
       <button
         ref={island}
         type="button"
@@ -192,7 +202,10 @@ export function FloatingLessonNav({
         aria-expanded={!compact}
         aria-controls={panelId}
         inert={!compact}
-        onClick={open}
+        onClick={() => {
+          open();
+          sound.play("ui.open");
+        }}
       >
         <svg viewBox="0 0 40 40" aria-hidden="true" focusable="false">
           <circle cx="13.5" cy="15" r="8" fill="#a8492a" />

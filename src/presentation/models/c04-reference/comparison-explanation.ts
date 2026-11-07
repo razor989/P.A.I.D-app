@@ -1,3 +1,5 @@
+import { silentReference, storyAccents } from "./story-sound";
+import type { ReferenceSound } from "./story-sound";
 import { createSalaryExploration } from "./employee-exploration";
 import {
   comparisonChapters as chapters,
@@ -92,7 +94,23 @@ function markup(avatars: readonly string[]) {
   </section>`;
 }
 
-export function createComparisonExplanation(announce: (text: string) => void) {
+// Heard only while the comparison plays by itself (seconds).
+const comparisonAccents = storyAccents(
+  [
+    // The copy slides across (1.4 s), then the pair matches.
+    { at: 17, cue: "story.grow" },
+    { at: 18.4, cue: "story.stamp" },
+    { at: 25.5, cue: "story.grow" },
+    { at: 34, cue: "story.piece" },
+  ],
+  chapterDuration,
+  duration,
+);
+
+export function createComparisonExplanation(
+  announce: (text: string) => void,
+  sound: ReferenceSound = silentReference,
+) {
   let root: HTMLElement | null = null,
     time = 0,
     playing = false,
@@ -285,7 +303,9 @@ export function createComparisonExplanation(announce: (text: string) => void) {
     lastTick = performance.now();
     timer = setTimeout(() => {
       if (!playing) return;
+      const before = time;
       time = Math.min(duration, time + (performance.now() - lastTick) / 1000);
+      comparisonAccents(sound, before, time, motion?.matches ?? false);
       if (time === duration) pause();
       draw();
       notify();
@@ -338,6 +358,7 @@ export function createComparisonExplanation(announce: (text: string) => void) {
           const action = button.dataset.story,
             index = comparisonFrame(time).index;
           if (action === "play") {
+            sound.cue(playing ? "ui.toggle.off" : "ui.toggle.on");
             if (playing) pause();
             else {
               if (time === duration) time = 0;
@@ -346,13 +367,19 @@ export function createComparisonExplanation(announce: (text: string) => void) {
               schedule();
             }
             draw();
-          } else if (action === "previous")
+          } else if (action === "previous") {
+            sound.cue("model.step");
             seek(Math.max(0, index - 1) * chapterDuration);
-          else if (action === "next")
+          } else if (action === "next") {
+            sound.cue("model.step");
             seek(Math.min(5, index + 1) * chapterDuration);
-          else if (action === "replay") seek(0);
-          else if (button.dataset.moment !== undefined)
+          } else if (action === "replay") {
+            sound.cue("model.step");
+            seek(0);
+          } else if (button.dataset.moment !== undefined) {
+            sound.cue("model.step");
             seek(Number(button.dataset.moment) * chapterDuration);
+          }
         };
         root.oninput = (event) => {
           if (!blocked && event.target instanceof HTMLInputElement)
@@ -368,6 +395,7 @@ export function createComparisonExplanation(announce: (text: string) => void) {
           announce,
           lessons: comparisonLessons,
           copyDistance: 206,
+          sound: sound.inspection,
         });
       }
       if (parentBeat !== beat) {

@@ -5,6 +5,7 @@ import { ChoiceThumbnail } from "./ExploreChoice";
 import { ExploreWorkspace } from "./ExploreWorkspace";
 import { ExploreRecord } from "./ExploreRecord";
 import { parseExploreNumber } from "./explore-input";
+import { useSound } from "../../audio/public";
 import styles from "./commission.module.css";
 import e from "./explore.module.css";
 
@@ -48,6 +49,7 @@ export function ExploreResponse(props: C06PreparePresentation) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [checked, setChecked] = useState<string | null>(null);
   const [help, setHelp] = useState(false);
+  const sound = useSound();
   const heading = useRef<HTMLHeadingElement>(null);
   const feedback = useRef<HTMLDivElement>(null);
   const workspace = useRef<HTMLDivElement>(null);
@@ -245,6 +247,14 @@ export function ExploreResponse(props: C06PreparePresentation) {
                 className={`${styles.primary} ${e.checkButton}`}
                 disabled={!ready}
                 onClick={() => {
+                  // Reveals the engine's existing per-part evaluation; the
+                  // sound follows that result and never decides it.
+                  if (evaluation)
+                    sound.play(
+                      evaluation.outcome === "CONFIRMED"
+                        ? "feedback.part.affirm"
+                        : "feedback.part.reconsider",
+                    );
                   setChecked(role);
                   requestAnimationFrame(() => feedback.current?.focus());
                 }}

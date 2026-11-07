@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from "react";
 import type { C04Presentation } from "./public";
 import { createSalaryExploration } from "../c04-reference/employee-exploration";
+import { useInspectionSound } from "../../audio/public";
 import { offerMoney } from "./ApplyOffer";
 import styles from "./transfer.module.css";
 
@@ -12,6 +13,9 @@ export function TransferModel({
   const root = useRef<HTMLDivElement>(null),
     live = useRef(blocked),
     id = useId();
+  const inspectionSound = useInspectionSound();
+  const voice = useRef(inspectionSound);
+  voice.current = inspectionSound;
   live.current = blocked;
   const explained = Boolean(transfer?.explained && transfer.difference != null);
   useEffect(() => {
@@ -26,6 +30,7 @@ export function TransferModel({
         if (el) el.textContent = text;
       },
       copyDistance: 0,
+      sound: (event, detail) => voice.current(event, detail),
       lessons: {
         original: {
           title: "Zero is still the original.",

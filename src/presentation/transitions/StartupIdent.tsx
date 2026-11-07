@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useSound } from "../audio/public";
 import { MotionRun, motionMode, watchInterruptions } from "./runtime";
 import styles from "./transitions.module.css";
 
@@ -40,6 +41,12 @@ const plates = [
   { key: "indigo", color: "#4a5aa6", dx: -0.25, dy: 1, r: -0.8 },
 ] as const;
 
+const PLATE = { duration: 520, delay: 40, stagger: 70 } as const;
+/** The plate easing first reaches register at ~54% of its run (then
+ * overshoots and settles back): the moment a plate drops onto its pin. */
+const PLATE_REGISTERS = 0.54;
+const KEY_PRINT = 560;
+
 /** Color Registration: three ink plates arrive out of register, lock into
  * one P.A.I.D. mark, and the sheet parts to reveal whatever the authorised
  * startup destination is. Decorative, aria-hidden, never a gate. */
@@ -50,12 +57,40 @@ export function StartupIdent() {
     setShow(false);
   };
   const root = useRef<HTMLDivElement>(null);
+  const sound = useSound();
 
   useLayoutEffect(() => {
     const node = root.current;
     if (!show || !node) return;
+    const origin = performance.now();
     const motion = new MotionRun(end);
-    const stop = watchInterruptions(motion.finish);
+    // Sound only where the platform already allows it; the ident never waits
+    // for audio, and a blocked context simply leaves it silent.
+    sound.primeWithoutGesture();
+    const sequence = sound.sequence(
+      "startup",
+      [
+        { cue: "startup.air", at: PLATE.delay },
+        ...plates.map((_, i) => ({
+          cue: "startup.pin" as const,
+          at: Math.round(
+            PLATE.delay + i * PLATE.stagger + PLATE.duration * PLATE_REGISTERS,
+          ),
+          rate: 0.94 + i * 0.06,
+        })),
+        { cue: "startup.tone", at: KEY_PRINT + 20 },
+      ],
+      origin,
+    );
+    let completed = false;
+    const complete = () => {
+      completed = true;
+      motion.finish();
+    };
+    const stop = watchInterruptions(() => {
+      sequence.cancel();
+      motion.finish();
+    });
     const unit = Math.min(window.innerWidth, window.innerHeight) * 0.06;
     const q = (part: string) =>
       Array.from(node.querySelectorAll<HTMLElement>(`[data-part="${part}"]`));
@@ -73,8 +108,8 @@ export function StartupIdent() {
           { transform: "none", opacity: 1 },
         ],
         {
-          duration: 520,
-          delay: 40 + i * 70,
+          duration: PLATE.duration,
+          delay: PLATE.delay + i * PLATE.stagger,
           easing: "cubic-bezier(.2,.9,.25,1.08)",
         },
       );
@@ -97,11 +132,13 @@ export function StartupIdent() {
     motion.animate(
       node.querySelector('[data-part="key"]'),
       [{ opacity: 0 }, { opacity: 1 }],
-      { duration: 160, delay: 560, easing: "ease-out" },
+      { duration: 160, delay: KEY_PRINT, easing: "ease-out" },
     );
     // D: reveal, once the real startup surface is underneath (cap 2.5 s).
     const started = performance.now();
     const reveal = () => {
+      // The registered sheet parts: heard only if the startup is audible.
+      sound.play("startup.reveal");
       motion.animate(
         node.querySelector('[data-part="top"]'),
         [{ transform: "none" }, { transform: "translateY(-101%)" }],
@@ -146,18 +183,21 @@ export function StartupIdent() {
           [{ opacity: 1 }, { opacity: 0 }],
           { duration: 160, easing: "ease-in", fill: "forwards" },
         );
-      motion.at(340, motion.finish);
+      motion.at(340, complete);
     };
     const waitForSurface = () => {
       if (surfaceReady || performance.now() - started > 2500) reveal();
       else motion.at(80, waitForSurface);
     };
     motion.at(740, waitForSurface);
-    motion.at(3400, motion.finish);
+    motion.at(3400, complete);
     return () => {
       stop();
+      if (!completed) sequence.cancel();
       motion.dispose();
     };
+    // One ident per page; the engine is stable for the page's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [show]);
 
   if (!show) return null;

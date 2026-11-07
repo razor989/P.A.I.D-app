@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { useSound } from "@/presentation/audio/public";
 import { UnfinishedWorkArt } from "./UnfinishedWorkArt";
 import type { ArtWorld } from "./UnfinishedWorkArt";
 import styles from "./unfinished.module.css";
@@ -41,12 +42,20 @@ export function UnfinishedActivityDialog({
   const busy = useRef(false);
   const [pending, setPending] = useState(false);
   const bodyId = useId();
+  const sound = useSound();
+  // Staying put closes the decision; Return and Abandon are heard as the
+  // navigation they cause.
+  const cancel = () => {
+    sound.play("ui.close");
+    onCancel();
+  };
 
   // Safe default focus: the progress-preserving choice, never abandonment.
   useEffect(() => {
     const button = primary.current;
     (button && !button.disabled ? button : card.current)?.focus();
-  }, []);
+    sound.play("ui.open");
+  }, [sound]);
 
   // A choice that the Session reopens (for example after a failed clear) can
   // be made again; until then one press is one request.
@@ -84,7 +93,7 @@ export function UnfinishedActivityDialog({
         onKeyDown={(event) => {
           if (event.key === "Escape") {
             event.preventDefault();
-            if (canCancel) once(onCancel)();
+            if (canCancel) once(cancel)();
             return;
           }
           if (event.key !== "Tab") return;
@@ -190,7 +199,7 @@ export function UnfinishedActivityDialog({
               className={styles.tertiary}
               data-paid-nav=""
               disabled={pending || !canCancel}
-              onClick={once(onCancel)}
+              onClick={once(cancel)}
             >
               Not now
             </button>

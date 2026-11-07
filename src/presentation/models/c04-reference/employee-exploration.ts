@@ -1,3 +1,4 @@
+import type { InspectionSound } from "../../audio/public";
 /** Presentation-only supplemental lessons. No source/assessment/Session callbacks. */
 export type SalaryPart = "original" | "addition" | "total";
 type ExplorationLessons = Record<
@@ -106,6 +107,8 @@ export function createSalaryExploration(
     announce: (text: string) => void;
     lessons?: ExplorationLessons | undefined;
     copyDistance?: number;
+    /** Decorative sound for opening, closing and the mini-animation. */
+    sound?: InspectionSound | undefined;
   },
 ) {
   const content = options.lessons ?? lessons;
@@ -132,8 +135,14 @@ export function createSalaryExploration(
     if (animation !== undefined) cancelAnimationFrame(animation);
     animation = undefined;
   };
+  // True only during an animated run whose copy slide is still to land.
+  let copyPending = false;
   function project(progress: number) {
     const eased = progress * progress * (3 - 2 * progress);
+    if (copyPending && eased >= 0.95) {
+      copyPending = false;
+      options.sound?.("piece", { index: 4 });
+    }
     const copy = panel.querySelector<SVGElement>(".mini-copy")!;
     copy.setAttribute(
       "transform",
@@ -153,10 +162,14 @@ export function createSalaryExploration(
   }
   function replay() {
     cancelMotion();
+    copyPending = false;
     if (options.reduced()) {
       project(1);
       return;
     }
+    // The reference line draws; a copied amount slides home as it ends.
+    options.sound?.("draw");
+    copyPending = (options.copyDistance ?? 246) > 0;
     started = performance.now();
     project(0);
     const tick = () => {
@@ -188,7 +201,9 @@ export function createSalaryExploration(
       panel.style.removeProperty("top");
     }
   }
-  function close(restore = false) {
+  function close(restore = false, quiet = false) {
+    if (!quiet && !panel.hidden && active) options.sound?.("close");
+    copyPending = false;
     clearTimeout(hover);
     clearTimeout(dismiss);
     clearTimeout(hold);
@@ -219,6 +234,11 @@ export function createSalaryExploration(
     clearTimeout(hover);
     options.pause();
     const changed = active !== part;
+    const wasOpen = !panel.hidden && active !== null;
+    if (pin) {
+      if (!(pinned && !changed)) options.sound?.("pin");
+    } else if (!wasOpen) options.sound?.("open");
+    else if (changed) options.sound?.("switch");
     trigger = element;
     active = part;
     pinned = pin || pinned;
@@ -438,9 +458,10 @@ export function createSalaryExploration(
   );
   window.addEventListener("scroll", position, { signal, capture: true });
   return {
-    close,
+    // Closes asked for by the story (a new beat, a block) stay quiet.
+    close: (restore = false) => close(restore, true),
     refresh() {
-      if (options.blocked()) close();
+      if (options.blocked()) close(false, true);
       else if (active) {
         if (options.reduced()) {
           cancelMotion();
@@ -450,7 +471,7 @@ export function createSalaryExploration(
       }
     },
     dispose() {
-      close();
+      close(false, true);
       controller.abort();
     },
   };

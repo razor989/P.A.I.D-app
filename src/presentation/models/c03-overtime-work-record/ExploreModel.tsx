@@ -1,8 +1,36 @@
+import { useCueOnChange } from "../../audio/public";
+import type { StoryAccent } from "../../audio/public";
 import type { C03WorkRecordProjection } from "./public";
 import { pesos } from "./WorkEvidence";
 import { ExploreInspection, Inspectable } from "./ExploreInspection";
 import { ExploreGlyph } from "./ExploreGlyph";
 import explore from "./explore.module.css";
+
+/**
+ * Sound accents for the visual events below, on the same `cue + progress`
+ * scale as `reveal()`: heard only while the explanation plays by itself.
+ */
+export function exploreModelAccents(
+  projection: C03WorkRecordProjection,
+  stage: number,
+): StoryAccent[] {
+  const { comparison, mathematicalExplanation: math } = projection;
+  if (comparison && stage >= 3)
+    return [
+      // Each day's pay bar grows in turn; the rest-day bracket appears.
+      { at: 1, cue: "story.grow" },
+      { at: 2, cue: "story.grow", rate: 1.06 },
+      { at: 3, cue: "story.appear" },
+    ];
+  const accents: StoryAccent[] = [];
+  if (stage === 0) accents.push({ at: 0.5, cue: "story.grow" });
+  if (stage > 0 && math) {
+    if (Number(math.multiplier.magnitude.toString()) > 1)
+      accents.push({ at: 1, cue: "story.grow", rate: 1.06 });
+    accents.push({ at: 3, cue: "story.appear" });
+  }
+  return accents;
+}
 
 /** One work record. Widths project exposed quantities; no pay is evaluated here. */
 export function ExploreModel({
@@ -45,6 +73,8 @@ export function ExploreModel({
       ? pesos(math.overtimePay.resolution.value.magnitude.toString())
       : null;
   const control = frame.modelSelectionControl;
+  // Heard when the engine projects the learner's new condition, not on mount.
+  useCueOnChange(control?.selectedId, "model.select");
   const inspected = frame.allowedLearnerIntents.includes("CONTINUE");
   const model = (
     <section

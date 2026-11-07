@@ -6,6 +6,7 @@ import "./atmosphere.css";
 import "./refinement.css";
 import "./instructional-enhancement.css";
 import { LessonMasthead } from "../../navigation/public";
+import { useInspectionSound, useSound } from "../../audio/public";
 
 /** React owns route/lifecycle; the source-preserved renderer owns only reading/view state. */
 export function ReferenceExperience(props: C04Presentation) {
@@ -14,11 +15,25 @@ export function ReferenceExperience(props: C04Presentation) {
   const renderer = useRef<ReturnType<typeof createReferenceRenderer> | null>(
     null,
   );
+  // The renderer lives for the mount; the engine is stable for the page.
+  const sound = useSound();
+  const play = useRef(sound);
+  play.current = sound;
+  const inspectionSound = useInspectionSound();
+  const voice = useRef(inspectionSound);
+  voice.current = inspectionSound;
   useEffect(() => {
     if (!host.current) return;
-    const current = createReferenceRenderer(host.current, (text) => {
-      if (announcer.current) announcer.current.textContent = text;
-    });
+    const current = createReferenceRenderer(
+      host.current,
+      (text) => {
+        if (announcer.current) announcer.current.textContent = text;
+      },
+      {
+        cue: (cue) => play.current.play(cue),
+        inspection: (event, detail) => voice.current(event, detail),
+      },
+    );
     renderer.current = current;
     return () => {
       current.dispose();

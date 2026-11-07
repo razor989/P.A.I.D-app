@@ -1,0 +1,9 @@
+"MACOS GOLDEN GATE SFX" folder
+
+Used here: one processed layer of activity-complete.ogg (breeze.mp3, at
+210 ms). The folder contains MP3 re-encodes (CapCut/"vicut" encoder tags)
+of system-style sounds and no licence or attribution file.
+
+The P.A.I.D. owner reviewed this and chose to use it, accepting the rights
+risk ("Use it; I accept the risk."). Replace this layer (scripts/sound-recipe.ts,
+cue "activity-complete") if that decision changes; alternates exist.
