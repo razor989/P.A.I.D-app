@@ -36,12 +36,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
       })
       .check();
     await page.reload();
-    await page
-      .getByRole("button", {
-        name: "Continue unfinished activity",
-        exact: true,
-      })
-      .click();
+    await page.getByRole("button", { name: /^Resume / }).click();
     await expect(
       page.getByRole("radio", {
         name: "I'm not sure yet; I would like to find out.",

@@ -128,11 +128,18 @@ test("sound follows the choreography and only authoritative results", async ({
   expect(heard.filter((c) => c.startsWith("feedback."))).toEqual([]);
   expect(heard).not.toContain("activity.complete");
 
-  // A restored, already-recorded response is silent.
+  // A reload lands quietly in the library (no leave-lesson choreography),
+  // and a restored, already-recorded response is silent.
   await page.reload();
-  await page
-    .getByRole("button", { name: "Continue unfinished activity", exact: true })
-    .click();
+  const resume = page.getByRole("button", { name: /^Resume / });
+  await expect(resume).toBeVisible();
+  await page.waitForTimeout(600);
+  expect(
+    (await cues(page)).filter((c) =>
+      /^(chapter|accordion)\./.test(c.sequence ?? ""),
+    ),
+  ).toEqual([]);
+  await resume.click();
   await expect(
     page.getByRole("button", { name: "Finish Prepare", exact: true }),
   ).toBeVisible();

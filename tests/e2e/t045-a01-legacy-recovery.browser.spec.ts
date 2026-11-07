@@ -48,9 +48,7 @@ test("unmarked legacy A01 resumes numeric evidence unchanged, finishes and conti
   const before = await page.evaluate(() =>
     localStorage.getItem("paid.recovery.checkpoint.v1"),
   );
-  await page
-    .getByRole("button", { name: "Continue unfinished activity", exact: true })
-    .click();
+  await page.getByRole("button", { name: /^Resume / }).click();
   await expect(page.getByText(/Resuming your saved activity/)).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Anchored Change Track" }),

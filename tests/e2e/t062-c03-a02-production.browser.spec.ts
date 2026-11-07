@@ -81,12 +81,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) {
     await page.getByRole("button", { name: /^Continue/ }).click();
     await page.getByRole("button", { name: "Rest day", exact: true }).click();
     await page.reload();
-    await page
-      .getByRole("button", {
-        name: "Continue unfinished activity",
-        exact: true,
-      })
-      .click();
+    await page.getByRole("button", { name: /^Resume / }).click();
     await expect(
       page.getByRole("button", { name: "Rest day", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");

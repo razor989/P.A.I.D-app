@@ -112,12 +112,7 @@ for (const width of [1440, 320]) {
       .getByRole("textbox", { name: "Overtime pay (₱)", exact: true })
       .fill("900");
     await page.reload();
-    await page
-      .getByRole("button", {
-        name: "Continue unfinished activity",
-        exact: true,
-      })
-      .click();
+    await page.getByRole("button", { name: /^Resume / }).click();
     await expect(
       page.getByRole("radio", { name: "rest day", exact: true }),
     ).toBeChecked();

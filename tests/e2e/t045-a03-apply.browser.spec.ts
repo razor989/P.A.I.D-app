@@ -78,9 +78,7 @@ test("formatted paste, composition, backtracking and restored draft can be check
     page.getByRole("button", { name: "Check", exact: true }),
   ).toBeEnabled();
   await page.reload();
-  await page
-    .getByRole("button", { name: "Continue unfinished activity", exact: true })
-    .click();
+  await page.getByRole("button", { name: /^Resume / }).click();
   await page
     .getByRole("button", { name: "State your conclusion", exact: true })
     .click();
@@ -150,9 +148,7 @@ test("real route: independent application, reconsider/revise/recheck, recovery a
   const scan = await new AxeBuilder({ page }).analyze();
   expect(scan.violations).toEqual([]);
   await page.reload();
-  await page
-    .getByRole("button", { name: "Continue unfinished activity", exact: true })
-    .click();
+  await page.getByRole("button", { name: /^Resume / }).click();
   await expect(page.locator("[data-feedback]")).toContainText("Confirmed");
   await page
     .getByRole("button", { name: "See your recap →", exact: true })
@@ -290,9 +286,7 @@ test("all quantity representations remain expressible and revisable without auto
   await page.getByRole("button", { name: "Check", exact: true }).click();
   await expect(page.locator("[data-feedback]")).toBeVisible();
   await page.reload();
-  await page
-    .getByRole("button", { name: "Continue unfinished activity", exact: true })
-    .click();
+  await page.getByRole("button", { name: /^Resume / }).click();
   await expect(page.getByLabel("Your submitted calculation")).toContainText(
     "Undefined",
   );

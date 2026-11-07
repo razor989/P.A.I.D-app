@@ -39,9 +39,7 @@ test("explicit v3 retains aggregate grading and its original optional post-Check
     checkpoint,
   );
   await page.reload();
-  await page
-    .getByRole("button", { name: "Continue unfinished activity", exact: true })
-    .click();
+  await page.getByRole("button", { name: /^Resume / }).click();
   for (let q = 0; q < 4; q++) {
     await page
       .getByRole("radio")

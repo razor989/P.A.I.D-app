@@ -89,12 +89,7 @@ for (const width of [1440, 320]) {
       .getByRole("textbox", { name: "Overtime pay (₱)", exact: true })
       .fill("938");
     await page.reload();
-    await page
-      .getByRole("button", {
-        name: "Continue unfinished activity",
-        exact: true,
-      })
-      .click();
+    await page.getByRole("button", { name: /^Resume / }).click();
     await expect(
       page.getByRole("textbox", {
         name: "Applicable overtime multiplier",

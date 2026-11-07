@@ -220,9 +220,7 @@ test("diagnostic alternatives, receipt/revision, Recovery, honest recap and auth
   await page.getByRole("button", { name: /Next question/ }).click();
   await page.getByRole("radio").nth(2).check();
   await page.reload();
-  await page
-    .getByRole("button", { name: "Continue unfinished activity", exact: true })
-    .click();
+  await page.getByRole("button", { name: /^Resume / }).click();
   await expect(page.getByRole("radio").nth(2)).toBeChecked();
   const saved = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("paid.recovery.checkpoint.v1")!),

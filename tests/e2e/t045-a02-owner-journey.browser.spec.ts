@@ -108,9 +108,7 @@ test("real browser checkpoint reload, departure and re-entry retain genuine A02 
     )
     .not.toBeNull();
   await page.reload();
-  await page
-    .getByRole("button", { name: "Continue unfinished activity", exact: true })
-    .click();
+  await page.getByRole("button", { name: /^Resume / }).click();
   await expect(page.locator(".practice-count")).toContainText("2 of 3");
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(

@@ -152,9 +152,8 @@ it("restores unfinished A01 through production startup without a second local Ac
   cleanup();
   root.stop();
   const restored = await mount(store);
-  fireEvent.click(
-    screen.getByRole("button", { name: "Continue unfinished activity" }),
-  );
+  // A reload lands in the Learning Library, which offers to resume.
+  fireEvent.click(screen.getByRole("button", { name: /^Resume / }));
   await waitFor(() =>
     expect(
       screen.getByRole("radio", {
@@ -549,9 +548,8 @@ it("recovers A04 actual answers through production V4 startup", async () => {
   cleanup();
   root.stop();
   const restored = await mount(store);
-  fireEvent.click(
-    screen.getByRole("button", { name: "Continue unfinished activity" }),
-  );
+  // A reload lands in the Learning Library, which offers to resume.
+  fireEvent.click(screen.getByRole("button", { name: /^Resume / }));
   expect(
     selectSession(restored.root.session).currentActivity?.getSnapshot().context
       .activityId,
@@ -576,9 +574,8 @@ it("restores A03 saved answers through application V4 startup without a monthly 
   cleanup();
   root.stop();
   const restored = await mount(store);
-  fireEvent.click(
-    screen.getByRole("button", { name: "Continue unfinished activity" }),
-  );
+  // A reload lands in the Learning Library, which offers to resume.
+  fireEvent.click(screen.getByRole("button", { name: /^Resume / }));
   fireEvent.click(
     screen.getByRole("button", { name: /02.*Build the calculation/ }),
   );
@@ -614,9 +611,8 @@ it("restores A02's explanation position and selected sales record through produc
   cleanup();
   root.stop();
   const restored = await mount(store);
-  fireEvent.click(
-    screen.getByRole("button", { name: "Continue unfinished activity" }),
-  );
+  // A reload lands in the Learning Library, which offers to resume.
+  fireEvent.click(screen.getByRole("button", { name: /^Resume / }));
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "Situation B" })).toHaveAttribute(
       "aria-pressed",

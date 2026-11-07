@@ -204,6 +204,26 @@ export function StartupShell({ root }: { root: ApplicationRoot }) {
   }, [lifecycle]);
   useSessionSnapshot();
   const view = selectSession(root.session);
+  // A reload with saved work lands in the Learning Library, which already
+  // offers Resume (and the switch dialog to abandon): continue the recovered
+  // activity, then leave it by the lesson's own path, before anything paints.
+  const recoveryChoice = view.startup === "recovery-choice";
+  useLayoutEffect(() => {
+    if (!recoveryChoice || root.session.getSnapshot().status !== "active")
+      return;
+    root.session.send({ type: "CONTINUE_RECOVERED_ACTIVITY" });
+    const destination = selectSession(root.session).destination;
+    if (destination?.kind !== "activity") return;
+    const competencyId = root.catalog.activities.get(
+      destination.activityId,
+    )?.competencyId;
+    if (
+      competencyId &&
+      navigate(root.session, { type: "SELECT_COMPETENCY", competencyId }) ===
+        "destination-changed"
+    )
+      navigate(root.session, { type: "RETURN_TO_LIBRARY" });
+  }, [recoveryChoice, root]);
   const retainedActivity = view.currentActivity;
   const actor =
     view.destination?.kind === "activity" &&

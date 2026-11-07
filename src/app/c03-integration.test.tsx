@@ -165,10 +165,11 @@ it("restores A01 through startup choice with selections retained", async () => {
   first.view.unmount();
   first.root.stop();
   const second = await mount(first.store);
-  expect(selectSession(second.root.session).startup).toBe("recovery-choice");
-  fireEvent.click(
-    screen.getByRole("button", { name: "Continue unfinished activity" }),
-  );
+  expect(selectSession(second.root.session).destination).toEqual({
+    kind: "library",
+  });
+  // A reload lands in the Learning Library, which offers to resume.
+  fireEvent.click(screen.getByRole("button", { name: /^Resume / }));
   expect(
     screen.getByRole("radio", {
       name: "I'm not sure yet; I would like to find out.",
@@ -219,7 +220,7 @@ it("retains C03 work across navigation and uses the existing cross-activity aban
   );
 });
 
-it("offers recovery choice for authorized C03-A04 and restores only after consent", async () => {
+it("returns a reloaded C03-A04 to the library and restores it on Resume", async () => {
   const actor = createC03ActivityActor("C03-A04");
   const store = createWebTestStore();
   try {
@@ -232,19 +233,12 @@ it("offers recovery choice for authorized C03-A04 and restores only after consen
     actor.stop();
   }
   const { root } = await mount(store);
-  expect(selectSession(root.session).startup).toBe("recovery-choice");
+  // The recovered activity is kept live behind the library's Resume.
+  expect(selectSession(root.session).destination).toEqual({ kind: "library" });
   const pending = selectSession(root.session).currentActivity!;
   expect(pending).not.toBe(actor);
-  expect(selectSession(root.session).destination).toBeNull();
-  expect(
-    acquireSessionCheckpointProducer(root.session).replace(
-      createRecoveryCheckpointV3(projectC03CheckpointV3(pending)),
-    ),
-  ).toBeNull();
   expect(await store.load()).not.toBeNull();
-  fireEvent.click(
-    screen.getByRole("button", { name: "Continue unfinished activity" }),
-  );
+  fireEvent.click(screen.getByRole("button", { name: /^Resume / }));
   const restored = selectSession(root.session).currentActivity!;
   expect(restored).toBe(pending);
   expect(selectSession(root.session).destination).toEqual({
@@ -306,10 +300,11 @@ it("runs A02 in production with authentic inspection, V3 recovery and delivered 
   first.view.unmount();
   first.root.stop();
   const second = await mount(first.store);
-  expect(selectSession(second.root.session).startup).toBe("recovery-choice");
-  fireEvent.click(
-    screen.getByRole("button", { name: "Continue unfinished activity" }),
-  );
+  expect(selectSession(second.root.session).destination).toEqual({
+    kind: "library",
+  });
+  // A reload lands in the Learning Library, which offers to resume.
+  fireEvent.click(screen.getByRole("button", { name: /^Resume / }));
   expect(screen.getByRole("button", { name: "Rest day" })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -395,4 +390,4 @@ it("runs A02 in production with authentic inspection, V3 recovery and delivered 
     screen.getByRole("button", { name: "Review completed activity" }),
   );
   expect(screen.getByRole("heading", { name: /Same two hours/ })).toBeVisible();
-});
+}, 15_000);

@@ -69,7 +69,7 @@ for (const width of [1440, 320]) {
         .getByRole("radio", { name: "I think their pay could be different." })
         .check();
       await page.reload();
-      await button(page, "Continue unfinished activity").click();
+      await button(page, /^Resume /).click();
       await expect(
         page.getByRole("radio", {
           name: "I think their pay could be different.",
@@ -226,7 +226,7 @@ for (const width of [1440, 320]) {
       ).toBeFocused();
       await fill("2,000,000", "5%", "100,000");
       await page.reload();
-      await button(page, "Continue unfinished activity").click();
+      await button(page, /^Resume /).click();
       await button(page, /02.*Build the calculation/).click();
       await expect(page.getByLabel("Sales base (₱)")).toHaveValue(
         /2,?000,?000/,

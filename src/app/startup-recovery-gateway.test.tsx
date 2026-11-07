@@ -44,7 +44,7 @@ function props(
 }
 
 describe("T036 bounded Recovery gateway", () => {
-  it("actual valid recovery shows explicit choices without auto-start and Continue uses the same actor", async () => {
+  it("actual valid recovery lands in the library and Resume uses the same actor", async () => {
     const raw = JSON.stringify({
       schemaVersion: 1,
       studyDefinitionRevision: "PAID-STUDY-DEF-R001",
@@ -77,14 +77,18 @@ describe("T036 bounded Recovery gateway", () => {
         <StartupShell root={root} />
       </SessionProvider>,
     );
-    expect(start).not.toHaveBeenCalled();
-    expect(screen.getAllByRole("button")).toHaveLength(2);
+    // No startup prompt: the library offers the kept activity instead.
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole("button", { name: "Continue unfinished activity" }),
+    ).toBeNull();
+    expect(root.session.getSnapshot().context.destination).toEqual({
+      kind: "library",
+    });
     await userEvent
       .setup()
-      .click(
-        screen.getByRole("button", { name: "Continue unfinished activity" }),
-      );
-    expect(start).toHaveBeenCalledTimes(1);
+      .click(screen.getByRole("button", { name: /^Resume / }));
+    expect(actor.getSnapshot().status).toBe("active");
     expect(root.session.getSnapshot().context.currentActivity).toBe(actor);
     expect(
       screen.getByRole("heading", {

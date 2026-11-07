@@ -422,9 +422,7 @@ test("recovery preserves committed calculation; revision clears reasoning and re
   await enter(page);
   await primary(page, true);
   await page.reload();
-  await page
-    .getByRole("button", { name: "Continue unfinished activity", exact: true })
-    .click();
+  await page.getByRole("button", { name: /^Resume / }).click();
   await expect(page.getByRole("radio")).toHaveCount(2);
   await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
   await check(page, true);
