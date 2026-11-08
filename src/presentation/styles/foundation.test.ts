@@ -353,14 +353,24 @@ describe("T038 source-governed visual foundation", () => {
     const moduleName: string = "eslint";
     const loaded: unknown = await import(moduleName);
     const { ESLint } = loaded as {
-      ESLint: new (options: { cache: boolean }) => {
+      ESLint: new (options: { cache: boolean; overrideConfig: unknown }) => {
         lintText(
           text: string,
           options: { filePath: string },
         ): Promise<{ messages: { ruleId: string | null }[] }[]>;
       };
     };
-    const engine = new ESLint({ cache: false });
+    // The import policy needs no type information. Type-aware parsing can read
+    // a file's on-disk contents instead of the supplied text on its first lint
+    // (seen on Linux CI), so the probes lint without it.
+    const tseslint: unknown = await import("typescript-eslint");
+    const { configs } = tseslint as {
+      configs: { disableTypeChecked: unknown };
+    };
+    const engine = new ESLint({
+      cache: false,
+      overrideConfig: configs.disableTypeChecked,
+    });
     const main = read("src/main.tsx");
     const cases: [string, string, boolean][] = [
       ["src/main.tsx", main, false],
@@ -391,11 +401,7 @@ describe("T038 source-governed visual foundation", () => {
       ],
     ];
     for (const [filePath, text, denied] of cases) {
-      // Absolute: on Linux, ESLint 10 skipped the bootstrap.tsx base.css denial
-      // for a relative filePath that it reports for the absolute one.
-      const results = await engine.lintText(text, {
-        filePath: resolve(root, filePath),
-      });
+      const results = await engine.lintText(text, { filePath });
       const messages = results.flatMap((r) => r.messages);
       expect(
         messages.some((m) => m.ruleId === "no-restricted-imports"),
