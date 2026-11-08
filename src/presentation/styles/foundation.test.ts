@@ -391,7 +391,11 @@ describe("T038 source-governed visual foundation", () => {
       ],
     ];
     for (const [filePath, text, denied] of cases) {
-      const results = await engine.lintText(text, { filePath });
+      // Absolute: on Linux, ESLint 10 skipped the bootstrap.tsx base.css denial
+      // for a relative filePath that it reports for the absolute one.
+      const results = await engine.lintText(text, {
+        filePath: resolve(root, filePath),
+      });
       const messages = results.flatMap((r) => r.messages);
       expect(
         messages.some((m) => m.ruleId === "no-restricted-imports"),
