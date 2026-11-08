@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <!-- P.A.I.D. icon foreground on the 108-unit Android adaptive-icon grid.
+       Everything that matters sits inside the 66-unit safe zone (radius 33 around 54,54).
+       A payslip: three entries in the competency colours (clay, forest, indigo), a total,
+       and the two dots of the P.A.I.D. wordmark. -->
+  <defs>
+    <filter id="lift" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="1.6" stdDeviation="1.6" flood-color="#14271d" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <g filter="url(#lift)">
+    <!-- slip with a torn (zigzag) bottom edge -->
+    <path fill="#fbf7ef" d="M35 29.5 a3 3 0 0 1 3 -3 h32 a3 3 0 0 1 3 3 V79
+      l-3.8 3.2 -3.8 -3.2 -3.8 3.2 -3.8 -3.2 -3.8 3.2 -3.8 -3.2 -3.8 3.2 -3.8 -3.2 -3.8 3.2 -3.8 -3.2 Z"/>
+  </g>
+  <!-- entries: label stroke (muted) + amount (colour) -->
+  <g stroke-linecap="round" stroke-width="3.4">
+    <line x1="41" y1="41" x2="50" y2="41" stroke="#b9c8c0"/>
+    <line x1="56" y1="41" x2="67" y2="41" stroke="#c97a50"/>
+    <line x1="41" y1="48.5" x2="50" y2="48.5" stroke="#b9c8c0"/>
+    <line x1="56" y1="48.5" x2="67" y2="48.5" stroke="#2f6b4f"/>
+    <line x1="41" y1="56" x2="50" y2="56" stroke="#b9c8c0"/>
+    <line x1="56" y1="56" x2="67" y2="56" stroke="#465d9e"/>
+  </g>
+  <!-- the wordmark's two dots (gold, green), as beside "P.A.I.D." in the app -->
+  <circle cx="63.2" cy="33" r="2.9" fill="#d8ac4d"/>
+  <circle cx="67.6" cy="30.2" r="1.7" fill="#879d65"/>
+  <!-- rule and total -->
+  <line x1="41" y1="62.8" x2="67" y2="62.8" stroke="#263128" stroke-width="1.6" stroke-linecap="round"/>
+  <rect x="49" y="66.6" width="18" height="7" rx="2.2" fill="#263128"/>
+</svg>
