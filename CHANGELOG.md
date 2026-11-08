@@ -2,6 +2,11 @@
 
 All notable changes are recorded here. Versions follow [Semantic Versioning](https://semver.org).
 
+## [1.0.1] (2026-11-08)
+
+### Fixed
+- Android: tapping a button, cover or control no longer flashes a translucent blue box over it. The app's own pressed and selected states and the keyboard focus outline are unchanged.
+
 ## [1.0.0] (2026-11-08)
 
 The first public version.

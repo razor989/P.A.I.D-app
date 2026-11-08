@@ -100,4 +100,4 @@ Sound effects are processed from third-party libraries plus original synthesized
 
 ## Project status
 
-Version 1.0.0. The instructional experience for the three competencies above is complete, and the Android build has been tested on a physical device. The development history is summarized in [docs/PROJECT-HISTORY.md](docs/PROJECT-HISTORY.md), and changes are recorded in [CHANGELOG.md](CHANGELOG.md).
+Version 1.0.1. The instructional experience for the three competencies above is complete, and the Android build has been tested on a physical device. The development history is summarized in [docs/PROJECT-HISTORY.md](docs/PROJECT-HISTORY.md), and changes are recorded in [CHANGELOG.md](CHANGELOG.md).
