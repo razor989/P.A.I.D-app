@@ -1,0 +1,4 @@
+# Check out text files with LF on every platform. Tests compare some source
+# files byte for byte, and a Windows checkout with core.autocrlf=true would
+# otherwise rewrite them with CRLF. Binary files are detected automatically.
+* text=auto eol=lf

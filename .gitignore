@@ -8,11 +8,18 @@ playwright-report/
 test-results/
 .tmp/
 
-# Machine-local editor and OS files
+# Machine-local editor, assistant-tool and OS files
 .vscode/
 .idea/
+.claude/
+.impeccable/
 .DS_Store
 Thumbs.db
+
+# Release signing material; it lives outside the repository and is never committed
+*.jks
+*.keystore
+keystore.properties
 
 # Android build products; keep the native project, source and configuration
 android/.gradle/
