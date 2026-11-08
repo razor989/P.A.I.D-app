@@ -56,6 +56,10 @@
   line-height: var(--leading-body);
   color: var(--color-text);
   background: var(--color-canvas);
+  /* Android WebView paints a translucent blue box over anything tapped. The
+     app draws its own pressed and selected states, and keyboard focus stays
+     visible through :focus-visible. Inherited by every element. */
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
