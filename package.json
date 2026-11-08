@@ -1,6 +1,6 @@
 {
   "name": "paid-app",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "P.A.I.D. offline instructional application.",
   "license": "UNLICENSED",
@@ -10,6 +10,9 @@
   },
   "packageManager": "npm@11.19.0",
   "scripts": {
+    "dev": "vite",
+    "preview": "vite preview",
+    "test": "vitest run",
     "typecheck": "tsc --project tsconfig.json && tsc --project tsconfig.node.json",
     "lint": "eslint src vite.config.ts",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"tests/**/*.{ts,tsx}\" \"*.{js,mjs,ts,json,html}\"",
@@ -20,7 +23,8 @@
     "test:e2e": "playwright test tests/e2e --project=chromium",
     "test:a11y": "playwright test tests/a11y --project=chromium",
     "build": "vite build",
-    "android:sync": "vite build && cap sync android"
+    "android:sync": "vite build && cap sync android",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm run validate:content && npm test"
   },
   "dependencies": {
     "@capacitor/android": "8.5.2",
